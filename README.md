@@ -1,1 +1,0 @@
-# boman-inventario
