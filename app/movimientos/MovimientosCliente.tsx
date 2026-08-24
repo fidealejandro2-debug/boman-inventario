@@ -86,7 +86,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
       supabase.from("productos").select("id, sku, nombre, categoria, talla").eq("activo", true).order("nombre"),
       supabase.from("almacenes").select("id, nombre, tipo").eq("activo", true).order("tipo"),
       supabase.from("movimientos")
-        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, anulador:anulado_por(nombre_completo), productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles(nombre_completo)")
+        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, anulador:perfiles!movimientos_anulado_por_fkey(nombre_completo), productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
         .order("created_at", { ascending: false }).limit(500),
     ]);
     if (p.data) setProductos(p.data as Producto[]);

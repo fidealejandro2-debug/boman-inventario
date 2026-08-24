@@ -11,15 +11,17 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const [filas, setFilas] = useState<any[]>([]);
   const [movs, setMovs] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const [s, m] = await Promise.all([
         supabase.from("vista_stock").select("producto_id, cantidad, bajo_minimo, almacen, producto, sku, talla, stock_minimo"),
         supabase.from("movimientos")
-          .select("id, tipo, cantidad, created_at, anulado, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles(nombre_completo)")
+          .select("id, tipo, cantidad, created_at, anulado, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
           .order("created_at", { ascending: false }).limit(10),
       ]);
+      if (s.error || m.error) setError(s.error?.message ?? m.error?.message ?? null);
       if (s.data) setFilas(s.data);
       if (m.data) setMovs(m.data);
       setCargando(false);
@@ -37,6 +39,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     <>
       <h2 style={{ color: "#1f3864" }}>Hola, {perfil.nombre_completo.split(" ")[0]}</h2>
 
+      {error && <div className="error">No se pudieron cargar los datos: {error}</div>}
       {cargando ? <div className="card"><div className="vacio">Cargando...</div></div> : (
         <>
           <div className="kpis">

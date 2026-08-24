@@ -26,6 +26,7 @@ export default function ReportesCliente() {
   const [filas, setFilas] = useState<Fila[]>([]);
   const [movs, setMovs] = useState<Mov[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("almacen");
   const [kardexProd, setKardexProd] = useState("");
   const [buscaKardex, setBuscaKardex] = useState("");
@@ -35,9 +36,10 @@ export default function ReportesCliente() {
       const [s, m] = await Promise.all([
         supabase.from("vista_stock").select("*"),
         supabase.from("movimientos")
-          .select("id, tipo, cantidad, nota, created_at, anulado, motivo_anulacion, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles(nombre_completo)")
+          .select("id, tipo, cantidad, nota, created_at, anulado, motivo_anulacion, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
           .order("created_at", { ascending: false }).limit(1000),
       ]);
+      if (s.error || m.error) setError(s.error?.message ?? m.error?.message ?? null);
       if (s.data) setFilas(s.data as Fila[]);
       if (m.data) setMovs(m.data as any);
       setCargando(false);
@@ -117,6 +119,7 @@ export default function ReportesCliente() {
   return (
     <>
       <h2 style={{ color: "#1f3864" }}>Reportes</h2>
+      {error && <div className="error">No se pudieron cargar los datos: {error}</div>}
 
       <div className="kpis">
         <div className="kpi"><div className="label">Unidades totales</div><div className="valor">{totalUnidades.toLocaleString("es-EC")}</div></div>
