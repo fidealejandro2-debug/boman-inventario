@@ -4,18 +4,24 @@
 -- Ejecutar completo en: Supabase Dashboard > SQL Editor
 -- ============================================================
 
--- 1. ENTIDADES (CIA LTDA, BMSPORT SAS, ...)
-create table if not exists entidades (
+-- 1. ALMACENES (Bodega Central + tiendas)
+create table if not exists almacenes (
   id uuid primary key default gen_random_uuid(),
   nombre text not null unique,
-  codigo text not null unique, -- ej: 'CIALTDA', 'BMSPORT'
+  codigo text not null unique, -- ej: 'BODEGA', 'TIENDA-PUYO'
+  tipo text not null default 'tienda' check (tipo in ('bodega', 'tienda')),
   activo boolean not null default true,
   created_at timestamptz not null default now()
 );
 
-insert into entidades (nombre, codigo) values
-  ('Industria Deportiva Boman Cia Ltda', 'CIALTDA'),
-  ('BMSport SAS', 'BMSPORT')
+insert into almacenes (nombre, codigo, tipo) values
+  ('Bodega Central', 'BODEGA', 'bodega'),
+  ('Shopping Ambato', 'TIENDA-SHOPPING-AMB', 'tienda'),
+  ('Mariano Egüez Ambato', 'TIENDA-MEGUEZ-AMB', 'tienda'),
+  ('Puyo', 'TIENDA-PUYO', 'tienda'),
+  ('Riobamba', 'TIENDA-RIOBAMBA', 'tienda'),
+  ('Guayaquil', 'TIENDA-GYE', 'tienda'),
+  ('Santo Domingo', 'TIENDA-SD', 'tienda')
 on conflict (codigo) do nothing;
 
 -- 2. PERFILES DE USUARIO (extiende auth.users de Supabase)
@@ -25,7 +31,7 @@ create table if not exists perfiles (
   id uuid primary key references auth.users(id) on delete cascade,
   nombre_completo text not null,
   rol rol_usuario not null default 'bodega',
-  entidad_id uuid references entidades(id), -- null = ve todas las entidades (admin/gerencia)
+  entidad_id uuid references almacenes(id), -- null = ve todas las entidades (admin/gerencia)
   activo boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -46,7 +52,7 @@ create table if not exists productos (
 create table if not exists inventario (
   id uuid primary key default gen_random_uuid(),
   producto_id uuid not null references productos(id),
-  entidad_id uuid not null references entidades(id),
+  entidad_id uuid not null references almacenes(id),
   cantidad integer not null default 0 check (cantidad >= 0),
   updated_at timestamptz not null default now(),
   unique (producto_id, entidad_id)
@@ -58,8 +64,8 @@ create type tipo_movimiento as enum ('entrada', 'salida', 'transferencia_envio',
 create table if not exists movimientos (
   id uuid primary key default gen_random_uuid(),
   producto_id uuid not null references productos(id),
-  entidad_id uuid not null references entidades(id),
-  entidad_destino_id uuid references entidades(id), -- solo para transferencias
+  entidad_id uuid not null references almacenes(id),
+  entidad_destino_id uuid references almacenes(id), -- solo para transferencias
   tipo tipo_movimiento not null,
   cantidad integer not null check (cantidad > 0),
   nota text,
@@ -128,10 +134,10 @@ alter table perfiles enable row level security;
 alter table productos enable row level security;
 alter table inventario enable row level security;
 alter table movimientos enable row level security;
-alter table entidades enable row level security;
+alter table almacenes enable row level security;
 
--- Todos los usuarios autenticados pueden leer entidades y su propio perfil
-create policy "leer_entidades" on entidades for select to authenticated using (true);
+-- Todos los usuarios autenticados pueden leer almacenes y su propio perfil
+create policy "leer_almacenes" on almacenes for select to authenticated using (true);
 create policy "leer_propio_perfil" on perfiles for select to authenticated using (true);
 
 -- Productos: todos leen, solo admin escribe

@@ -10,7 +10,7 @@ export default async function InventarioPage() {
 
   const { data: inventario } = await supabase
     .from("inventario")
-    .select("cantidad, productos(sku, nombre, categoria, talla, color), entidades(nombre)")
+    .select("cantidad, productos(sku, nombre, categoria, talla, color), almacenes(nombre)")
     .order("cantidad", { ascending: false });
 
   return (
@@ -27,7 +27,7 @@ export default async function InventarioPage() {
                 <th>Categoría</th>
                 <th>Talla</th>
                 <th>Color</th>
-                <th>Entidad</th>
+                <th>Almacén</th>
                 <th>Cantidad</th>
               </tr>
             </thead>
@@ -39,7 +39,7 @@ export default async function InventarioPage() {
                   <td>{r.productos?.categoria}</td>
                   <td>{r.productos?.talla ?? "-"}</td>
                   <td>{r.productos?.color ?? "-"}</td>
-                  <td>{r.entidades?.nombre}</td>
+                  <td>{r.almacenes?.nombre}</td>
                   <td style={{ fontWeight: 700 }}>{r.cantidad}</td>
                 </tr>
               ))}

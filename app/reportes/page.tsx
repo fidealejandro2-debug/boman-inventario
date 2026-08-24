@@ -12,13 +12,13 @@ export default async function ReportesPage() {
   const supabase = createClient();
   const { data: inventario } = await supabase
     .from("inventario")
-    .select("cantidad, productos(categoria), entidades(nombre)");
+    .select("cantidad, productos(categoria), almacenes(nombre)");
 
   const porEntidad: Record<string, number> = {};
   const porCategoria: Record<string, number> = {};
 
   (inventario ?? []).forEach((r: any) => {
-    const ent = r.entidades?.nombre ?? "Sin entidad";
+    const ent = r.almacenes?.nombre ?? "Sin almacén";
     const cat = r.productos?.categoria ?? "Sin categoría";
     porEntidad[ent] = (porEntidad[ent] ?? 0) + r.cantidad;
     porCategoria[cat] = (porCategoria[cat] ?? 0) + r.cantidad;
@@ -32,9 +32,9 @@ export default async function ReportesPage() {
 
         <div className="grid-2">
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Stock por entidad</h3>
+            <h3 style={{ marginTop: 0 }}>Stock por almacén</h3>
             <table>
-              <thead><tr><th>Entidad</th><th>Unidades</th></tr></thead>
+              <thead><tr><th>Almacén</th><th>Unidades</th></tr></thead>
               <tbody>
                 {Object.entries(porEntidad).map(([nombre, cant]) => (
                   <tr key={nombre}><td>{nombre}</td><td>{cant}</td></tr>

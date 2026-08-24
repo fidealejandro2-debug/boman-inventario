@@ -10,13 +10,13 @@ export default async function DashboardPage() {
 
   const { data: inventario } = await supabase
     .from("inventario")
-    .select("cantidad, productos(nombre, sku), entidades(nombre)")
+    .select("cantidad, productos(nombre, sku), almacenes(nombre)")
     .order("cantidad", { ascending: false })
     .limit(8);
 
   const { data: movimientos } = await supabase
     .from("movimientos")
-    .select("tipo, cantidad, created_at, productos(nombre), entidades(nombre), perfiles(nombre_completo)")
+    .select("tipo, cantidad, created_at, productos(nombre), almacenes(nombre), perfiles(nombre_completo)")
     .order("created_at", { ascending: false })
     .limit(8);
 
@@ -52,7 +52,7 @@ export default async function DashboardPage() {
                 <th>Fecha</th>
                 <th>Tipo</th>
                 <th>Producto</th>
-                <th>Entidad</th>
+                <th>Almacén</th>
                 <th>Cantidad</th>
                 <th>Usuario</th>
               </tr>
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
                   <td>{new Date(m.created_at).toLocaleString("es-EC")}</td>
                   <td><span className={`badge ${m.tipo}`}>{m.tipo.replace("_", " ")}</span></td>
                   <td>{m.productos?.nombre}</td>
-                  <td>{m.entidades?.nombre}</td>
+                  <td>{m.almacenes?.nombre}</td>
                   <td>{m.cantidad}</td>
                   <td>{m.perfiles?.nombre_completo}</td>
                 </tr>

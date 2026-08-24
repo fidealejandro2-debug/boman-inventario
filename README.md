@@ -1,7 +1,9 @@
 # Boman Sport — Inventario de Producto Terminado
 
 App interna para 6 usuarios (bodega, logística, admin, gerencia) con roles y stock separado
-por entidad (CIA LTDA / BMSPORT SAS).
+por almacén: **Bodega Central** + 5 tiendas (Shopping Ambato, Mariano Egüez Ambato, Puyo,
+Riobamba, Guayaquil). Bodega despacha hacia cada tienda vía "Transferencia" y el stock se
+mueve automáticamente de un lado a otro.
 
 Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel para este tamaño de equipo).
 

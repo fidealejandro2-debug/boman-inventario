@@ -11,12 +11,12 @@ export default async function MovimientosPage() {
 
   const { data: movimientos } = await supabase
     .from("movimientos")
-    .select("tipo, cantidad, nota, created_at, productos(nombre, sku), entidades(nombre), entidad_destino:entidad_destino_id(nombre), perfiles(nombre_completo)")
+    .select("tipo, cantidad, nota, created_at, productos(nombre, sku), almacenes(nombre), almacen_destino:entidad_destino_id(nombre), perfiles(nombre_completo)")
     .order("created_at", { ascending: false })
     .limit(50);
 
   const { data: productos } = await supabase.from("productos").select("id, sku, nombre").eq("activo", true).order("nombre");
-  const { data: entidades } = await supabase.from("entidades").select("id, nombre").eq("activo", true);
+  const { data: almacenes } = await supabase.from("almacenes").select("id, nombre").eq("activo", true);
 
   const puedeRegistrar = perfil.rol === "admin" || perfil.rol === "bodega" || perfil.rol === "logistica";
 
@@ -30,7 +30,7 @@ export default async function MovimientosPage() {
           <MovimientoForm
             perfil={perfil}
             productos={productos ?? []}
-            entidades={entidades ?? []}
+            almacenes={almacenes ?? []}
           />
         )}
 
@@ -42,7 +42,7 @@ export default async function MovimientosPage() {
                 <th>Fecha</th>
                 <th>Tipo</th>
                 <th>Producto</th>
-                <th>Entidad</th>
+                <th>Almacén</th>
                 <th>Destino</th>
                 <th>Cant.</th>
                 <th>Usuario</th>
@@ -55,8 +55,8 @@ export default async function MovimientosPage() {
                   <td>{new Date(m.created_at).toLocaleString("es-EC")}</td>
                   <td><span className={`badge ${m.tipo}`}>{m.tipo.replace("_", " ")}</span></td>
                   <td>{m.productos?.nombre} ({m.productos?.sku})</td>
-                  <td>{m.entidades?.nombre}</td>
-                  <td>{m.entidad_destino?.nombre ?? "-"}</td>
+                  <td>{m.almacenes?.nombre}</td>
+                  <td>{m.almacen_destino?.nombre ?? "-"}</td>
                   <td>{m.cantidad}</td>
                   <td>{m.perfiles?.nombre_completo}</td>
                   <td style={{ maxWidth: 200 }}>{m.nota ?? "-"}</td>
