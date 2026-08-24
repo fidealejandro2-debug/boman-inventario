@@ -17,7 +17,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
       const [s, m] = await Promise.all([
         supabase.from("vista_stock").select("producto_id, cantidad, bajo_minimo, almacen, producto, sku, talla, stock_minimo"),
         supabase.from("movimientos")
-          .select("id, tipo, cantidad, created_at, productos(nombre, sku), almacenes(nombre), almacen_destino:entidad_destino_id(nombre), perfiles(nombre_completo)")
+          .select("id, tipo, cantidad, created_at, anulado, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles(nombre_completo)")
           .order("created_at", { ascending: false }).limit(10),
       ]);
       if (s.data) setFilas(s.data);
@@ -29,7 +29,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const totalUnidades = filas.reduce((a, f) => a + f.cantidad, 0);
   const skusConStock = new Set(filas.filter((f) => f.cantidad > 0).map((f) => f.producto_id)).size;
   const alertas = useMemo(() => filas.filter((f) => f.bajo_minimo).sort((a, b) => a.cantidad - b.cantidad), [filas]);
-  const hoy = movs.filter((m) => new Date(m.created_at).toDateString() === new Date().toDateString()).length;
+  const hoy = movs.filter((m) => !m.anulado && new Date(m.created_at).toDateString() === new Date().toDateString()).length;
 
   const puedeVerReportes = perfil.rol === "admin" || perfil.rol === "gerencia";
 
@@ -77,9 +77,12 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
               <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th className="num">Cant.</th><th>Usuario</th></tr></thead>
               <tbody>
                 {movs.map((m) => (
-                  <tr key={m.id}>
+                  <tr key={m.id} className={m.anulado ? "fila-anulada" : ""}>
                     <td style={{ whiteSpace: "nowrap" }}>{fecha(m.created_at)}</td>
-                    <td><span className={`badge ${m.tipo}`}>{ETIQUETA_TIPO[m.tipo] ?? m.tipo}</span></td>
+                    <td>
+                      <span className={`badge ${m.tipo}`}>{ETIQUETA_TIPO[m.tipo] ?? m.tipo}</span>
+                      {m.anulado && <span className="badge anulado" style={{ marginLeft: 4 }}>ANULADO</span>}
+                    </td>
                     <td>{m.productos?.nombre}</td>
                     <td>{m.almacenes?.nombre}{m.almacen_destino ? ` → ${m.almacen_destino.nombre}` : ""}</td>
                     <td className="num">{m.cantidad}</td>

@@ -12,6 +12,7 @@ type Fila = {
 };
 type Mov = {
   id: string; tipo: string; cantidad: number; nota: string | null; created_at: string;
+  anulado: boolean; motivo_anulacion: string | null;
   productos: { nombre: string; sku: string } | null;
   almacenes: { nombre: string } | null;
   almacen_destino: { nombre: string } | null;
@@ -34,7 +35,7 @@ export default function ReportesCliente() {
       const [s, m] = await Promise.all([
         supabase.from("vista_stock").select("*"),
         supabase.from("movimientos")
-          .select("id, tipo, cantidad, nota, created_at, productos(nombre, sku), almacenes(nombre), almacen_destino:entidad_destino_id(nombre), perfiles(nombre_completo)")
+          .select("id, tipo, cantidad, nota, created_at, anulado, motivo_anulacion, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles(nombre_completo)")
           .order("created_at", { ascending: false }).limit(1000),
       ]);
       if (s.data) setFilas(s.data as Fila[]);
@@ -274,6 +275,7 @@ export default function ReportesCliente() {
                 Fecha: fecha(m.created_at), Tipo: ETIQUETA_TIPO[m.tipo] ?? m.tipo,
                 Almacen: m.almacenes?.nombre, Destino: m.almacen_destino?.nombre ?? "",
                 Cantidad: m.cantidad, Usuario: m.perfiles?.nombre_completo, Nota: m.nota ?? "",
+                Estado: m.anulado ? "ANULADO" : "Vigente", MotivoAnulacion: m.motivo_anulacion ?? "",
               })))}>Exportar a Excel</button>
             )}
           </div>
@@ -286,14 +288,19 @@ export default function ReportesCliente() {
                 <thead><tr><th>Fecha</th><th>Tipo</th><th>Almacén</th><th>Destino</th><th className="num">Cant.</th><th>Usuario</th><th>Nota</th></tr></thead>
                 <tbody>
                   {kardex.map((m) => (
-                    <tr key={m.id}>
+                    <tr key={m.id} className={m.anulado ? "fila-anulada" : ""}>
                       <td style={{ whiteSpace: "nowrap" }}>{fecha(m.created_at)}</td>
-                      <td><span className={`badge ${m.tipo}`}>{ETIQUETA_TIPO[m.tipo] ?? m.tipo}</span></td>
+                      <td>
+                        <span className={`badge ${m.tipo}`}>{ETIQUETA_TIPO[m.tipo] ?? m.tipo}</span>
+                        {m.anulado && <span className="badge anulado" style={{ marginLeft: 4 }}>ANULADO</span>}
+                      </td>
                       <td>{m.almacenes?.nombre}</td>
                       <td>{m.almacen_destino?.nombre ?? "-"}</td>
                       <td className="num">{m.cantidad}</td>
                       <td>{m.perfiles?.nombre_completo}</td>
-                      <td style={{ fontSize: 13 }}>{m.nota ?? "-"}</td>
+                      <td style={{ fontSize: 13 }}>
+                        {m.anulado ? <span style={{ color: "#991b1b" }}>Motivo: {m.motivo_anulacion}</span> : (m.nota ?? "-")}
+                      </td>
                     </tr>
                   ))}
                   {!kardex.length && <tr><td colSpan={7} className="vacio">Este producto no tiene movimientos registrados.</td></tr>}
