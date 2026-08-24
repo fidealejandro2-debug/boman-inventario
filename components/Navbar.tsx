@@ -17,6 +17,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
 
   const puedeEditarProductos = perfil.rol === "admin";
   const puedeVerTodo = perfil.rol === "admin" || perfil.rol === "gerencia";
+  const puedeImportar = perfil.rol === "admin" || perfil.rol === "bodega";
 
   return (
     <div className="navbar">
@@ -27,6 +28,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
         <Link href="/movimientos">Movimientos</Link>
         {puedeEditarProductos && <Link href="/productos">Productos</Link>}
         {puedeVerTodo && <Link href="/reportes">Reportes</Link>}
+        {puedeImportar && <Link href="/importar">Importar</Link>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <span style={{ fontSize: 13, opacity: 0.85 }}>
