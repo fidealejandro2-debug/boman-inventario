@@ -10,20 +10,32 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
   const [filas, setFilas] = useState<any[]>([]);
   const [movs, setMovs] = useState<any[]>([]);
+  const [movimientosHoy, setMovimientosHoy] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const [s, m] = await Promise.all([
+      const inicioHoy = new Date();
+      inicioHoy.setHours(0, 0, 0, 0);
+      const finHoy = new Date(inicioHoy);
+      finHoy.setDate(finHoy.getDate() + 1);
+
+      const [s, m, h] = await Promise.all([
         supabase.from("vista_stock").select("producto_id, cantidad, bajo_minimo, almacen, producto, sku, talla, stock_minimo"),
         supabase.from("movimientos")
           .select("id, tipo, cantidad, created_at, anulado, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
           .order("created_at", { ascending: false }).limit(10),
+        supabase.from("movimientos")
+          .select("id", { count: "exact", head: true })
+          .eq("anulado", false)
+          .gte("created_at", inicioHoy.toISOString())
+          .lt("created_at", finHoy.toISOString()),
       ]);
-      if (s.error || m.error) setError(s.error?.message ?? m.error?.message ?? null);
+      if (s.error || m.error || h.error) setError(s.error?.message ?? m.error?.message ?? h.error?.message ?? null);
       if (s.data) setFilas(s.data);
       if (m.data) setMovs(m.data);
+      setMovimientosHoy(h.count ?? 0);
       setCargando(false);
     })();
   }, []);
@@ -31,8 +43,6 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const totalUnidades = filas.reduce((a, f) => a + f.cantidad, 0);
   const skusConStock = new Set(filas.filter((f) => f.cantidad > 0).map((f) => f.producto_id)).size;
   const alertas = useMemo(() => filas.filter((f) => f.bajo_minimo).sort((a, b) => a.cantidad - b.cantidad), [filas]);
-  const hoy = movs.filter((m) => !m.anulado && new Date(m.created_at).toDateString() === new Date().toDateString()).length;
-
   const puedeVerReportes = perfil.rol === "admin" || perfil.rol === "gerencia";
 
   return (
@@ -46,7 +56,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
             <div className="kpi"><div className="label">Unidades en stock</div><div className="valor">{totalUnidades.toLocaleString("es-EC")}</div></div>
             <div className="kpi"><div className="label">SKUs con stock</div><div className="valor">{skusConStock}</div></div>
             <div className={`kpi ${alertas.length ? "alerta" : "ok"}`}><div className="label">Alertas de stock</div><div className="valor">{alertas.length}</div></div>
-            <div className="kpi"><div className="label">Movimientos hoy</div><div className="valor">{hoy}</div></div>
+            <div className="kpi"><div className="label">Movimientos hoy</div><div className="valor">{movimientosHoy}</div></div>
           </div>
 
           {alertas.length > 0 && (

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
+import type { Perfil } from "@/lib/getPerfil";
 
 type Almacen = { id: string; nombre: string; tipo: string };
 type Item = { sku: string; cantidad: number };
@@ -22,11 +23,11 @@ const COL_CANT = ["cantidad", "cant", "stock", "existencia", "existencias", "sal
 const normalizar = (s: string) =>
   s.toString().trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-export default function ImportarCliente() {
+export default function ImportarCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
 
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
-  const [almacenId, setAlmacenId] = useState("");
+  const [almacenId, setAlmacenId] = useState(perfil.entidad_id ?? "");
   const [cerrarFaltantes, setCerrarFaltantes] = useState(true);
   const [nota, setNota] = useState("");
 
@@ -42,7 +43,12 @@ export default function ImportarCliente() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from("almacenes").select("id, nombre, tipo").eq("activo", true).order("tipo");
-      if (data) setAlmacenes(data as Almacen[]);
+      if (data) {
+        const visibles = perfil.entidad_id
+          ? data.filter((a: Almacen) => a.id === perfil.entidad_id)
+          : data;
+        setAlmacenes(visibles as Almacen[]);
+      }
     })();
   }, []);
 

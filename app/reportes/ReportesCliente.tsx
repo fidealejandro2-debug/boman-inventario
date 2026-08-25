@@ -24,7 +24,8 @@ type Tab = "almacen" | "categoria" | "bajo" | "matriz" | "kardex";
 export default function ReportesCliente() {
   const supabase = createClient();
   const [filas, setFilas] = useState<Fila[]>([]);
-  const [movs, setMovs] = useState<Mov[]>([]);
+  const [kardex, setKardex] = useState<Mov[]>([]);
+  const [cargandoKardex, setCargandoKardex] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("almacen");
@@ -33,18 +34,53 @@ export default function ReportesCliente() {
 
   useEffect(() => {
     (async () => {
-      const [s, m] = await Promise.all([
-        supabase.from("vista_stock").select("*"),
-        supabase.from("movimientos")
-          .select("id, tipo, cantidad, nota, created_at, anulado, motivo_anulacion, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
-          .order("created_at", { ascending: false }).limit(1000),
-      ]);
-      if (s.error || m.error) setError(s.error?.message ?? m.error?.message ?? null);
+      const s = await supabase.from("vista_stock").select("*");
+      if (s.error) setError(s.error.message);
       if (s.data) setFilas(s.data as Fila[]);
-      if (m.data) setMovs(m.data as any);
       setCargando(false);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!kardexProd) {
+      setKardex([]);
+      return;
+    }
+
+    let cancelado = false;
+    (async () => {
+      setCargandoKardex(true);
+      setError(null);
+      const acumulado: Mov[] = [];
+      const tamanoPagina = 1000;
+      let desde = 0;
+
+      while (!cancelado) {
+        const { data, error: errorKardex } = await supabase.from("movimientos")
+          .select("id, tipo, cantidad, nota, created_at, anulado, motivo_anulacion, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
+          .eq("producto_id", kardexProd)
+          .order("created_at", { ascending: false })
+          .range(desde, desde + tamanoPagina - 1);
+
+        if (errorKardex) {
+          if (!cancelado) setError(errorKardex.message);
+          break;
+        }
+
+        const pagina = (data as unknown as Mov[]) ?? [];
+        acumulado.push(...pagina);
+        if (pagina.length < tamanoPagina) break;
+        desde += tamanoPagina;
+      }
+
+      if (!cancelado) {
+        setKardex(acumulado);
+        setCargandoKardex(false);
+      }
+    })();
+
+    return () => { cancelado = true; };
+  }, [kardexProd]);
 
   // ---- Agregados ----
   const porAlmacen = useMemo(() => {
@@ -101,13 +137,6 @@ export default function ReportesCliente() {
     filas.forEach((f) => m.set(f.producto_id, { id: f.producto_id, sku: f.sku, nombre: f.producto }));
     return Array.from(m.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [filas]);
-
-  const kardex = useMemo(() => {
-    if (!kardexProd) return [];
-    const p = productosUnicos.find((x) => x.id === kardexProd);
-    if (!p) return [];
-    return movs.filter((m) => m.productos?.sku === p.sku);
-  }, [kardexProd, movs, productosUnicos]);
 
   const totalUnidades = filas.reduce((a, f) => a + f.cantidad, 0);
   const valorTotal = filas.reduce((a, f) => a + (f.precio ?? 0) * f.cantidad, 0);
@@ -285,6 +314,8 @@ export default function ReportesCliente() {
 
           {!kardexProd ? (
             <div className="vacio">Selecciona un producto para ver todo su historial de movimientos.</div>
+          ) : cargandoKardex ? (
+            <div className="vacio">Cargando kardex completo...</div>
           ) : (
             <div className="tabla-scroll">
               <table>

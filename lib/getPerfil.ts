@@ -17,13 +17,21 @@ export async function getPerfilActual(): Promise<Perfil> {
 
   if (!user) redirect("/login");
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error } = await supabase
     .from("perfiles")
     .select("id, nombre_completo, rol, entidad_id, activo")
     .eq("id", user.id)
     .single();
 
-  if (!perfil) redirect("/login");
+  if (error || !perfil) {
+    await supabase.auth.signOut();
+    redirect("/login?motivo=sin-perfil");
+  }
+
+  if (!perfil.activo) {
+    await supabase.auth.signOut();
+    redirect("/login?motivo=inactivo");
+  }
 
   return perfil as Perfil;
 }

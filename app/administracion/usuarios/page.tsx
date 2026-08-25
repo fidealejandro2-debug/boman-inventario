@@ -1,19 +1,19 @@
 export const dynamic = "force-dynamic";
 
-import { getPerfilActual } from "@/lib/getPerfil";
 import { redirect } from "next/navigation";
+import { getPerfilActual } from "@/lib/getPerfil";
 import Navbar from "@/components/Navbar";
-import ImportarCliente from "./ImportarCliente";
+import UsuariosCliente from "./UsuariosCliente";
 
-export default async function ImportarPage() {
+export default async function UsuariosPage() {
   const perfil = await getPerfilActual();
-  if (perfil.rol !== "admin" && perfil.rol !== "bodega") redirect("/dashboard");
+  if (perfil.rol !== "admin") redirect("/dashboard");
 
   return (
     <>
       <Navbar perfil={perfil} />
       <div className="container">
-        <ImportarCliente perfil={perfil} />
+        <UsuariosCliente usuarioActualId={perfil.id} />
       </div>
     </>
   );

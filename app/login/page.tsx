@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -11,6 +11,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const motivo = new URLSearchParams(window.location.search).get("motivo");
+    if (motivo === "inactivo") setError("Tu cuenta está inactiva. Solicita acceso al administrador.");
+    if (motivo === "sin-perfil") setError("Tu cuenta no tiene un perfil habilitado en el sistema.");
+    if (motivo === "enlace-invalido") setError("El enlace de invitación venció o ya fue utilizado. Solicita uno nuevo.");
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();

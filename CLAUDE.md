@@ -26,7 +26,7 @@ Deploy: push a GitHub → Vercel redespliega solo.
 | Framework | Next.js 14.2.35 (App Router) |
 | Backend | Supabase (Postgres + Auth + RLS) |
 | Auth | `@supabase/ssr` — cookies, middleware refresca sesión |
-| Excel | SheetJS (`xlsx` ^0.18.5) — lectura en el navegador |
+| Excel | SheetJS (`xlsx` 0.20.3 oficial) — lectura en el navegador |
 | Estilos | CSS plano en `app/globals.css`. **Sin Tailwind, sin librería de componentes.** |
 
 ### Variables de entorno
@@ -34,6 +34,8 @@ Deploy: push a GitHub → Vercel redespliega solo.
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://fpztguulwecbvkdokkef.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+NEXT_PUBLIC_SITE_URL=https://boman-inventario.vercel.app
+SUPABASE_SECRET_KEY=<secret key; solo servidor, nunca NEXT_PUBLIC_>
 ```
 
 ⚠️ La URL va **limpia**, sin `/rest/v1` al final. Ese sufijo ya rompió el login una vez.
@@ -51,6 +53,9 @@ app/
   productos/  page.tsx + ProductosCliente.tsx    catálogo, edición en línea (admin)
   reportes/   page.tsx + ReportesCliente.tsx     5 pestañas (admin/gerencia)
   importar/   page.tsx + ImportarCliente.tsx     toma física (admin/bodega)
+  administracion/usuarios/                       gestión de usuarios (admin)
+  auth/callback/                                 procesa invitaciones
+  establecer-clave/                             contraseña inicial
   globals.css
 components/Navbar.tsx               navegación según rol
 lib/
@@ -64,6 +69,9 @@ sql/
   v3_anular.sql              grupo_id, cantidad_anterior, anular v1
   v4_anulacion_logica.sql    anulación lógica (reemplaza v3)
   v5_importar_stock.sql      importar_stock()
+  v6_seguridad_consistencia.sql  seguridad, consistencia y auditoría
+  v7_administracion_usuarios.sql administración auditada de perfiles
+  v8_estado_productos.sql    activación/desactivación auditada; exige stock cero
 ```
 
 **Patrón:** `page.tsx` es Server Component (valida rol, redirige) y delega a un `*Cliente.tsx` con `"use client"` que hace las consultas y maneja filtros en memoria. Los volúmenes son chicos; no hace falta paginación en servidor.
@@ -177,7 +185,7 @@ Fotos de producto · escaneo de código de barras · alertas por correo al caer 
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** (`schema` → `v2` → `v3` → `v4` → `v5`). Son incrementales; v4 reemplaza la función de v3.
+1. Ejecuta los SQL **en orden** (`schema` → `v2` → `v3` → `v4` → `v5` → `v6` → `v7` → `v8`). Son incrementales; v4 reemplaza la función de v3.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.

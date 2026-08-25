@@ -17,7 +17,8 @@ Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel pa
 3. Cuando el proyecto esté listo, ve a **SQL Editor** (menú izquierdo) → **New query**.
 4. Ejecuta en orden, uno por uno, los archivos de la carpeta `sql`:
    `schema.sql`, `v2_upgrade.sql`, `v3_anular.sql`, `v4_anulacion_logica.sql`,
-   `v5_importar_stock.sql` y `v6_seguridad_consistencia.sql`.
+   `v5_importar_stock.sql`, `v6_seguridad_consistencia.sql` y
+   `v7_administracion_usuarios.sql` y `v8_estado_productos.sql`.
    La migración v6 es obligatoria: corrige permisos, ajustes a cero, anulaciones,
    importaciones por almacén y agrega auditoría de cambios de notas.
 5. Ve a **Project Settings → API**. Copia dos valores, los vas a necesitar:
@@ -57,11 +58,16 @@ Abre http://localhost:3000
 1. Sube esta carpeta a un repositorio de GitHub (crea el repo desde github.com, gratis).
 2. Ve a https://vercel.com, crea cuenta gratis con GitHub, clic en **Add New → Project** y elige
    el repositorio.
-3. En **Environment Variables**, agrega las mismas dos variables de `.env.local`:
+3. En **Environment Variables**, agrega las variables de `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_SITE_URL` (por ejemplo, `https://boman-inventario.vercel.app`)
+   - `SUPABASE_SECRET_KEY` (Secret key del servidor; no uses el prefijo `NEXT_PUBLIC_`)
 4. Clic en **Deploy**. En ~2 minutos tienes una URL pública (ej: `boman-inventario.vercel.app`)
    que pueden abrir desde el celular o computador.
+
+Para las invitaciones, agrega en **Supabase → Authentication → URL Configuration** la URL
+`https://tu-dominio.vercel.app/auth/callback` dentro de las Redirect URLs permitidas.
 
 ## 5. Uso diario
 
@@ -80,7 +86,10 @@ Abre http://localhost:3000
 - Ajustes de stock a cero y anulaciones posteriores corregidos.
 - Historial y kardex completos mediante paginación; exportación a Excel actualizada.
 - Repositorio Git inicializado.
+- Panel de administración para invitar, editar, asignar y desactivar usuarios.
+- Desactivación de productos auditada y bloqueada mientras exista stock.
 
-Pendiente operativo: aplicar `sql/v6_seguridad_consistencia.sql` en el proyecto real de
-Supabase y probar con un usuario de cada rol. Next.js 14 quedó marcado para una migración
+Pendiente operativo: aplicar `sql/v6_seguridad_consistencia.sql` y
+`sql/v7_administracion_usuarios.sql` y `sql/v8_estado_productos.sql` en el proyecto real de Supabase, configurar
+`SUPABASE_SECRET_KEY` y probar con un usuario de cada rol. Next.js 14 quedó marcado para una migración
 separada a una versión LTS, ya que implica también actualizar React y adaptar APIs asíncronas.

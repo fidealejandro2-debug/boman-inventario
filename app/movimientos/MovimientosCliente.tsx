@@ -82,17 +82,39 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function cargar() {
-    const [p, a, m] = await Promise.all([
+    setCargando(true);
+    const [p, a] = await Promise.all([
       supabase.from("productos").select("id, sku, nombre, categoria, talla").eq("activo", true).order("nombre"),
       supabase.from("almacenes").select("id, nombre, tipo").eq("activo", true).order("tipo"),
-      supabase.from("movimientos")
-        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, anulador:perfiles!movimientos_anulado_por_fkey(nombre_completo), productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
-        .order("created_at", { ascending: false }).limit(500),
     ]);
+
     if (p.data) setProductos(p.data as Producto[]);
     if (a.data) setAlmacenes(a.data as Almacen[]);
-    if (m.error) setMsg({ tipo: "error", texto: m.error.message });
-    else setMovs((m.data as any) ?? []);
+    if (p.error || a.error) {
+      setMsg({ tipo: "error", texto: p.error?.message ?? a.error!.message });
+      setCargando(false);
+      return;
+    }
+
+    const todos: Movimiento[] = [];
+    const tamanoPagina = 1000;
+    let desde = 0;
+    while (true) {
+      const m = await supabase.from("movimientos")
+        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, anulador:perfiles!movimientos_anulado_por_fkey(nombre_completo), productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
+        .order("created_at", { ascending: false })
+        .range(desde, desde + tamanoPagina - 1);
+
+      if (m.error) {
+        setMsg({ tipo: "error", texto: m.error.message });
+        break;
+      }
+      const pagina = (m.data as any as Movimiento[]) ?? [];
+      todos.push(...pagina);
+      if (pagina.length < tamanoPagina) break;
+      desde += tamanoPagina;
+    }
+    setMovs(todos);
     setCargando(false);
   }
 
@@ -108,6 +130,9 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   }, [buscaProd, productos]);
 
   const seleccionado = productos.find((p) => p.id === productoId);
+  const almacenesOrigen = perfil.entidad_id
+    ? almacenes.filter((a) => a.id === perfil.entidad_id)
+    : almacenes;
 
   const movsFiltrados = useMemo(() => {
     const q = fTexto.trim().toLowerCase();
@@ -133,7 +158,13 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
     if (!productoId) { setMsg({ tipo: "error", texto: "Busca y selecciona un producto." }); return; }
     if (!almacenId) { setMsg({ tipo: "error", texto: "Selecciona el almacén." }); return; }
     if (tipo === "transferencia_envio" && !destinoId) { setMsg({ tipo: "error", texto: "Selecciona el almacén destino." }); return; }
-    if (cantidad <= 0) { setMsg({ tipo: "error", texto: "La cantidad debe ser mayor a cero." }); return; }
+    if ((tipo === "ajuste" && cantidad < 0) || (tipo !== "ajuste" && cantidad <= 0)) {
+      setMsg({
+        tipo: "error",
+        texto: tipo === "ajuste" ? "El stock final no puede ser negativo." : "La cantidad debe ser mayor a cero.",
+      });
+      return;
+    }
 
     setGuardando(true);
     const { error } = await supabase.rpc("registrar_movimiento", {
@@ -215,7 +246,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                 <label>Almacén {tipo === "transferencia_envio" ? "(origen)" : ""}</label>
                 <select value={almacenId} onChange={(e) => setAlmacenId(e.target.value)} style={{ width: "100%" }}>
                   <option value="">Selecciona...</option>
-                  {almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                  {almacenesOrigen.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                 </select>
               </div>
               {tipo === "transferencia_envio" && (

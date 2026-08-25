@@ -29,6 +29,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
         {puedeEditarProductos && <Link href="/productos">Productos</Link>}
         {puedeVerTodo && <Link href="/reportes">Reportes</Link>}
         {puedeImportar && <Link href="/importar">Importar</Link>}
+        {perfil.rol === "admin" && <Link href="/administracion/usuarios">Usuarios</Link>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <span style={{ fontSize: 13, opacity: 0.85 }}>

@@ -32,8 +32,10 @@ export default function ProductosCliente() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [edit, setEdit] = useState<Partial<Producto>>({});
+  const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null);
 
   async function cargar() {
+    setCargando(true);
     const { data, error } = await supabase
       .from("productos")
       .select("id, sku, nombre, categoria, talla, color, stock_minimo, precio, activo")
@@ -69,15 +71,19 @@ export default function ProductosCliente() {
   async function crear(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
+    if (!nuevo.categoria.trim()) {
+      setMsg({ tipo: "error", texto: "La categoría es obligatoria." });
+      return;
+    }
     const { error } = await supabase.from("productos").insert({
       sku: nuevo.sku.trim(),
       nombre: nuevo.nombre.trim(),
-      categoria: nuevo.categoria.trim() || null,
+      categoria: nuevo.categoria.trim(),
       talla: nuevo.talla.trim() || null,
       color: nuevo.color.trim() || null,
       stock_minimo: Number(nuevo.stock_minimo) || 0,
       precio: nuevo.precio === "" ? null : Number(nuevo.precio),
-    });
+    }).select("id").single();
     if (error) {
       setMsg({ tipo: "error", texto: error.message.includes("duplicate") ? "Ese SKU ya existe." : error.message });
       return;
@@ -85,7 +91,7 @@ export default function ProductosCliente() {
     setMsg({ tipo: "ok", texto: "Producto creado." });
     setNuevo({ ...VACIO });
     setMostrarForm(false);
-    cargar();
+    await cargar();
   }
 
   function abrirEdicion(p: Producto) {
@@ -95,23 +101,62 @@ export default function ProductosCliente() {
 
   async function guardar(id: string) {
     setMsg(null);
+    const categoriaLimpia = String(edit.categoria ?? "").trim();
+    if (!categoriaLimpia) {
+      setMsg({ tipo: "error", texto: "La categoría es obligatoria." });
+      return;
+    }
     const { error } = await supabase.from("productos").update({
       nombre: edit.nombre,
-      categoria: edit.categoria || null,
+      categoria: categoriaLimpia,
       talla: edit.talla || null,
       color: edit.color || null,
       stock_minimo: Number(edit.stock_minimo) || 0,
       precio: edit.precio === null || edit.precio === undefined || (edit.precio as any) === "" ? null : Number(edit.precio),
-    }).eq("id", id);
+    }).eq("id", id).select("id").single();
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
     setEditando(null);
-    cargar();
+    setMsg({ tipo: "ok", texto: "Producto actualizado." });
+    await cargar();
   }
 
   async function alternarActivo(p: Producto) {
-    const { error } = await supabase.from("productos").update({ activo: !p.activo }).eq("id", p.id);
-    if (error) setMsg({ tipo: "error", texto: error.message });
-    else cargar();
+    const accion = p.activo ? "desactivar" : "reactivar";
+    const motivo = window.prompt(
+      `${p.activo ? "Desactivar" : "Reactivar"}: ${p.nombre} (${p.sku})\n\n` +
+      (p.activo
+        ? "Solo se permitirá si su stock total es cero. El historial de movimientos se conservará.\n\n"
+        : "El producto volverá a estar disponible para movimientos e importaciones.\n\n") +
+      `Indica el motivo para ${accion} el producto:`
+    );
+
+    if (motivo === null) return;
+    if (!motivo.trim()) {
+      setMsg({ tipo: "error", texto: "Debes indicar el motivo del cambio." });
+      return;
+    }
+
+    setMsg(null);
+    setCambiandoEstado(p.id);
+    const { error } = await supabase.rpc("admin_cambiar_estado_producto", {
+      p_producto_id: p.id,
+      p_activo: !p.activo,
+      p_motivo: motivo.trim(),
+    });
+    setCambiandoEstado(null);
+
+    if (error) {
+      setMsg({ tipo: "error", texto: error.message });
+      return;
+    }
+
+    setMsg({
+      tipo: "ok",
+      texto: p.activo
+        ? "Producto desactivado. Su historial permanece disponible."
+        : "Producto reactivado correctamente.",
+    });
+    await cargar();
   }
 
   return (
@@ -133,7 +178,7 @@ export default function ProductosCliente() {
               <div className="field"><label>Nombre</label>
                 <input value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} required style={{ width: "100%" }} /></div>
               <div className="field"><label>Categoría</label>
-                <input list="cats" value={nuevo.categoria} onChange={(e) => setNuevo({ ...nuevo, categoria: e.target.value })} style={{ width: "100%" }} />
+                <input list="cats" value={nuevo.categoria} onChange={(e) => setNuevo({ ...nuevo, categoria: e.target.value })} required style={{ width: "100%" }} />
                 <datalist id="cats">{categorias.map((c) => <option key={c} value={c} />)}</datalist></div>
               <div className="field"><label>Talla</label>
                 <input value={nuevo.talla} onChange={(e) => setNuevo({ ...nuevo, talla: e.target.value })} style={{ width: "100%" }} /></div>
@@ -219,8 +264,9 @@ export default function ProductosCliente() {
                       <td className="num">{p.precio != null ? `$${Number(p.precio).toFixed(2)}` : "-"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <button className="secondary" onClick={() => abrirEdicion(p)} style={{ padding: "5px 10px", marginRight: 5 }}>Editar</button>
-                        <button className="chip-limpiar" onClick={() => alternarActivo(p)} style={{ padding: "5px 10px" }}>
-                          {p.activo ? "Desactivar" : "Activar"}
+                        <button className="chip-limpiar" disabled={cambiandoEstado === p.id}
+                          onClick={() => alternarActivo(p)} style={{ padding: "5px 10px" }}>
+                          {cambiandoEstado === p.id ? "Procesando..." : p.activo ? "Desactivar" : "Activar"}
                         </button>
                       </td>
                     </tr>
