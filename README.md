@@ -15,8 +15,11 @@ Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel pa
 2. Clic en **New Project**. Ponle nombre `boman-inventario`, elige una contraseña de base de datos
    (guárdala, no la volverás a ver) y la región más cercana (US East suele ser la más rápida desde Ecuador).
 3. Cuando el proyecto esté listo, ve a **SQL Editor** (menú izquierdo) → **New query**.
-4. Copia y pega **todo** el contenido del archivo `sql/schema.sql` de este proyecto y dale **Run**.
-   Esto crea las tablas, los roles y la seguridad (RLS) automáticamente.
+4. Ejecuta en orden, uno por uno, los archivos de la carpeta `sql`:
+   `schema.sql`, `v2_upgrade.sql`, `v3_anular.sql`, `v4_anulacion_logica.sql`,
+   `v5_importar_stock.sql` y `v6_seguridad_consistencia.sql`.
+   La migración v6 es obligatoria: corrige permisos, ajustes a cero, anulaciones,
+   importaciones por almacén y agrega auditoría de cambios de notas.
 5. Ve a **Project Settings → API**. Copia dos valores, los vas a necesitar:
    - **Project URL**
    - **anon public key**
@@ -29,8 +32,8 @@ Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel pa
 3. Para ajustar el rol y la entidad de cada quien: ve a **Table Editor → perfiles** y edita la fila
    de cada usuario:
    - `rol`: `admin`, `bodega`, `logistica` o `gerencia`
-   - `entidad_id`: copia el `id` de CIA LTDA o BMSPORT SAS desde la tabla `entidades`
-     (déjalo vacío/null para admin y gerencia, así ven todas las entidades)
+   - `entidad_id`: copia el `id` de la tienda o bodega asignada desde la tabla `almacenes`
+     (déjalo vacío/null para admin y gerencia, así ven todos los almacenes)
 
    Sugerencia según tu equipo:
    - Tú (Fidel) → `admin`
@@ -64,17 +67,20 @@ Abre http://localhost:3000
 
 - **Bodega**: entra a "Movimientos" → registra entradas (producción terminada que llega) y salidas
   (ventas/despachos). El stock se actualiza solo.
-- **Logística**: usa "Movimientos" con tipo "Transferencia entre entidades" cuando muevan producto
-  de CIA LTDA a BMSPORT SAS o viceversa. Se refleja automáticamente en ambos lados.
+- **Logística**: usa "Movimientos" con tipo "Transferencia" cuando mueva producto de un almacén
+  a otro. El despacho y la recepción se registran automáticamente como un solo grupo auditable.
 - **Admin (tú)**: da de alta productos nuevos en "Productos", y tienes acceso total.
 - **Gerencia (Diego)**: solo ve "Stock" y "Reportes", sin poder editar nada.
 
-## Próximos pasos posibles (cuando lo necesites)
+## Estado de la Fase 0
 
-- Exportar reportes a Excel
-- Alertas de stock mínimo por producto
-- Historial de movimientos filtrable por fecha/producto
-- Fotos de producto en el catálogo
-- Código de barras / escaneo desde el celular
+- Compilación de producción verificada.
+- Movimientos e importaciones protegidos mediante funciones atómicas de Supabase.
+- Acceso restringido por usuario activo y almacén asignado.
+- Ajustes de stock a cero y anulaciones posteriores corregidos.
+- Historial y kardex completos mediante paginación; exportación a Excel actualizada.
+- Repositorio Git inicializado.
 
-Dime cuál de estos quieres primero y lo construyo.
+Pendiente operativo: aplicar `sql/v6_seguridad_consistencia.sql` en el proyecto real de
+Supabase y probar con un usuario de cada rol. Next.js 14 quedó marcado para una migración
+separada a una versión LTS, ya que implica también actualizar React y adaptar APIs asíncronas.

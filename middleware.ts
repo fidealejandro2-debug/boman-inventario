@@ -6,6 +6,12 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  function redirectConCookies(url: URL) {
+    const redirectResponse = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -34,13 +40,30 @@ export async function middleware(request: NextRequest) {
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return redirectConCookies(url);
+  }
+
+  if (user) {
+    const { data: perfil, error: perfilError } = await supabase
+      .from("perfiles")
+      .select("activo")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (perfilError || !perfil?.activo) {
+      await supabase.auth.signOut({ scope: "local" });
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = `?motivo=${perfil ? "inactivo" : "sin-perfil"}`;
+      return redirectConCookies(url);
+    }
   }
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    url.search = "";
+    return redirectConCookies(url);
   }
 
   return response;
