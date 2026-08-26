@@ -17,8 +17,9 @@ Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel pa
 3. Cuando el proyecto esté listo, ve a **SQL Editor** (menú izquierdo) → **New query**.
 4. Ejecuta en orden, uno por uno, los archivos de la carpeta `sql`:
    `schema.sql`, `v2_upgrade.sql`, `v3_anular.sql`, `v4_anulacion_logica.sql`,
-   `v5_importar_stock.sql`, `v6_seguridad_consistencia.sql` y
-   `v7_administracion_usuarios.sql` y `v8_estado_productos.sql`.
+   `v5_importar_stock.sql`, `v6_seguridad_consistencia.sql`,
+   `v7_administracion_usuarios.sql`, `v8_estado_productos.sql`,
+   `v9_reparar_estado_productos.sql` y `v10_categorias_subcategorias.sql`.
    La migración v6 es obligatoria: corrige permisos, ajustes a cero, anulaciones,
    importaciones por almacén y agrega auditoría de cambios de notas.
 5. Ve a **Project Settings → API**. Copia dos valores, los vas a necesitar:
@@ -88,8 +89,9 @@ Para las invitaciones, agrega en **Supabase → Authentication → URL Configura
 - Repositorio Git inicializado.
 - Panel de administración para invitar, editar, asignar y desactivar usuarios.
 - Desactivación de productos auditada y bloqueada mientras exista stock.
+- Catálogo administrable de categorías y subcategorías para productos.
 
-Pendiente operativo: aplicar `sql/v6_seguridad_consistencia.sql` y
-`sql/v7_administracion_usuarios.sql` y `sql/v8_estado_productos.sql` en el proyecto real de Supabase, configurar
+Pendiente operativo: aplicar las migraciones SQL numeradas hasta
+`sql/v10_categorias_subcategorias.sql` en el proyecto real de Supabase, configurar
 `SUPABASE_SECRET_KEY` y probar con un usuario de cada rol. Next.js 14 quedó marcado para una migración
 separada a una versión LTS, ya que implica también actualizar React y adaptar APIs asíncronas.

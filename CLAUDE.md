@@ -72,6 +72,8 @@ sql/
   v6_seguridad_consistencia.sql  seguridad, consistencia y auditoría
   v7_administracion_usuarios.sql administración auditada de perfiles
   v8_estado_productos.sql    activación/desactivación auditada; exige stock cero
+  v9_reparar_estado_productos.sql corrige propietario/permisos de la RPC de estado
+  v10_categorias_subcategorias.sql catálogo jerárquico para productos
 ```
 
 **Patrón:** `page.tsx` es Server Component (valida rol, redirige) y delega a un `*Cliente.tsx` con `"use client"` que hace las consultas y maneja filtros en memoria. Los volúmenes son chicos; no hace falta paginación en servidor.
@@ -185,7 +187,7 @@ Fotos de producto · escaneo de código de barras · alertas por correo al caer 
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** (`schema` → `v2` → `v3` → `v4` → `v5` → `v6` → `v7` → `v8`). Son incrementales; v4 reemplaza la función de v3.
+1. Ejecuta los SQL **en orden** (`schema` → `v2` → `v3` → `v4` → `v5` → `v6` → `v7` → `v8` → `v9` → `v10`). Son incrementales; v4 reemplaza la función de v3.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.
