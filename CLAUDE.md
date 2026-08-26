@@ -86,6 +86,8 @@ sql/
   verificacion_v13.sql       comprobaciones de instalación de Ventas XML
   v14_anulacion_ventas_xml.sql reversión auditada de facturas XML exclusiva de admin
   verificacion_v14.sql       comprobaciones de instalación de la anulación administrativa
+  v15_admin_aprueba_conteo_propio.sql excepción auditada para que admin resuelva su propio conteo
+  verificacion_v15.sql       comprueba la excepción exclusiva de admin
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 
@@ -172,6 +174,8 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 
 **Tienda y Bodega pueden cargar XML, pero no anularlos.** Los usuarios `tienda` y `bodega` importan únicamente contra sus almacenes asignados. La anulación de la aplicación en inventario exige rol `admin`, motivo y conserva responsable/fecha. Tampoco anula el comprobante en el facturador ni ante el SRI.
 
+**Admin puede resolver su propio conteo como excepción explícita.** El rol `control` conserva la separación entre quien cuenta y quien revisa. Cuando `admin` registra el segundo conteo o aprueba uno creado por sí mismo, el evento y los ajustes lo identifican como `Excepción Admin`.
+
 ---
 
 ## Funcionalidad actual
@@ -196,6 +200,7 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - [ ] Realizar la prueba de aceptación de `sql/verificacion_v12.sql` con usuarios distintos de Bodega, Tienda y Control.
 - [ ] Después de aprobar v12, ejecutar `sql/v13_ventas_xml.sql` y luego `sql/verificacion_v13.sql`.
 - [ ] Después de validar v13, ejecutar `sql/v14_anulacion_ventas_xml.sql` y luego `sql/verificacion_v14.sql`.
+- [ ] Ejecutar `sql/v15_admin_aprueba_conteo_propio.sql` y validar con `sql/verificacion_v15.sql`.
 - [ ] Probar v13 con una factura real primero en un almacén de prueba y confirmar la distribución por talla/color antes de aplicarla.
 - [ ] Asignar roles a los usuarios restantes:
       Jonathan Guaygua y Tatiana Sánchez → `bodega` / Bodega Central ·
@@ -224,7 +229,7 @@ Fotos de producto · código de barras · alertas por correo · costos/valoraci�
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** hasta `v14`. Si producción ya está en v11, ejecuta v12, valida, ejecuta v13, valida y finalmente v14.
+1. Ejecuta los SQL **en orden** hasta `v15`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14 y v15.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.
