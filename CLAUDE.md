@@ -84,6 +84,8 @@ sql/
   verificacion_v12.sql       comprobaciones de instalación y prueba de aceptación
   v13_ventas_xml.sql         facturas SRI, equivalencias de SKU y ventas contra inventario
   verificacion_v13.sql       comprobaciones de instalación de Ventas XML
+  v14_anulacion_ventas_xml.sql reversión auditada de facturas XML exclusiva de admin
+  verificacion_v14.sql       comprobaciones de instalación de la anulación administrativa
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 
@@ -151,6 +153,7 @@ Expone stock físico, reservado, disponible, tránsito de entrada/salida y repos
 | `control_anular_movimiento` | Anulación segregada y auditada por Control. |
 | `admin_importar_catalogo_productos(p_items, p_nota)` | Crea/actualiza el catálogo maestro, categorías, precios y mínimos en una transacción auditada. No modifica stock. |
 | `aplicar_factura_venta_xml(p_documento, p_almacen_id, p_asignaciones, p_nota)` | Valida una factura SRI autorizada, evita duplicados, aprende equivalencias y descuenta stock atómicamente. |
+| `admin_anular_factura_venta_xml(p_documento_id, p_motivo)` | Solo admin: reintegra el stock y marca factura/movimientos como anulados sin borrar evidencia. |
 
 ---
 
@@ -166,6 +169,8 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 **Los errores de carga se muestran en pantalla.** Nada de tragarse el error y renderizar "sin resultados" — eso mandó a buscar el problema en los filtros cuando estaba en la consulta.
 
 **Ventas XML no sustituye al facturador.** El XML autorizado se interpreta en el navegador. La base conserva la clave de acceso, huella SHA-256, cabecera operativa, líneas y asignaciones; no guarda el XML completo ni datos personales del cliente. Una factura solo puede descontar inventario una vez.
+
+**Tienda y Bodega pueden cargar XML, pero no anularlos.** Los usuarios `tienda` y `bodega` importan únicamente contra sus almacenes asignados. La anulación de la aplicación en inventario exige rol `admin`, motivo y conserva responsable/fecha. Tampoco anula el comprobante en el facturador ni ante el SRI.
 
 ---
 
@@ -190,6 +195,7 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - [ ] Ejecutar v12 en producción y asignar roles/almacenes desde Administración → Usuarios.
 - [ ] Realizar la prueba de aceptación de `sql/verificacion_v12.sql` con usuarios distintos de Bodega, Tienda y Control.
 - [ ] Después de aprobar v12, ejecutar `sql/v13_ventas_xml.sql` y luego `sql/verificacion_v13.sql`.
+- [ ] Después de validar v13, ejecutar `sql/v14_anulacion_ventas_xml.sql` y luego `sql/verificacion_v14.sql`.
 - [ ] Probar v13 con una factura real primero en un almacén de prueba y confirmar la distribución por talla/color antes de aplicarla.
 - [ ] Asignar roles a los usuarios restantes:
       Jonathan Guaygua y Tatiana Sánchez → `bodega` / Bodega Central ·
@@ -218,7 +224,7 @@ Fotos de producto · código de barras · alertas por correo · costos/valoraci�
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** hasta `v13`. Si producción ya está en v11, ejecuta `v12_fase_erp_operativa.sql` y, después de validarlo, `v13_ventas_xml.sql`, una sola vez cada uno.
+1. Ejecuta los SQL **en orden** hasta `v14`. Si producción ya está en v11, ejecuta v12, valida, ejecuta v13, valida y finalmente v14.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.

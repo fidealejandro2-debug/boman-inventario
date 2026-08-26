@@ -7,7 +7,7 @@ import VentasXmlCliente from "./VentasXmlCliente";
 
 export default async function VentasPage() {
   const perfil = await getPerfilActual();
-  if (!["admin", "control", "tienda", "gerencia"].includes(perfil.rol)) redirect("/dashboard");
+  if (!["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol)) redirect("/dashboard");
 
   return (
     <>

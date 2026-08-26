@@ -63,7 +63,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeAdministrar = perfil.rol === "admin";
   const puedeConfigurarStock = perfil.rol === "admin" || perfil.rol === "control";
   const puedeVerControl = ["admin", "control", "gerencia"].includes(perfil.rol);
-  const puedeVerVentas = ["admin", "control", "tienda", "gerencia"].includes(perfil.rol);
+  const puedeVerVentas = ["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol);
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",

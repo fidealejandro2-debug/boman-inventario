@@ -20,16 +20,21 @@ type DocumentoVenta = {
   importe_total: number;
   unidades_inventario: number;
   created_at: string;
+  anulado: boolean;
+  motivo_anulacion: string | null;
+  anulado_at: string | null;
   almacen: { nombre: string } | null;
   creador: { nombre_completo: string } | null;
+  anulador: { nombre_completo: string } | null;
 };
 
-const normalizar = (valor: string | null | undefined) => (valor ?? "").trim().toLocaleLowerCase("es");
+const normalizar = (valor: string | null | undefined) => (valor ?? "")
+  .trim().toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 const dinero = new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" });
 
 export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
-  const puedeImportar = ["admin", "control", "tienda"].includes(perfil.rol);
+  const puedeImportar = ["admin", "control", "tienda", "bodega"].includes(perfil.rol);
   const rolGlobal = ["admin", "control", "gerencia"].includes(perfil.rol);
   const [tab, setTab] = useState<"importar" | "historial">(puedeImportar ? "importar" : "historial");
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
@@ -45,6 +50,9 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   const [almacenId, setAlmacenId] = useState(perfil.entidad_id ?? "");
   const [lineas, setLineas] = useState<Record<number, EstadoLinea>>({});
   const [busquedas, setBusquedas] = useState<Record<number, string>>({});
+  const [selectorLinea, setSelectorLinea] = useState<number | null>(null);
+  const [seleccionCatalogo, setSeleccionCatalogo] = useState<Set<string>>(new Set());
+  const [busquedaCatalogo, setBusquedaCatalogo] = useState("");
   const [stock, setStock] = useState<Record<string, number>>({});
   const [nota, setNota] = useState("");
   const [cargando, setCargando] = useState(true);
@@ -62,9 +70,10 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
       supabase.from("emisores_facturacion").select("ruc").eq("activo", true),
       supabase.from("documentos_venta_xml").select(`
         id, numero_documento, razon_social_emisor, fecha_emision, importe_total,
-        unidades_inventario, created_at,
+        unidades_inventario, created_at, anulado, motivo_anulacion, anulado_at,
         almacen:almacenes!documentos_venta_xml_almacen_id_fkey(nombre),
-        creador:perfiles!documentos_venta_xml_creado_por_fkey(nombre_completo)
+        creador:perfiles!documentos_venta_xml_creado_por_fkey(nombre_completo),
+        anulador:perfiles!documentos_venta_xml_anulado_por_fkey(nombre_completo)
       `).order("created_at", { ascending: false }).limit(150),
     ]);
     const error = a.error ?? pa.error ?? p.error ?? c.error ?? e.error ?? em.error ?? h.error;
@@ -184,6 +193,69 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     setLineas({ ...lineas, [numeroLinea]: { afectaInventario, asignaciones: afectaInventario ? estado.asignaciones : [] } });
   }
 
+  function abrirSelectorCatalogo(linea: LineaFacturaSri) {
+    setSelectorLinea(linea.numeroLinea);
+    setSeleccionCatalogo(new Set(lineas[linea.numeroLinea]?.asignaciones.map((a) => a.productoId) ?? []));
+    setBusquedaCatalogo(linea.descripcion);
+  }
+
+  function alternarProductoCatalogo(productoId: string, seleccionado: boolean) {
+    const siguiente = new Set(seleccionCatalogo);
+    seleccionado ? siguiente.add(productoId) : siguiente.delete(productoId);
+    setSeleccionCatalogo(siguiente);
+  }
+
+  function guardarSeleccionCatalogo(repartir: boolean) {
+    if (selectorLinea == null || !factura) return;
+    const lineaXml = factura.lineas.find((linea) => linea.numeroLinea === selectorLinea);
+    if (!lineaXml) return;
+    const ids = Array.from(seleccionCatalogo);
+    if (!ids.length) {
+      setMsg({ tipo: "error", texto: `Selecciona al menos un producto para la línea ${selectorLinea}.` });
+      return;
+    }
+    if (!Number.isInteger(lineaXml.cantidad) || ids.length > lineaXml.cantidad) {
+      setMsg({ tipo: "error", texto: `No se pueden distribuir ${lineaXml.cantidad} unidades entre ${ids.length} productos con cantidades enteras positivas.` });
+      return;
+    }
+
+    const anteriores = new Map((lineas[selectorLinea]?.asignaciones ?? []).map((a) => [a.productoId, a.cantidad]));
+    const base = Math.floor(lineaXml.cantidad / ids.length);
+    const residuo = lineaXml.cantidad % ids.length;
+    const asignaciones = ids.map((productoId, indice) => ({
+      productoId,
+      cantidad: repartir
+        ? String(base + (indice < residuo ? 1 : 0))
+        : (anteriores.get(productoId) ?? (ids.length === 1 ? String(lineaXml.cantidad) : "1")),
+    }));
+    setLineas({ ...lineas, [selectorLinea]: { afectaInventario: true, asignaciones } });
+    setSelectorLinea(null);
+    setSeleccionCatalogo(new Set());
+    setBusquedaCatalogo("");
+    setMsg(repartir ? { tipo: "ok", texto: "Reparto provisional creado. Revisa las cantidades por talla o color antes de aplicar." } : null);
+  }
+
+  function repartirLineaPorIgual(numeroLinea: number) {
+    if (!factura) return;
+    const lineaXml = factura.lineas.find((linea) => linea.numeroLinea === numeroLinea);
+    const estado = lineas[numeroLinea];
+    if (!lineaXml || !estado?.asignaciones.length) return;
+    if (!Number.isInteger(lineaXml.cantidad) || estado.asignaciones.length > lineaXml.cantidad) {
+      setMsg({ tipo: "error", texto: "No es posible repartir esa cantidad en enteros positivos." });
+      return;
+    }
+    const base = Math.floor(lineaXml.cantidad / estado.asignaciones.length);
+    const residuo = lineaXml.cantidad % estado.asignaciones.length;
+    setLineas({
+      ...lineas,
+      [numeroLinea]: {
+        ...estado,
+        asignaciones: estado.asignaciones.map((a, indice) => ({ ...a, cantidad: String(base + (indice < residuo ? 1 : 0)) })),
+      },
+    });
+    setMsg({ tipo: "ok", texto: "Reparto provisional actualizado. Confirma las cantidades reales antes de aplicar." });
+  }
+
   const totalesProducto = useMemo(() => {
     const totales: Record<string, number> = {};
     Object.values(lineas).forEach((linea) => linea.asignaciones.forEach((a) => {
@@ -263,6 +335,29 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     await cargarDatos();
   }
 
+  async function anularFactura(documento: DocumentoVenta) {
+    const motivo = window.prompt(
+      `Motivo obligatorio para anular la factura ${documento.numero_documento}:\n\n` +
+      "Esta acción revierte el inventario, pero no anula el comprobante en el sistema de facturación ni ante el SRI."
+    )?.trim();
+    if (!motivo) return;
+    if (!window.confirm(
+      `Se reintegrarán ${documento.unidades_inventario} unidades a ${documento.almacen?.nombre ?? "su almacén"}.\n\n` +
+      "La factura y sus movimientos permanecerán visibles como ANULADOS. ¿Deseas continuar?"
+    )) return;
+
+    setProcesando(true); setMsg(null);
+    const { data, error } = await supabase.rpc("admin_anular_factura_venta_xml", {
+      p_documento_id: documento.id,
+      p_motivo: motivo,
+    });
+    setProcesando(false);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    const resultado = data as { mensaje?: string } | null;
+    setMsg({ tipo: "ok", texto: resultado?.mensaje ?? "Factura anulada y stock reintegrado." });
+    await cargarDatos();
+  }
+
   function sugerencias(numeroLinea: number) {
     const consulta = normalizar(busquedas[numeroLinea]);
     if (!consulta) return [];
@@ -289,6 +384,18 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     const asignados = new Set(lineas[linea.numeroLinea]?.asignaciones.map((a) => a.productoId) ?? []);
     return productos.filter((producto) => ids.has(producto.id) && !asignados.has(producto.id));
   }
+
+  const productosCatalogo = useMemo(() => {
+    const consulta = normalizar(busquedaCatalogo);
+    const palabras = consulta.split(/\s+/).filter(Boolean);
+    return productos.filter((producto) => {
+      if (!consulta) return true;
+      const texto = normalizar(`${producto.sku} ${producto.nombre} ${producto.talla ?? ""} ${producto.color ?? ""}`);
+      return palabras.every((palabra) =>
+        texto.includes(palabra) || (palabra.endsWith("s") && texto.includes(palabra.slice(0, -1)))
+      );
+    }).slice(0, 300);
+  }, [busquedaCatalogo, productos]);
 
   return (
     <>
@@ -326,7 +433,7 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
 
           <section className="card">
             <h3 style={{ marginTop: 0 }}>3. Relacionar productos</h3>
-            <p className="conteo">Cada línea inventariable debe quedar distribuida exactamente. La equivalencia confirmada se recordará para próximas facturas.</p>
+            <div className="info-box"><strong>¿Qué significa asignación masiva?</strong> Abre una línea del XML, marca juntos todos los SKU o tallas que le corresponden y agrégalos en una sola acción. Puedes repartir el total por igual como punto de partida y después corregir las cantidades reales.</div>
             <div className="lista-lineas-xml">{factura.lineas.map((linea) => {
               const estado = lineas[linea.numeroLinea] ?? { afectaInventario: true, asignaciones: [] };
               const totalAsignado = estado.asignaciones.reduce((suma, a) => suma + Number(a.cantidad || 0), 0);
@@ -339,6 +446,7 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
                 <label className="opcion-destacada compacta"><input type="checkbox" checked={!estado.afectaInventario} onChange={(e) => cambiarAfectacion(linea.numeroLinea, !e.target.checked)} /> Es servicio u otro concepto que no descuenta inventario</label>
                 {estado.afectaInventario && <>
                   {productosRecordados(linea).length > 0 && <div className="recordados-xml"><span>Coincidencias por código:</span>{productosRecordados(linea).map((producto) => <button className="secondary" type="button" key={producto.id} onClick={() => agregarProducto(linea.numeroLinea, producto.id)}>{producto.sku} · {producto.talla ?? producto.color ?? producto.nombre}</button>)}</div>}
+                  <div className="acciones-masivas-xml"><button type="button" onClick={() => abrirSelectorCatalogo(linea)}>Seleccionar varios del catálogo</button>{estado.asignaciones.length > 1 && <button className="secondary" type="button" onClick={() => repartirLineaPorIgual(linea.numeroLinea)}>Repartir {linea.cantidad} por igual</button>}<span>{estado.asignaciones.length} producto(s) seleccionado(s)</span></div>
                   <div className="asignaciones-xml">{estado.asignaciones.map((a) => {
                     const producto = productos.find((p) => p.id === a.productoId);
                     return <div className="asignacion-xml" key={a.productoId}>
@@ -367,8 +475,19 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
 
       {tab === "historial" && <section className="card">
         <h3 style={{ marginTop: 0 }}>Facturas aplicadas</h3>
-        {cargando ? <div className="vacio">Cargando…</div> : <div className="tabla-scroll"><table><thead><tr><th>Factura</th><th>Emisor</th><th>Fecha venta</th><th>Almacén</th><th className="num">Unidades</th><th className="num">Total</th><th>Aplicada por</th><th>Importada</th></tr></thead><tbody>{historial.map((doc) => <tr key={doc.id}><td><strong>{doc.numero_documento}</strong></td><td>{doc.razon_social_emisor}</td><td>{doc.fecha_emision}</td><td>{doc.almacen?.nombre ?? "-"}</td><td className="num">{doc.unidades_inventario}</td><td className="num">{dinero.format(Number(doc.importe_total))}</td><td>{doc.creador?.nombre_completo ?? "-"}</td><td>{fecha(doc.created_at)}</td></tr>)}{!historial.length && <tr><td colSpan={8} className="vacio">Todavía no hay facturas XML aplicadas.</td></tr>}</tbody></table></div>}
+        {cargando ? <div className="vacio">Cargando…</div> : <div className="tabla-scroll"><table><thead><tr><th>Factura</th><th>Emisor</th><th>Fecha venta</th><th>Almacén</th><th className="num">Unidades</th><th className="num">Total</th><th>Aplicada por</th><th>Importada</th><th>Estado</th><th></th></tr></thead><tbody>{historial.map((doc) => <tr key={doc.id} className={doc.anulado ? "fila-anulada" : ""}><td><strong>{doc.numero_documento}</strong></td><td>{doc.razon_social_emisor}</td><td>{doc.fecha_emision}</td><td>{doc.almacen?.nombre ?? "-"}</td><td className="num">{doc.unidades_inventario}</td><td className="num">{dinero.format(Number(doc.importe_total))}</td><td>{doc.creador?.nombre_completo ?? "-"}</td><td>{fecha(doc.created_at)}</td><td>{doc.anulado ? <span className="badge anulado" title={`${doc.motivo_anulacion ?? ""} · ${doc.anulador?.nombre_completo ?? ""} · ${doc.anulado_at ? fecha(doc.anulado_at) : ""}`}>ANULADA</span> : <span className="badge ok">APLICADA</span>}</td><td>{perfil.rol === "admin" && !doc.anulado && <button className="peligro" disabled={procesando} onClick={() => anularFactura(doc)}>Anular</button>}{doc.anulado && <small>{doc.motivo_anulacion}</small>}</td></tr>)}{!historial.length && <tr><td colSpan={10} className="vacio">Todavía no hay facturas XML aplicadas.</td></tr>}</tbody></table></div>}
       </section>}
+
+      {selectorLinea != null && factura && <div className="modal-operativo" role="dialog" aria-modal="true" aria-label="Seleccionar productos del catálogo">
+        <div className="modal-contenido ancho selector-catalogo-xml">
+          <div className="header-row"><div><h3 style={{ margin: 0 }}>Seleccionar productos</h3><p className="conteo">Línea {selectorLinea}: {factura.lineas.find((l) => l.numeroLinea === selectorLinea)?.descripcion} · Cantidad XML: <strong>{factura.lineas.find((l) => l.numeroLinea === selectorLinea)?.cantidad}</strong></p></div><button className="chip-limpiar" type="button" onClick={() => setSelectorLinea(null)}>Cerrar</button></div>
+          <div className="field"><label>Buscar en el catálogo</label><input autoFocus value={busquedaCatalogo} onChange={(e) => setBusquedaCatalogo(e.target.value)} placeholder="SKU, producto, talla o color" /></div>
+          <div className="resumen-seleccion-xml"><strong>{seleccionCatalogo.size} seleccionados</strong><span>Marca todos los productos internos que forman parte de esta línea.</span></div>
+          <div className="catalogo-productos-xml">{productosCatalogo.map((producto) => <label key={producto.id} className={seleccionCatalogo.has(producto.id) ? "seleccionado" : ""}><input type="checkbox" checked={seleccionCatalogo.has(producto.id)} onChange={(e) => alternarProductoCatalogo(producto.id, e.target.checked)} /><strong>{producto.sku}</strong><span>{producto.nombre}</span><small>{producto.talla ? `Talla ${producto.talla}` : ""} {producto.color ?? ""}</small><b>Stock {stock[producto.id] ?? 0}</b></label>)}{!productosCatalogo.length && <div className="vacio">No se encontraron productos con ese filtro.</div>}</div>
+          <div className="info-box">El reparto por igual es únicamente una ayuda inicial. Debes corregirlo si la factura agrupa cantidades distintas por talla o color.</div>
+          <div className="acciones-documento"><button type="button" disabled={!seleccionCatalogo.size} onClick={() => guardarSeleccionCatalogo(true)}>Agregar y repartir por igual</button><button className="secondary" type="button" disabled={!seleccionCatalogo.size} onClick={() => guardarSeleccionCatalogo(false)}>Agregar para ajustar manualmente</button><button className="chip-limpiar" type="button" onClick={() => setSeleccionCatalogo(new Set())}>Limpiar selección</button></div>
+        </div>
+      </div>}
     </>
   );
 }
