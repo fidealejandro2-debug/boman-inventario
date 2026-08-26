@@ -1430,8 +1430,17 @@ select
   greatest(coalesce(i.cantidad, 0) - coalesce(res.reservado, 0), 0) as stock_disponible,
   coalesce(te.entrada, 0) as transito_entrada,
   coalesce(ts.salida, 0) as transito_salida,
-  (coalesce(i.cantidad, 0) <= c.stock_minimo) as bajo_minimo,
-  greatest(c.punto_reposicion - (coalesce(i.cantidad, 0) + coalesce(te.entrada, 0)), 0) as sugerido_reponer,
+  (greatest(coalesce(i.cantidad, 0) - coalesce(res.reservado, 0), 0) <= c.stock_minimo) as bajo_minimo,
+  case
+    when greatest(coalesce(i.cantidad, 0) - coalesce(res.reservado, 0), 0)
+         + coalesce(te.entrada, 0) <= c.punto_reposicion
+    then greatest(
+      coalesce(c.stock_maximo, c.punto_reposicion)
+      - (greatest(coalesce(i.cantidad, 0) - coalesce(res.reservado, 0), 0) + coalesce(te.entrada, 0)),
+      0
+    )
+    else 0
+  end as sugerido_reponer,
   i.updated_at
 from public.producto_almacen_config c
 join public.productos p on p.id = c.producto_id and p.activo

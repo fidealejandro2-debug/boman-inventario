@@ -105,14 +105,22 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
 
   async function guardarConteo(enviar: boolean) {
     if (!activo) return;
-    const items = activo.lineas.filter((l) => valores[l.producto_id] !== "").map((l) => ({
+    const vacios = activo.lineas.filter((l) => (valores[l.producto_id] ?? "") === "");
+    if (enviar && vacios.length > 0) {
+      const confirmar = window.confirm(
+        `${vacios.length} producto(s) están vacíos y se registrarán con cantidad 0.\n\n` +
+        "Esto significa que físicamente no encontraste existencias de esos productos. ¿Deseas continuar?"
+      );
+      if (!confirmar) return;
+    }
+    const valoresFinales = { ...valores };
+    if (enviar) vacios.forEach((l) => { valoresFinales[l.producto_id] = "0"; });
+    if (enviar && vacios.length) setValores(valoresFinales);
+    const items = activo.lineas.filter((l) => enviar || (valoresFinales[l.producto_id] ?? "") !== "").map((l) => ({
       producto_id: l.producto_id,
-      cantidad: Number(valores[l.producto_id]),
+      cantidad: Number(valoresFinales[l.producto_id] || 0),
       observacion: observaciones[l.producto_id] || null,
     }));
-    if (enviar && items.length !== activo.lineas.length) {
-      setMsg({ tipo: "error", texto: `Faltan ${activo.lineas.length - items.length} productos por contar.` }); return;
-    }
     if (items.some((i) => !Number.isInteger(i.cantidad) || i.cantidad < 0)) {
       setMsg({ tipo: "error", texto: "Todas las cantidades deben ser enteros iguales o mayores que cero." }); return;
     }
@@ -125,6 +133,15 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
     setMsg({ tipo: "ok", texto: enviar ? "Conteo enviado a Control. Las diferencias requieren segundo conteo." : "Avance guardado." });
     setActivo(null); await cargar();
+  }
+
+  function completarVaciosConCero() {
+    if (!activo) return;
+    const siguientes = { ...valores };
+    activo.lineas.forEach((linea) => {
+      if ((siguientes[linea.producto_id] ?? "") === "") siguientes[linea.producto_id] = "0";
+    });
+    setValores(siguientes);
   }
 
   function imprimirHoja(conteo: Conteo) {
@@ -150,9 +167,9 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
 
       {activo && <section className="card conteo-activo">
         <div className="header-row"><div><h3 style={{ margin: 0 }}>{activo.numero}</h3><span className="badge estado-en_conteo">Conteo ciego · {activo.origen?.nombre}</span></div><button className="secondary" onClick={() => imprimirHoja(activo)}>Imprimir hoja</button></div>
-        <p className="info-box">El stock del sistema permanece oculto. Cuenta físicamente cada SKU y guarda avances cuando lo necesites.</p>
+        <p className="info-box">El stock del sistema permanece oculto. Cuenta físicamente cada SKU. Al finalizar, cualquier campo vacío se registrará como <strong>0</strong> después de pedirte confirmación.</p>
         <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th>Talla</th><th className="num">Cantidad física</th><th>Observación</th></tr></thead><tbody>{activo.lineas.map((l) => <tr key={l.id}><td><strong>{l.producto?.sku}</strong></td><td>{l.producto?.nombre}</td><td>{l.producto?.talla ?? "-"}</td><td className="num"><input type="number" min={0} value={valores[l.producto_id] ?? ""} onChange={(e) => setValores({ ...valores, [l.producto_id]: e.target.value })} style={{ width: 90, textAlign: "right" }} /></td><td><input value={observaciones[l.producto_id] ?? ""} onChange={(e) => setObservaciones({ ...observaciones, [l.producto_id]: e.target.value })} /></td></tr>)}</tbody></table></div>
-        <div className="acciones-documento"><button className="secondary" disabled={procesando} onClick={() => guardarConteo(false)}>Guardar avance</button><button disabled={procesando} onClick={() => guardarConteo(true)}>Finalizar y enviar a Control</button><button className="chip-limpiar" onClick={() => setActivo(null)}>Cerrar</button></div>
+        <div className="acciones-documento"><button className="secondary" disabled={procesando} onClick={completarVaciosConCero}>Completar vacíos con 0</button><button className="secondary" disabled={procesando} onClick={() => guardarConteo(false)}>Guardar avance</button><button disabled={procesando} onClick={() => guardarConteo(true)}>Finalizar y enviar a Control</button><button className="chip-limpiar" onClick={() => setActivo(null)}>Cerrar</button></div>
       </section>}
 
       <div className="card"><h3 style={{ marginTop: 0 }}>Historial de conteos</h3>{cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Almacén</th><th>Fecha</th><th>Responsable</th><th>Estado</th><th className="num">Líneas</th><th></th></tr></thead><tbody>{conteos.map((c) => <tr key={c.id}><td><strong>{c.numero}</strong></td><td>{c.origen?.nombre}</td><td>{fecha(c.created_at)}</td><td>{c.creador?.nombre_completo}</td><td><span className={`badge estado-${c.estado}`}>{ETIQUETAS_ESTADO[c.estado] ?? c.estado}</span></td><td className="num">{c.lineas.length}</td><td>{c.estado === "en_conteo" && puedeContar ? <button className="secondary" onClick={() => abrirConteo(c)}>Continuar</button> : <button className="secondary" onClick={() => imprimirHoja(c)}>Ver hoja</button>}</td></tr>)}{!conteos.length && <tr><td colSpan={7} className="vacio">No hay conteos registrados.</td></tr>}</tbody></table></div>}</div>

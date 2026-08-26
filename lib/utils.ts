@@ -39,4 +39,5 @@ export const ETIQUETA_TIPO: Record<string, string> = {
   transferencia_envio: "Despacho",
   transferencia_recibo: "Recepción",
   ajuste: "Ajuste",
+  venta_xml: "Venta XML",
 };

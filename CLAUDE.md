@@ -53,6 +53,7 @@ app/
   productos/  page.tsx + ProductosCliente.tsx    catálogo, edición en línea (admin)
   reportes/   page.tsx + ReportesCliente.tsx     5 pestañas (admin/gerencia)
   operaciones/                              solicitudes, picking, despacho, recepción
+  ventas/                                   carga y conciliación de facturas XML SRI
   conteos/                                  conteo ciego y envío a Control
   control/                                  aprobaciones, diferencias y auditoría
   configuracion/inventario/                 mínimos/ubicaciones por almacén
@@ -81,6 +82,8 @@ sql/
   v11_importar_catalogo_productos.sql importación atómica y auditada del catálogo maestro
   v12_fase_erp_operativa.sql documentos, recepción, conteos, roles y stock operativo
   verificacion_v12.sql       comprobaciones de instalación y prueba de aceptación
+  v13_ventas_xml.sql         facturas SRI, equivalencias de SKU y ventas contra inventario
+  verificacion_v13.sql       comprobaciones de instalación de Ventas XML
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 
@@ -102,10 +105,12 @@ sql/
 - **producto_almacen_config** — mínimo/máximo/seguridad/reposición/ubicación por almacén
 - **documentos_inventario + líneas + eventos** — solicitudes, transferencias y conteos multilínea
 - **movimientos** — bitácora inmutable (ver abajo)
+- **documentos_venta_xml + líneas + asignaciones** — facturas autorizadas ya aplicadas y reparto de cada línea externa entre SKU internos
+- **producto_codigos_facturacion** — equivalencias aprendidas entre códigos del facturador y productos internos
 
 ### `movimientos` — ojo con esto
 
-Tipos: `entrada`, `salida`, `transferencia_envio`, `transferencia_recibo`, `ajuste`.
+Tipos: `entrada`, `salida`, `transferencia_envio`, `transferencia_recibo`, `ajuste`, `venta_xml`.
 
 **Tiene relaciones DUPLICADAS. Toda consulta con embed necesita hint explícito de FK o falla.**
 
@@ -145,6 +150,7 @@ Expone stock físico, reservado, disponible, tránsito de entrada/salida y repos
 | `registrar_movimiento_manual` | Solo entradas/salidas excepcionales con referencia. |
 | `control_anular_movimiento` | Anulación segregada y auditada por Control. |
 | `admin_importar_catalogo_productos(p_items, p_nota)` | Crea/actualiza el catálogo maestro, categorías, precios y mínimos en una transacción auditada. No modifica stock. |
+| `aplicar_factura_venta_xml(p_documento, p_almacen_id, p_asignaciones, p_nota)` | Valida una factura SRI autorizada, evita duplicados, aprende equivalencias y descuenta stock atómicamente. |
 
 ---
 
@@ -159,6 +165,8 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 
 **Los errores de carga se muestran en pantalla.** Nada de tragarse el error y renderizar "sin resultados" — eso mandó a buscar el problema en los filtros cuando estaba en la consulta.
 
+**Ventas XML no sustituye al facturador.** El XML autorizado se interpreta en el navegador. La base conserva la clave de acceso, huella SHA-256, cabecera operativa, líneas y asignaciones; no guarda el XML completo ni datos personales del cliente. Una factura solo puede descontar inventario una vez.
+
 ---
 
 ## Funcionalidad actual
@@ -172,6 +180,7 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - **Reportes:** por almacén · por categoría/subcategoría · stock bajo · matriz producto×almacén · kardex.
 - **Exportación CSV** en cada pantalla (separador `;`, BOM UTF-8 para que Excel respete los acentos).
 - **Importar stock** con vista previa comparativa antes de aplicar.
+- **Ventas desde XML SRI:** carga local, validación de autorización, asignación de líneas genéricas entre varios SKU, memoria de equivalencias, control de stock e historial.
 
 ---
 
@@ -180,6 +189,8 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - [ ] Cargar los precios reales usando la importación del catálogo maestro (hasta entonces el KPI "Valor inventario" seguirá en $0)
 - [ ] Ejecutar v12 en producción y asignar roles/almacenes desde Administración → Usuarios.
 - [ ] Realizar la prueba de aceptación de `sql/verificacion_v12.sql` con usuarios distintos de Bodega, Tienda y Control.
+- [ ] Después de aprobar v12, ejecutar `sql/v13_ventas_xml.sql` y luego `sql/verificacion_v13.sql`.
+- [ ] Probar v13 con una factura real primero en un almacén de prueba y confirmar la distribución por talla/color antes de aplicarla.
 - [ ] Asignar roles a los usuarios restantes:
       Jonathan Guaygua y Tatiana Sánchez → `bodega` / Bodega Central ·
       Alicia Tigse → `logistica` · Diego Bonilla → `gerencia`
@@ -207,7 +218,7 @@ Fotos de producto · código de barras · alertas por correo · costos/valoraci�
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** hasta `v12`. Si producción ya está en v11, ejecuta únicamente `v12_fase_erp_operativa.sql` una vez.
+1. Ejecuta los SQL **en orden** hasta `v13`. Si producción ya está en v11, ejecuta `v12_fase_erp_operativa.sql` y, después de validarlo, `v13_ventas_xml.sql`, una sola vez cada uno.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.
