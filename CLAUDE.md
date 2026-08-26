@@ -52,7 +52,11 @@ app/
   movimientos/page.tsx + MovimientosCliente.tsx  registro + historial + anular
   productos/  page.tsx + ProductosCliente.tsx    catálogo, edición en línea (admin)
   reportes/   page.tsx + ReportesCliente.tsx     5 pestañas (admin/gerencia)
-  importar/   page.tsx + ImportarCliente.tsx     toma física (admin/bodega)
+  operaciones/                              solicitudes, picking, despacho, recepción
+  conteos/                                  conteo ciego y envío a Control
+  control/                                  aprobaciones, diferencias y auditoría
+  configuracion/inventario/                 mínimos/ubicaciones por almacén
+  importar/                                 redirige al flujo seguro de conteos
   administracion/usuarios/                       gestión de usuarios (admin)
   auth/callback/                                 procesa invitaciones
   establecer-clave/                             contraseña inicial
@@ -74,6 +78,10 @@ sql/
   v8_estado_productos.sql    activación/desactivación auditada; exige stock cero
   v9_reparar_estado_productos.sql corrige propietario/permisos de la RPC de estado
   v10_categorias_subcategorias.sql catálogo jerárquico para productos
+  v11_importar_catalogo_productos.sql importación atómica y auditada del catálogo maestro
+  v12_fase_erp_operativa.sql documentos, recepción, conteos, roles y stock operativo
+  verificacion_v12.sql       comprobaciones de instalación y prueba de aceptación
+  actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 
 **Patrón:** `page.tsx` es Server Component (valida rol, redirige) y delega a un `*Cliente.tsx` con `"use client"` que hace las consultas y maneja filtros en memoria. Los volúmenes son chicos; no hace falta paginación en servidor.
@@ -86,10 +94,13 @@ sql/
 
 - **almacenes** — `id, nombre, tipo ('bodega'|'tienda'), activo`
   Bodega Central + Shopping Ambato, Mariano Egüez, Puyo, Riobamba, Guayaquil, Santo Domingo.
-- **perfiles** — `id (=auth.users.id), nombre_completo, rol, entidad_id, activo`
-  Roles: `admin`, `bodega`, `logistica`, `gerencia`. `entidad_id` NULL = ve todos los almacenes.
-- **productos** — `id, sku (único), nombre, categoria, talla, color, stock_minimo, precio, activo`
+- **perfiles / perfil_almacenes** — perfil, rol y uno o varios almacenes explícitos.
+  Roles: `admin`, `control`, `bodega`, `logistica`, `tienda`, `gerencia`.
+- **productos** — `id, sku (único), nombre, categoria/categoria_id, subcategoria/subcategoria_id, talla, color, stock_minimo, precio, activo`
+- **categorias_productos / subcategorias_productos** — catálogo jerárquico administrable; se desactiva en lugar de borrar
 - **inventario** — `producto_id + entidad_id` (único), `cantidad`
+- **producto_almacen_config** — mínimo/máximo/seguridad/reposición/ubicación por almacén
+- **documentos_inventario + líneas + eventos** — solicitudes, transferencias y conteos multilínea
 - **movimientos** — bitácora inmutable (ver abajo)
 
 ### `movimientos` — ojo con esto
@@ -119,17 +130,21 @@ Dos FK a `perfiles`: `usuario_id`, `anulado_por`.
 
 Otras columnas: `grupo_id` (une despacho ↔ recepción), `cantidad_anterior` (stock previo a un ajuste, para revertirlo).
 
-### Vista `vista_stock`
+### Vista `vista_stock_operativo`
 
-Une inventario + productos + almacenes y calcula `bajo_minimo`. Es la fuente de Stock, Dashboard y Reportes. Si agregas campos a `productos` que se muestren en esas pantallas, hay que recrear la vista.
+Expone stock físico, reservado, disponible, tránsito de entrada/salida y reposición sugerida por ubicación.
 
 ### Funciones RPC (todas `security definer set search_path = public`)
 
 | Función | Qué hace |
 |---|---|
-| `registrar_movimiento(...)` | Inserta movimiento + actualiza stock atómicamente. En `transferencia_envio` genera la recepción espejo con el mismo `grupo_id`. En `ajuste` guarda `cantidad_anterior`. |
-| `anular_movimiento(p_movimiento_id, p_motivo)` | Revierte el stock y **marca** `anulado=true` con motivo, autor y fecha. Motivo obligatorio. Anular un despacho anula también su recepción. |
-| `importar_stock(p_entidad_id, p_items jsonb, p_nota, p_cerrar_faltantes)` | Toma física. Cada cambio se graba como `ajuste` con `cantidad_anterior`. Devuelve `{actualizados, sin_cambio, cerrados, desconocidos[]}`. |
+| `crear_solicitud_reposicion / resolver_solicitud_reposicion` | Solicitud y aprobación que genera transferencia. |
+| `crear_transferencia_directa / guardar_preparacion_transferencia / despachar_transferencia` | Reserva, picking y salida de origen. |
+| `recibir_transferencia` | Suma al destino únicamente la cantidad físicamente recibida. |
+| `crear_conteo_inventario / guardar_conteo_inventario / resolver_conteo_inventario` | Conteo ciego, segundo conteo y ajuste aprobado. |
+| `registrar_movimiento_manual` | Solo entradas/salidas excepcionales con referencia. |
+| `control_anular_movimiento` | Anulación segregada y auditada por Control. |
+| `admin_importar_catalogo_productos(p_items, p_nota)` | Crea/actualiza el catálogo maestro, categorías, precios y mínimos en una transacción auditada. No modifica stock. |
 
 ---
 
@@ -139,7 +154,8 @@ Une inventario + productos + almacenes y calcula `bajo_minimo`. Es la fuente de 
 
 **La importación de stock genera ajustes, no sobrescribe en silencio.** Por eso cada línea de una toma física es individualmente anulable y aparece en el kardex del producto.
 
-**RLS con `entidad_id IS NULL`.** Un perfil sin almacén asignado ve todo. Sin esto, un usuario `bodega` sin `entidad_id` no veía **nada** y parecía que la app estaba rota. Fue un bug real; no lo reintroduzcas.
+**Almacenes explícitos.** Los roles operativos deben tener al menos un almacén en `perfil_almacenes`.
+Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 
 **Los errores de carga se muestran en pantalla.** Nada de tragarse el error y renderizar "sin resultados" — eso mandó a buscar el problema en los filtros cuando estaba en la consulta.
 
@@ -147,11 +163,13 @@ Une inventario + productos + almacenes y calcula `bajo_minimo`. Es la fuente de 
 
 ## Funcionalidad actual
 
-- **Búsqueda de texto libre** en Stock, Productos y Movimientos: nombre, SKU, categoría, talla, color simultáneamente.
-- **Filtros:** categoría, almacén, tipo, rango de fechas, solo bajo mínimo, ocultar sin stock, mostrar anulados.
+- **Búsqueda de texto libre** en Stock, Productos y Movimientos: nombre, SKU, categoría, subcategoría, talla y color simultáneamente.
+- **Filtros:** categoría/subcategoría, almacén, tipo, rango de fechas, solo bajo mínimo, ocultar sin stock, mostrar anulados.
 - **Autocompletado de producto** al registrar movimientos (545 productos en un `<select>` era inusable).
+- **Clasificación masiva de productos:** selección individual o de todos los resultados filtrados para asignar categoría/subcategoría por lotes.
+- **Importación de catálogo maestro:** Excel/CSV con vista previa, validación, altas/actualizaciones y últimas importaciones.
 - **Alertas de reposición** vía `stock_minimo` por producto.
-- **Reportes:** por almacén · por categoría · stock bajo · matriz producto×almacén · kardex.
+- **Reportes:** por almacén · por categoría/subcategoría · stock bajo · matriz producto×almacén · kardex.
 - **Exportación CSV** en cada pantalla (separador `;`, BOM UTF-8 para que Excel respete los acentos).
 - **Importar stock** con vista previa comparativa antes de aplicar.
 
@@ -159,15 +177,17 @@ Une inventario + productos + almacenes y calcula `bajo_minimo`. Es la fuente de 
 
 ## Pendientes
 
-- [ ] Cargar precios (el Excel origen los traía en 0 → el KPI "Valor inventario" da $0)
-- [ ] Asignar roles a los 5 usuarios restantes en `perfiles`:
+- [ ] Cargar los precios reales usando la importación del catálogo maestro (hasta entonces el KPI "Valor inventario" seguirá en $0)
+- [ ] Ejecutar v12 en producción y asignar roles/almacenes desde Administración → Usuarios.
+- [ ] Realizar la prueba de aceptación de `sql/verificacion_v12.sql` con usuarios distintos de Bodega, Tienda y Control.
+- [ ] Asignar roles a los usuarios restantes:
       Jonathan Guaygua y Tatiana Sánchez → `bodega` / Bodega Central ·
       Alicia Tigse → `logistica` · Diego Bonilla → `gerencia`
 - [ ] Categorizar 38 productos que quedaron sin categoría
 - [ ] Los 13 ítems `CTR-*` (contratos de maquila) se excluyeron del catálogo — confirmar si deben entrar
 
 ### Ideas para más adelante
-Fotos de producto · escaneo de código de barras · alertas por correo al caer bajo mínimo · reporte de rotación · cierre de período.
+Fotos de producto · código de barras · alertas por correo · costos/valoración contable · cierre de período.
 
 ---
 
@@ -187,7 +207,7 @@ Fotos de producto · escaneo de código de barras · alertas por correo al caer 
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** (`schema` → `v2` → `v3` → `v4` → `v5` → `v6` → `v7` → `v8` → `v9` → `v10`). Son incrementales; v4 reemplaza la función de v3.
+1. Ejecuta los SQL **en orden** hasta `v12`. Si producción ya está en v11, ejecuta únicamente `v12_fase_erp_operativa.sql` una vez.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const ROLES = ["admin", "bodega", "logistica", "gerencia"] as const;
+const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control"] as const;
 type Rol = (typeof ROLES)[number];
 
 type DatosPerfil = {
@@ -56,7 +56,7 @@ export async function GET() {
 
   try {
     const admin = createAdminClient();
-    const [perfiles, almacenes, usuariosAuth] = await Promise.all([
+    const [perfiles, almacenes, asignaciones, usuariosAuth] = await Promise.all([
       contexto.supabase
         .from("perfiles")
         .select("id, nombre_completo, rol, entidad_id, activo, created_at")
@@ -67,11 +67,15 @@ export async function GET() {
         .eq("activo", true)
         .order("tipo")
         .order("nombre"),
+      contexto.supabase
+        .from("perfil_almacenes")
+        .select("perfil_id, almacen_id"),
       admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
 
     if (perfiles.error) throw perfiles.error;
     if (almacenes.error) throw almacenes.error;
+    if (asignaciones.error) throw asignaciones.error;
     if (usuariosAuth.error) throw usuariosAuth.error;
 
     const authPorId = new Map(usuariosAuth.data.users.map((usuario) => [usuario.id, usuario]));
@@ -79,6 +83,7 @@ export async function GET() {
       const usuarioAuth = authPorId.get(perfil.id);
       return {
         ...perfil,
+        almacen_ids: (asignaciones.data ?? []).filter((a) => a.perfil_id === perfil.id).map((a) => a.almacen_id),
         email: usuarioAuth?.email ?? "",
         ultimo_acceso: usuarioAuth?.last_sign_in_at ?? null,
         confirmado: Boolean(usuarioAuth?.email_confirmed_at),
@@ -103,7 +108,8 @@ export async function POST(request: NextRequest) {
     const email = String(body.email ?? "").trim().toLowerCase();
     const nombre = String(body.nombre_completo ?? "").trim();
     const rol = body.rol;
-    const entidadId = body.entidad_id ? String(body.entidad_id) : null;
+    const almacenIds = Array.isArray(body.almacen_ids) ? body.almacen_ids.map(String).filter(Boolean) : [];
+    const entidadId = almacenIds[0] ?? (body.entidad_id ? String(body.entidad_id) : null);
 
     if (!email || !email.includes("@")) {
       return NextResponse.json({ error: "Ingresa un correo válido." }, { status: 400 });
@@ -114,8 +120,8 @@ export async function POST(request: NextRequest) {
     if (!esRol(rol)) {
       return NextResponse.json({ error: "El rol indicado no es válido." }, { status: 400 });
     }
-    if (rol === "bodega" && !entidadId) {
-      return NextResponse.json({ error: "Un usuario de bodega debe tener un almacén asignado." }, { status: 400 });
+    if (!["admin", "control", "gerencia"].includes(rol) && !entidadId) {
+      return NextResponse.json({ error: "Los usuarios operativos deben tener al menos un almacén asignado." }, { status: 400 });
     }
 
     const admin = createAdminClient();
@@ -151,6 +157,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { error: asignacionError } = await contexto.supabase.rpc("admin_asignar_almacenes", {
+      p_perfil_id: invitacion.user.id,
+      p_almacen_ids: ["admin", "control", "gerencia"].includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
+    });
+    if (asignacionError) {
+      return NextResponse.json({ error: `El perfil fue creado, pero falló la asignación de almacenes: ${asignacionError.message}` }, { status: 500 });
+    }
+
     return NextResponse.json({ ok: true, mensaje: `Invitación enviada a ${email}.` });
   } catch (error) {
     return NextResponse.json({ error: textoError(error) }, { status: 500 });
@@ -169,11 +183,15 @@ export async function PATCH(request: NextRequest) {
     const id = String(body.id ?? "");
     const nombre = String(body.nombre_completo ?? "").trim();
     const rol = body.rol;
-    const entidadId = body.entidad_id ? String(body.entidad_id) : null;
+    const almacenIds = Array.isArray(body.almacen_ids) ? body.almacen_ids.map(String).filter(Boolean) : [];
+    const entidadId = almacenIds[0] ?? (body.entidad_id ? String(body.entidad_id) : null);
     const activo = body.activo;
 
     if (!id || !nombre || !esRol(rol) || typeof activo !== "boolean") {
       return NextResponse.json({ error: "Los datos del usuario están incompletos." }, { status: 400 });
+    }
+    if (!["admin", "control", "gerencia"].includes(rol) && !entidadId) {
+      return NextResponse.json({ error: "Los usuarios operativos deben tener al menos un almacén asignado." }, { status: 400 });
     }
 
     const { error } = await contexto.supabase.rpc("admin_actualizar_perfil", {
@@ -186,6 +204,14 @@ export async function PATCH(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    const { error: asignacionError } = await contexto.supabase.rpc("admin_asignar_almacenes", {
+      p_perfil_id: id,
+      p_almacen_ids: ["admin", "control", "gerencia"].includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
+    });
+    if (asignacionError) {
+      return NextResponse.json({ error: asignacionError.message }, { status: 400 });
     }
 
     return NextResponse.json({ ok: true });

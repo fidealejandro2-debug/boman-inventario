@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 export type Perfil = {
   id: string;
   nombre_completo: string;
-  rol: "admin" | "bodega" | "logistica" | "gerencia";
+  rol: "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control";
   entidad_id: string | null;
   activo: boolean;
 };

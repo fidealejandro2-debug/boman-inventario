@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
+import ImportarCatalogo from "./ImportarCatalogo";
 
 type Producto = {
   id: string;
@@ -60,6 +61,7 @@ export default function ProductosCliente() {
 
   const [nuevo, setNuevo] = useState({ ...VACIO });
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [mostrarImportacion, setMostrarImportacion] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [edit, setEdit] = useState<Partial<Producto>>({});
   const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null);
@@ -67,6 +69,10 @@ export default function ProductosCliente() {
   const [nuevaCategoria, setNuevaCategoria] = useState("");
   const [nuevasSubcategorias, setNuevasSubcategorias] = useState<Record<string, string>>({});
   const [guardandoCatalogo, setGuardandoCatalogo] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [categoriaMasiva, setCategoriaMasiva] = useState("");
+  const [subcategoriaMasiva, setSubcategoriaMasiva] = useState("");
+  const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -121,6 +127,78 @@ export default function ProductosCliente() {
       );
     });
   }, [productos, busqueda, categoria, subcategoria, verInactivos]);
+
+  const todosFiltradosSeleccionados = filtrados.length > 0 && filtrados.every((p) => seleccionados.has(p.id));
+
+  function alternarSeleccion(id: string) {
+    setSeleccionados((actual) => {
+      const siguiente = new Set(actual);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+  }
+
+  function alternarSeleccionFiltrados() {
+    setSeleccionados((actual) => {
+      const siguiente = new Set(actual);
+      if (todosFiltradosSeleccionados) filtrados.forEach((p) => siguiente.delete(p.id));
+      else filtrados.forEach((p) => siguiente.add(p.id));
+      return siguiente;
+    });
+  }
+
+  async function aplicarClasificacionMasiva() {
+    setMsg(null);
+    const ids = Array.from(seleccionados);
+    const categoriaSeleccionada = categoriasActivas.find((c) => c.id === categoriaMasiva);
+    const subcategoriaSeleccionada = subcategoriasActivas.find(
+      (s) => s.id === subcategoriaMasiva && s.categoria_id === categoriaMasiva
+    );
+    if (!ids.length) {
+      setMsg({ tipo: "error", texto: "Selecciona al menos un producto." });
+      return;
+    }
+    if (!categoriaSeleccionada) {
+      setMsg({ tipo: "error", texto: "Selecciona la categoría que deseas asignar." });
+      return;
+    }
+    if (subcategoriaMasiva && !subcategoriaSeleccionada) {
+      setMsg({ tipo: "error", texto: "La subcategoría no pertenece a la categoría seleccionada." });
+      return;
+    }
+    const destino = `${categoriaSeleccionada.nombre}${subcategoriaSeleccionada ? ` / ${subcategoriaSeleccionada.nombre}` : " / Sin subcategoría"}`;
+    if (!window.confirm(`Se asignará “${destino}” a ${ids.length} producto(s).\n\n¿Continuar?`)) return;
+
+    setAplicandoMasivo(true);
+    let actualizados = 0;
+    for (let i = 0; i < ids.length; i += 100) {
+      const lote = ids.slice(i, i + 100);
+      const { error } = await supabase.from("productos").update({
+        categoria_id: categoriaSeleccionada.id,
+        subcategoria_id: subcategoriaSeleccionada?.id || null,
+      }).in("id", lote);
+      if (error) {
+        setAplicandoMasivo(false);
+        setMsg({
+          tipo: "error",
+          texto: actualizados
+            ? `Se actualizaron ${actualizados} productos antes del error: ${error.message}`
+            : error.message,
+        });
+        await cargar();
+        return;
+      }
+      actualizados += lote.length;
+    }
+    setAplicandoMasivo(false);
+    setSeleccionados(new Set());
+    setCategoriaMasiva("");
+    setSubcategoriaMasiva("");
+    setEditando(null);
+    setMsg({ tipo: "ok", texto: `${actualizados} producto(s) clasificados correctamente.` });
+    await cargar();
+  }
 
   async function crear(e: React.FormEvent) {
     e.preventDefault();
@@ -317,11 +395,22 @@ export default function ProductosCliente() {
           <button className="secondary" onClick={() => setMostrarCategorias(!mostrarCategorias)}>
             {mostrarCategorias ? "Cerrar categorías" : "Categorías y subcategorías"}
           </button>
-          <button onClick={() => setMostrarForm(!mostrarForm)}>
+          <button className="secondary" onClick={() => { setMostrarImportacion(!mostrarImportacion); setMostrarForm(false); }}>
+            {mostrarImportacion ? "Cerrar importación" : "Importar catálogo"}
+          </button>
+          <button onClick={() => { setMostrarForm(!mostrarForm); setMostrarImportacion(false); }}>
             {mostrarForm ? "Cancelar" : "+ Nuevo producto"}
           </button>
         </div>
       </div>
+
+      {mostrarImportacion && (
+        <ImportarCatalogo
+          productos={productos.map((p) => ({ sku: p.sku, nombre: p.nombre }))}
+          alCompletar={cargar}
+          alCerrar={() => setMostrarImportacion(false)}
+        />
+      )}
 
       {mostrarCategorias && (
         <div className="card">
@@ -470,6 +559,42 @@ export default function ProductosCliente() {
           </button>
         </div>
 
+        {seleccionados.size > 0 && (
+          <div style={{ background: "#eef5ff", border: "1.5px solid #93b4d8", borderRadius: 9, padding: 12, marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <strong style={{ color: "#1f3864", marginRight: 4 }}>{seleccionados.size} seleccionado(s)</strong>
+              <select
+                value={categoriaMasiva}
+                onChange={(e) => { setCategoriaMasiva(e.target.value); setSubcategoriaMasiva(""); }}
+                style={{ minWidth: 190 }}
+              >
+                <option value="">Asignar categoría...</option>
+                {categoriasActivas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+              <select
+                value={subcategoriaMasiva}
+                onChange={(e) => setSubcategoriaMasiva(e.target.value)}
+                disabled={!categoriaMasiva}
+                style={{ minWidth: 190 }}
+              >
+                <option value="">Sin subcategoría</option>
+                {subcategoriasActivas
+                  .filter((s) => s.categoria_id === categoriaMasiva)
+                  .map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+              <button type="button" disabled={aplicandoMasivo || !categoriaMasiva} onClick={aplicarClasificacionMasiva}>
+                {aplicandoMasivo ? "Aplicando..." : "Aplicar clasificación"}
+              </button>
+              <button type="button" className="chip-limpiar" disabled={aplicandoMasivo} onClick={() => setSeleccionados(new Set())}>
+                Cancelar selección
+              </button>
+            </div>
+            <div style={{ marginTop: 6, color: "#64748b", fontSize: 12 }}>
+              La categoría anterior será reemplazada en todos los productos seleccionados.
+            </div>
+          </div>
+        )}
+
         {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
 
         {cargando ? <div className="vacio">Cargando catálogo...</div> : (
@@ -477,6 +602,16 @@ export default function ProductosCliente() {
             <table>
               <thead>
                 <tr>
+                  <th style={{ width: 38, textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={todosFiltradosSeleccionados}
+                      onChange={alternarSeleccionFiltrados}
+                      disabled={!filtrados.length || aplicandoMasivo}
+                      title="Seleccionar todos los productos visibles"
+                      aria-label="Seleccionar todos los productos visibles"
+                    />
+                  </th>
                   <th>SKU</th><th>Nombre</th><th>Categoría / subcategoría</th><th>Talla</th>
                   <th className="num">Mín.</th><th className="num">Precio</th><th>Acciones</th>
                 </tr>
@@ -485,6 +620,9 @@ export default function ProductosCliente() {
                 {filtrados.map((p) => (
                   editando === p.id ? (
                     <tr key={p.id}>
+                      <td style={{ textAlign: "center" }}>
+                        <input type="checkbox" checked={seleccionados.has(p.id)} onChange={() => alternarSeleccion(p.id)} disabled={aplicandoMasivo} aria-label={`Seleccionar ${p.nombre}`} />
+                      </td>
                       <td>{p.sku}</td>
                       <td><input value={edit.nombre ?? ""} onChange={(e) => setEdit({ ...edit, nombre: e.target.value })} style={{ width: "100%" }} /></td>
                       <td>
@@ -527,6 +665,9 @@ export default function ProductosCliente() {
                     </tr>
                   ) : (
                     <tr key={p.id} style={{ opacity: p.activo ? 1 : 0.5 }}>
+                      <td style={{ textAlign: "center" }}>
+                        <input type="checkbox" checked={seleccionados.has(p.id)} onChange={() => alternarSeleccion(p.id)} disabled={aplicandoMasivo} aria-label={`Seleccionar ${p.nombre}`} />
+                      </td>
                       <td>{p.sku}</td>
                       <td>{p.nombre}</td>
                       <td>
@@ -546,7 +687,7 @@ export default function ProductosCliente() {
                     </tr>
                   )
                 ))}
-                {!filtrados.length && <tr><td colSpan={7} className="vacio">Sin resultados.</td></tr>}
+                {!filtrados.length && <tr><td colSpan={8} className="vacio">Sin resultados.</td></tr>}
               </tbody>
             </table>
           </div>

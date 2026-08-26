@@ -1,6 +1,6 @@
 # Boman Sport — Inventario de Producto Terminado
 
-App interna para 6 usuarios (bodega, logística, admin, gerencia) con roles y stock separado
+App interna para bodega, tiendas, logística, control, administración y gerencia, con stock separado
 por almacén: **Bodega Central** + 5 tiendas (Shopping Ambato, Mariano Egüez Ambato, Puyo,
 Riobamba, Guayaquil). Bodega despacha hacia cada tienda vía "Transferencia" y el stock se
 mueve automáticamente de un lado a otro.
@@ -19,7 +19,8 @@ Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel pa
    `schema.sql`, `v2_upgrade.sql`, `v3_anular.sql`, `v4_anulacion_logica.sql`,
    `v5_importar_stock.sql`, `v6_seguridad_consistencia.sql`,
    `v7_administracion_usuarios.sql`, `v8_estado_productos.sql`,
-   `v9_reparar_estado_productos.sql` y `v10_categorias_subcategorias.sql`.
+   `v9_reparar_estado_productos.sql`, `v10_categorias_subcategorias.sql` y
+   `v11_importar_catalogo_productos.sql` y `v12_fase_erp_operativa.sql`.
    La migración v6 es obligatoria: corrige permisos, ajustes a cero, anulaciones,
    importaciones por almacén y agrega auditoría de cambios de notas.
 5. Ve a **Project Settings → API**. Copia dos valores, los vas a necesitar:
@@ -29,13 +30,14 @@ Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel pa
 ## 2. Crear los 6 usuarios en Supabase
 
 1. En Supabase, ve a **Authentication → Users → Add user**.
-2. Crea uno por cada persona (correo + contraseña temporal). Al crearse, el trigger de la base de
-   datos les asigna automáticamente el rol `bodega` por defecto.
-3. Para ajustar el rol y la entidad de cada quien: ve a **Table Editor → perfiles** y edita la fila
-   de cada usuario:
-   - `rol`: `admin`, `bodega`, `logistica` o `gerencia`
-   - `entidad_id`: copia el `id` de la tienda o bodega asignada desde la tabla `almacenes`
-     (déjalo vacío/null para admin y gerencia, así ven todos los almacenes)
+2. Crea o invita a cada persona desde **Administración → Usuarios** dentro de la app.
+3. Asigna su rol y uno o varios almacenes:
+   - `admin`: usuarios, catálogo y supervisión general.
+   - `control`: conteos, diferencias, anulaciones y políticas de stock.
+   - `bodega`: entradas/salidas manuales, picking y despacho.
+   - `logistica`: seguimiento del transporte.
+   - `tienda`: solicitud de reposición, recepción y conteo de su tienda.
+   - `gerencia`: consulta global sin operación.
 
    Sugerencia según tu equipo:
    - Tú (Fidel) → `admin`
@@ -72,14 +74,14 @@ Para las invitaciones, agrega en **Supabase → Authentication → URL Configura
 
 ## 5. Uso diario
 
-- **Bodega**: entra a "Movimientos" → registra entradas (producción terminada que llega) y salidas
-  (ventas/despachos). El stock se actualiza solo.
-- **Logística**: usa "Movimientos" con tipo "Transferencia" cuando mueva producto de un almacén
-  a otro. El despacho y la recepción se registran automáticamente como un solo grupo auditable.
-- **Admin (tú)**: da de alta productos nuevos en "Productos", y tienes acceso total.
-- **Gerencia (Diego)**: solo ve "Stock" y "Reportes", sin poder editar nada.
+- **Tienda**: solicita reposición, recibe físicamente cada transferencia y realiza conteos ciegos.
+- **Bodega**: aprueba solicitudes, prepara picking, despacha, y registra entradas/salidas excepcionales con referencia.
+- **Logística**: marca la mercadería en tránsito y consulta la ruta documental.
+- **Control**: realiza segundo conteo, aprueba diferencias, cierra incidencias y anula movimientos manuales.
+- **Admin**: administra catálogo, usuarios y configuraciones; no sustituye la recepción física de tienda.
+- **Gerencia**: consulta stock físico/disponible/en tránsito, documentos y reportes.
 
-## Estado de la Fase 0
+## Estado de la Fase ERP operativa (v12)
 
 - Compilación de producción verificada.
 - Movimientos e importaciones protegidos mediante funciones atómicas de Supabase.
@@ -90,8 +92,22 @@ Para las invitaciones, agrega en **Supabase → Authentication → URL Configura
 - Panel de administración para invitar, editar, asignar y desactivar usuarios.
 - Desactivación de productos auditada y bloqueada mientras exista stock.
 - Catálogo administrable de categorías y subcategorías para productos.
+- Categorías y subcategorías integradas en Stock, Movimientos, Dashboard, Reportes y exportaciones.
+- Clasificación masiva de productos desde los resultados filtrados.
+- Importación auditada del catálogo maestro desde Excel/CSV: altas, categorías, precios y mínimos sin alterar stock.
+- Solicitudes de reposición y transferencias multilínea con número de documento.
+- Picking, despacho, tránsito y recepción real; el destino solo aumenta al confirmar lo recibido.
+- Diferencias de recepción enviadas al Centro de Control.
+- Conteos ciegos totales o parciales, segundo conteo y aplicación aprobada al kardex.
+- Stock físico, reservado, disponible y en tránsito por tienda y bodega.
+- Mínimos, máximos, seguridad, punto de reposición y ubicación por producto/almacén.
+- Asignación de uno o varios almacenes por usuario y roles `tienda`/`control`.
+- Auditoría de documentos, catálogo y anulaciones; reportes operativos exportables.
+- Captura masiva por pegado de SKU/cantidad, guías imprimibles y aviso de conexión. No incluye código de barras todavía.
 
-Pendiente operativo: aplicar las migraciones SQL numeradas hasta
-`sql/v10_categorias_subcategorias.sql` en el proyecto real de Supabase, configurar
-`SUPABASE_SECRET_KEY` y probar con un usuario de cada rol. Next.js 14 quedó marcado para una migración
-separada a una versión LTS, ya que implica también actualizar React y adaptar APIs asíncronas.
+### Puesta en marcha de esta fase
+
+Si la base real ya tiene v11, ejecuta **una sola vez** `sql/v12_fase_erp_operativa.sql` en Supabase.
+Después configura los roles/almacenes desde la app y realiza la prueba de aceptación descrita en
+`sql/verificacion_v12.sql`. La v12 bloquea las transferencias y tomas físicas antiguas para evitar
+que convivan dos formas distintas de modificar stock.

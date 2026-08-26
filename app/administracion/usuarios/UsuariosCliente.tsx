@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fecha } from "@/lib/utils";
 
-type Rol = "admin" | "bodega" | "logistica" | "gerencia";
+type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control";
 type Almacen = { id: string; nombre: string; tipo: string; activo: boolean };
 type Usuario = {
   id: string;
@@ -11,6 +11,7 @@ type Usuario = {
   nombre_completo: string;
   rol: Rol;
   entidad_id: string | null;
+  almacen_ids: string[];
   activo: boolean;
   confirmado: boolean;
   ultimo_acceso: string | null;
@@ -21,6 +22,8 @@ const ROLES: { valor: Rol; etiqueta: string }[] = [
   { valor: "admin", etiqueta: "Administrador" },
   { valor: "bodega", etiqueta: "Bodega" },
   { valor: "logistica", etiqueta: "Logística" },
+  { valor: "tienda", etiqueta: "Tienda" },
+  { valor: "control", etiqueta: "Control" },
   { valor: "gerencia", etiqueta: "Gerencia" },
 ];
 
@@ -28,7 +31,7 @@ const NUEVO = {
   email: "",
   nombre_completo: "",
   rol: "bodega" as Rol,
-  entidad_id: "",
+  almacen_ids: [] as string[],
 };
 
 export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: string }) {
@@ -72,15 +75,15 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
       usuario.nombre_completo.toLowerCase().includes(q) ||
       usuario.email.toLowerCase().includes(q) ||
       usuario.rol.toLowerCase().includes(q) ||
-      (almacenes.find((a) => a.id === usuario.entidad_id)?.nombre ?? "").toLowerCase().includes(q)
+      usuario.almacen_ids.some((id) => (almacenes.find((a) => a.id === id)?.nombre ?? "").toLowerCase().includes(q))
     );
   }, [usuarios, almacenes, busqueda]);
 
   async function invitar(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    if (nuevo.rol === "bodega" && !nuevo.entidad_id) {
-      setMsg({ tipo: "error", texto: "Un usuario de bodega debe tener un almacén asignado." });
+    if (!["admin", "control", "gerencia"].includes(nuevo.rol) && !nuevo.almacen_ids.length) {
+      setMsg({ tipo: "error", texto: "Los usuarios operativos deben tener al menos un almacén asignado." });
       return;
     }
 
@@ -91,7 +94,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...nuevo,
-          entidad_id: ["admin", "gerencia"].includes(nuevo.rol) ? null : nuevo.entidad_id || null,
+          almacen_ids: ["admin", "control", "gerencia"].includes(nuevo.rol) ? [] : nuevo.almacen_ids,
         }),
       });
       setMsg({ tipo: "ok", texto: data.mensaje ?? "Invitación enviada." });
@@ -111,6 +114,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
       nombre_completo: usuario.nombre_completo,
       rol: usuario.rol,
       entidad_id: usuario.entidad_id,
+      almacen_ids: usuario.almacen_ids,
       activo: usuario.activo,
     });
     setMsg(null);
@@ -127,7 +131,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
           id: usuario.id,
           nombre_completo: edicion.nombre_completo,
           rol: edicion.rol,
-          entidad_id: ["admin", "gerencia"].includes(String(edicion.rol)) ? null : edicion.entidad_id || null,
+          almacen_ids: ["admin", "control", "gerencia"].includes(String(edicion.rol)) ? [] : edicion.almacen_ids ?? [],
           activo: edicion.activo,
         }),
       });
@@ -173,17 +177,16 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
               </div>
               <div className="field">
                 <label>Rol</label>
-                <select value={nuevo.rol} onChange={(e) => setNuevo({ ...nuevo, rol: e.target.value as Rol, entidad_id: "" })} style={{ width: "100%" }}>
+                <select value={nuevo.rol} onChange={(e) => setNuevo({ ...nuevo, rol: e.target.value as Rol, almacen_ids: [] })} style={{ width: "100%" }}>
                   {ROLES.map((rol) => <option key={rol.valor} value={rol.valor}>{rol.etiqueta}</option>)}
                 </select>
               </div>
-              {!['admin', 'gerencia'].includes(nuevo.rol) && (
+              {!['admin', 'control', 'gerencia'].includes(nuevo.rol) && (
                 <div className="field">
-                  <label>Almacén asignado</label>
-                  <select value={nuevo.entidad_id} onChange={(e) => setNuevo({ ...nuevo, entidad_id: e.target.value })} style={{ width: "100%" }}>
-                    <option value="">Todos los almacenes (acceso global)</option>
-                    {almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                  </select>
+                  <label>Almacenes asignados</label>
+                  <div className="selector-almacenes">
+                    {almacenes.map((a) => <label key={a.id}><input type="checkbox" checked={nuevo.almacen_ids.includes(a.id)} onChange={(e) => setNuevo({ ...nuevo, almacen_ids: e.target.checked ? [...nuevo.almacen_ids, a.id] : nuevo.almacen_ids.filter((id) => id !== a.id) })} /> {a.nombre}</label>)}
+                  </div>
                 </div>
               )}
             </div>
@@ -222,20 +225,17 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                       </td>
                       <td>
                         {estaEditando ? (
-                          <select value={rolEdicion} onChange={(e) => setEdicion({ ...edicion, rol: e.target.value as Rol, entidad_id: null })}>
+                          <select value={rolEdicion} onChange={(e) => setEdicion({ ...edicion, rol: e.target.value as Rol, entidad_id: null, almacen_ids: [] })}>
                             {ROLES.map((rol) => <option key={rol.valor} value={rol.valor}>{rol.etiqueta}</option>)}
                           </select>
                         ) : ROLES.find((r) => r.valor === usuario.rol)?.etiqueta}
                       </td>
                       <td>
-                        {estaEditando && !['admin', 'gerencia'].includes(rolEdicion) ? (
-                          <select value={edicion.entidad_id ?? ""} onChange={(e) => setEdicion({ ...edicion, entidad_id: e.target.value || null })}>
-                            <option value="">Todos (acceso global)</option>
-                            {almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                          </select>
-                        ) : ['admin', 'gerencia'].includes(estaEditando ? rolEdicion : usuario.rol)
+                        {estaEditando && !['admin', 'control', 'gerencia'].includes(rolEdicion) ? (
+                          <div className="selector-almacenes compacto">{almacenes.map((a) => { const ids = edicion.almacen_ids ?? []; return <label key={a.id}><input type="checkbox" checked={ids.includes(a.id)} onChange={(e) => setEdicion({ ...edicion, almacen_ids: e.target.checked ? [...ids, a.id] : ids.filter((id) => id !== a.id) })} /> {a.nombre}</label>; })}</div>
+                        ) : ['admin', 'control', 'gerencia'].includes(estaEditando ? rolEdicion : usuario.rol)
                           ? "Todos"
-                          : almacenes.find((a) => a.id === usuario.entidad_id)?.nombre ?? "Todos"}
+                          : usuario.almacen_ids.map((id) => almacenes.find((a) => a.id === id)?.nombre).filter(Boolean).join(", ") || "Sin asignación"}
                       </td>
                       <td>
                         {estaEditando ? (

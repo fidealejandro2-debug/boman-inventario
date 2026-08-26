@@ -5,7 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { exportarCSV, fecha, ETIQUETA_TIPO } from "@/lib/utils";
 import type { Perfil } from "@/lib/getPerfil";
 
-type Producto = { id: string; sku: string; nombre: string; categoria: string | null; talla: string | null };
+type Producto = {
+  id: string; sku: string; nombre: string;
+  categoria: string | null; categoria_id: string | null;
+  subcategoria: string | null; subcategoria_id: string | null;
+  talla: string | null;
+};
 type Almacen = { id: string; nombre: string; tipo: string };
 type Movimiento = {
   id: string; tipo: string; cantidad: number; nota: string | null; created_at: string;
@@ -14,7 +19,11 @@ type Movimiento = {
   anulado_at: string | null;
   motivo_anulacion: string | null;
   anulador: { nombre_completo: string } | null;
-  productos: { nombre: string; sku: string } | null;
+  productos: {
+    nombre: string; sku: string;
+    categoria: string | null; categoria_id: string | null;
+    subcategoria: string | null; subcategoria_id: string | null;
+  } | null;
   almacenes: { nombre: string } | null;
   almacen_destino: { nombre: string } | null;
   perfiles: { nombre_completo: string } | null;
@@ -33,7 +42,6 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   const [buscaProd, setBuscaProd] = useState("");
   const [productoId, setProductoId] = useState("");
   const [almacenId, setAlmacenId] = useState(perfil.entidad_id ?? "");
-  const [destinoId, setDestinoId] = useState("");
   const [tipo, setTipo] = useState("entrada");
   const [cantidad, setCantidad] = useState(1);
   const [nota, setNota] = useState("");
@@ -43,11 +51,14 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   const [fTexto, setFTexto] = useState("");
   const [fTipo, setFTipo] = useState("");
   const [fAlmacen, setFAlmacen] = useState("");
+  const [fCategoria, setFCategoria] = useState("");
+  const [fSubcategoria, setFSubcategoria] = useState("");
   const [fDesde, setFDesde] = useState("");
   const [fHasta, setFHasta] = useState("");
   const [verAnulados, setVerAnulados] = useState(true);
 
-  const puedeRegistrar = ["admin", "bodega", "logistica"].includes(perfil.rol);
+  const puedeRegistrar = ["admin", "bodega"].includes(perfil.rol);
+  const puedeAnular = perfil.rol === "control";
   const [anulando, setAnulando] = useState<string | null>(null);
   const [editNota, setEditNota] = useState<string | null>(null);
   const [notaTmp, setNotaTmp] = useState("");
@@ -67,7 +78,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
 
     setAnulando(m.id);
     setMsg(null);
-    const { error } = await supabase.rpc("anular_movimiento", { p_movimiento_id: m.id, p_motivo: motivo.trim() });
+    const { error } = await supabase.rpc("control_anular_movimiento", { p_movimiento_id: m.id, p_motivo: motivo.trim() });
     setAnulando(null);
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
     setMsg({ tipo: "ok", texto: "Movimiento anulado. Queda en el historial para trazabilidad y el stock ya se corrigió." });
@@ -84,7 +95,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   async function cargar() {
     setCargando(true);
     const [p, a] = await Promise.all([
-      supabase.from("productos").select("id, sku, nombre, categoria, talla").eq("activo", true).order("nombre"),
+      supabase.from("productos").select("id, sku, nombre, categoria, categoria_id, subcategoria, subcategoria_id, talla").eq("activo", true).order("nombre"),
       supabase.from("almacenes").select("id, nombre, tipo").eq("activo", true).order("tipo"),
     ]);
 
@@ -101,7 +112,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
     let desde = 0;
     while (true) {
       const m = await supabase.from("movimientos")
-        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, anulador:perfiles!movimientos_anulado_por_fkey(nombre_completo), productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
+        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, anulador:perfiles!movimientos_anulado_por_fkey(nombre_completo), productos(nombre, sku, categoria, categoria_id, subcategoria, subcategoria_id), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
         .order("created_at", { ascending: false })
         .range(desde, desde + tamanoPagina - 1);
 
@@ -125,9 +136,30 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
     if (!q) return [];
     return productos.filter((p) =>
       p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) ||
-      (p.categoria ?? "").toLowerCase().includes(q)
+      (p.categoria ?? "").toLowerCase().includes(q) ||
+      (p.subcategoria ?? "").toLowerCase().includes(q)
     ).slice(0, 8);
   }, [buscaProd, productos]);
+
+  const categoriasHistorial = useMemo(() => {
+    const mapa = new Map<string, string>();
+    movs.forEach((m) => {
+      const p = m.productos;
+      if (p?.categoria_id && p.categoria) mapa.set(p.categoria_id, p.categoria);
+    });
+    return Array.from(mapa, ([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [movs]);
+
+  const subcategoriasHistorial = useMemo(() => {
+    const mapa = new Map<string, string>();
+    movs.forEach((m) => {
+      const p = m.productos;
+      if (p?.subcategoria_id && p.subcategoria && (!fCategoria || p.categoria_id === fCategoria)) {
+        mapa.set(p.subcategoria_id, p.subcategoria);
+      }
+    });
+    return Array.from(mapa, ([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [movs, fCategoria]);
 
   const seleccionado = productos.find((p) => p.id === productoId);
   const almacenesOrigen = perfil.entidad_id
@@ -140,41 +172,37 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
       if (!verAnulados && m.anulado) return false;
       if (fTipo && m.tipo !== fTipo) return false;
       if (fAlmacen && m.almacenes?.nombre !== fAlmacen && m.almacen_destino?.nombre !== fAlmacen) return false;
+      if (fCategoria && m.productos?.categoria_id !== fCategoria) return false;
+      if (fSubcategoria && m.productos?.subcategoria_id !== fSubcategoria) return false;
       if (fDesde && new Date(m.created_at) < new Date(fDesde + "T00:00:00")) return false;
       if (fHasta && new Date(m.created_at) > new Date(fHasta + "T23:59:59")) return false;
       if (!q) return true;
       return (
         (m.productos?.nombre ?? "").toLowerCase().includes(q) ||
         (m.productos?.sku ?? "").toLowerCase().includes(q) ||
+        (m.productos?.categoria ?? "").toLowerCase().includes(q) ||
+        (m.productos?.subcategoria ?? "").toLowerCase().includes(q) ||
         (m.nota ?? "").toLowerCase().includes(q) ||
         (m.perfiles?.nombre_completo ?? "").toLowerCase().includes(q)
       );
     });
-  }, [movs, fTexto, fTipo, fAlmacen, fDesde, fHasta, verAnulados]);
+  }, [movs, fTexto, fTipo, fAlmacen, fCategoria, fSubcategoria, fDesde, fHasta, verAnulados]);
 
   async function registrar(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
     if (!productoId) { setMsg({ tipo: "error", texto: "Busca y selecciona un producto." }); return; }
     if (!almacenId) { setMsg({ tipo: "error", texto: "Selecciona el almacén." }); return; }
-    if (tipo === "transferencia_envio" && !destinoId) { setMsg({ tipo: "error", texto: "Selecciona el almacén destino." }); return; }
-    if ((tipo === "ajuste" && cantidad < 0) || (tipo !== "ajuste" && cantidad <= 0)) {
-      setMsg({
-        tipo: "error",
-        texto: tipo === "ajuste" ? "El stock final no puede ser negativo." : "La cantidad debe ser mayor a cero.",
-      });
-      return;
-    }
+    if (cantidad <= 0) { setMsg({ tipo: "error", texto: "La cantidad debe ser mayor a cero." }); return; }
+    if (!nota.trim()) { setMsg({ tipo: "error", texto: "La referencia o motivo es obligatorio." }); return; }
 
     setGuardando(true);
-    const { error } = await supabase.rpc("registrar_movimiento", {
+    const { error } = await supabase.rpc("registrar_movimiento_manual", {
       p_producto_id: productoId,
       p_entidad_id: almacenId,
       p_tipo: tipo,
       p_cantidad: cantidad,
-      p_nota: nota || null,
-      p_usuario_id: perfil.id,
-      p_entidad_destino_id: tipo === "transferencia_envio" ? destinoId : null,
+      p_referencia: nota.trim(),
     });
     setGuardando(false);
 
@@ -202,13 +230,15 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                   <strong>{seleccionado.nombre}</strong>
                   <span style={{ color: "#6b7280", fontSize: 13 }}>
                     {seleccionado.sku}{seleccionado.talla ? ` · T/${seleccionado.talla}` : ""}
+                    {seleccionado.categoria ? ` · ${seleccionado.categoria}` : ""}
+                    {seleccionado.subcategoria ? ` / ${seleccionado.subcategoria}` : ""}
                   </span>
                   <button type="button" className="chip-limpiar" style={{ marginLeft: "auto", padding: "4px 10px" }}
                     onClick={() => { setProductoId(""); setBuscaProd(""); }}>Cambiar</button>
                 </div>
               ) : (
                 <>
-                  <input placeholder="Escribe nombre, SKU o categoría..." value={buscaProd}
+                  <input placeholder="Escribe nombre, SKU, categoría o subcategoría..." value={buscaProd}
                     onChange={(e) => setBuscaProd(e.target.value)} style={{ width: "100%" }} autoComplete="off" />
                   {sugerencias.length > 0 && (
                     <div style={{ position: "absolute", zIndex: 20, background: "white", border: "1px solid #d1d5db", borderRadius: 6, width: "100%", maxHeight: 240, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
@@ -218,7 +248,9 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                           onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
                           onMouseLeave={(e) => (e.currentTarget.style.background = "white")}>
                           <strong>{p.nombre}</strong>{p.talla ? ` · T/${p.talla}` : ""}
-                          <div style={{ color: "#6b7280", fontSize: 12 }}>{p.sku} · {p.categoria ?? "sin categoría"}</div>
+                          <div style={{ color: "#6b7280", fontSize: 12 }}>
+                            {p.sku} · {p.categoria ?? "sin categoría"}{p.subcategoria ? ` / ${p.subcategoria}` : ""}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -231,36 +263,25 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
               <div className="field">
                 <label>Tipo de movimiento</label>
                 <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ width: "100%" }}>
-                  <option value="entrada">Entrada — llega producción</option>
-                  <option value="salida">Salida — venta o baja</option>
-                  <option value="transferencia_envio">Despacho — de Bodega a Tienda</option>
-                  <option value="ajuste">Ajuste — fijar stock exacto</option>
+                  <option value="entrada">Entrada manual con referencia</option>
+                  <option value="salida">Salida manual con referencia</option>
                 </select>
               </div>
               <div className="field">
-                <label>Cantidad {tipo === "ajuste" ? "(stock final)" : ""}</label>
-                <input type="number" min={tipo === "ajuste" ? 0 : 1} value={cantidad}
+                <label>Cantidad</label>
+                <input type="number" min={1} value={cantidad}
                   onChange={(e) => setCantidad(parseInt(e.target.value) || 0)} style={{ width: "100%" }} />
               </div>
               <div className="field">
-                <label>Almacén {tipo === "transferencia_envio" ? "(origen)" : ""}</label>
+                <label>Almacén</label>
                 <select value={almacenId} onChange={(e) => setAlmacenId(e.target.value)} style={{ width: "100%" }}>
                   <option value="">Selecciona...</option>
                   {almacenesOrigen.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                 </select>
               </div>
-              {tipo === "transferencia_envio" && (
-                <div className="field">
-                  <label>Almacén destino</label>
-                  <select value={destinoId} onChange={(e) => setDestinoId(e.target.value)} style={{ width: "100%" }}>
-                    <option value="">Selecciona...</option>
-                    {almacenes.filter((a) => a.id !== almacenId).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                  </select>
-                </div>
-              )}
               <div className="field">
-                <label>Nota / referencia (opcional)</label>
-                <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="N° guía, factura, contrato..." style={{ width: "100%" }} />
+                <label>Referencia / motivo obligatorio</label>
+                <input required value={nota} onChange={(e) => setNota(e.target.value)} placeholder="N° orden, factura, contrato o motivo..." style={{ width: "100%" }} />
               </div>
             </div>
 
@@ -274,7 +295,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
         <div className="filtros">
           <div className="field buscador">
             <label>Buscar</label>
-            <input placeholder="Producto, SKU, nota o usuario..." value={fTexto} onChange={(e) => setFTexto(e.target.value)} />
+            <input placeholder="Producto, SKU, categoría, nota o usuario..." value={fTexto} onChange={(e) => setFTexto(e.target.value)} />
           </div>
           <div className="field">
             <label>Tipo</label>
@@ -290,6 +311,20 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
               {almacenes.map((a) => <option key={a.id} value={a.nombre}>{a.nombre}</option>)}
             </select>
           </div>
+          <div className="field">
+            <label>Categoría</label>
+            <select value={fCategoria} onChange={(e) => { setFCategoria(e.target.value); setFSubcategoria(""); }}>
+              <option value="">Todas</option>
+              {categoriasHistorial.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Subcategoría</label>
+            <select value={fSubcategoria} onChange={(e) => setFSubcategoria(e.target.value)}>
+              <option value="">Todas</option>
+              {subcategoriasHistorial.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          </div>
           <div className="field"><label>Desde</label><input type="date" value={fDesde} onChange={(e) => setFDesde(e.target.value)} /></div>
           <div className="field"><label>Hasta</label><input type="date" value={fHasta} onChange={(e) => setFHasta(e.target.value)} /></div>
           <div className="field">
@@ -298,7 +333,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
               Mostrar anulados
             </label>
           </div>
-          <button className="chip-limpiar" onClick={() => { setFTexto(""); setFTipo(""); setFAlmacen(""); setFDesde(""); setFHasta(""); setVerAnulados(true); }}>Limpiar</button>
+          <button className="chip-limpiar" onClick={() => { setFTexto(""); setFTipo(""); setFAlmacen(""); setFCategoria(""); setFSubcategoria(""); setFDesde(""); setFHasta(""); setVerAnulados(true); }}>Limpiar</button>
         </div>
 
         <div className="header-row">
@@ -309,6 +344,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
               onClick={() => exportarCSV("movimientos_boman", movsFiltrados.map((m) => ({
                 Fecha: fecha(m.created_at), Tipo: ETIQUETA_TIPO[m.tipo] ?? m.tipo,
                 SKU: m.productos?.sku, Producto: m.productos?.nombre,
+                Categoria: m.productos?.categoria, Subcategoria: m.productos?.subcategoria,
                 Almacen: m.almacenes?.nombre, Destino: m.almacen_destino?.nombre ?? "",
                 Cantidad: m.cantidad, Usuario: m.perfiles?.nombre_completo, Nota: m.nota ?? "",
                 Estado: m.anulado ? "ANULADO" : "Vigente",
@@ -339,7 +375,15 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                       <span className={`badge ${m.tipo}`}>{ETIQUETA_TIPO[m.tipo] ?? m.tipo}</span>
                       {m.anulado && <span className="badge anulado" style={{ marginLeft: 4 }}>ANULADO</span>}
                     </td>
-                    <td>{m.productos?.nombre}<div style={{ fontSize: 12, color: "#6b7280" }}>{m.productos?.sku}</div></td>
+                    <td>
+                      {m.productos?.nombre}
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>{m.productos?.sku}</div>
+                      {(m.productos?.categoria || m.productos?.subcategoria) && (
+                        <div style={{ fontSize: 11, color: "#64748b" }}>
+                          {m.productos?.categoria ?? "Sin categoría"}{m.productos?.subcategoria ? ` / ${m.productos.subcategoria}` : ""}
+                        </div>
+                      )}
+                    </td>
                     <td>{m.almacenes?.nombre}</td>
                     <td>{m.almacen_destino?.nombre ?? "-"}</td>
                     <td className="num">{m.cantidad}</td>
@@ -370,7 +414,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                         </span>
                       )}
                     </td>
-                    {puedeRegistrar && (
+                    {puedeAnular && (
                       <td style={{ whiteSpace: "nowrap" }}>
                         {m.anulado ? (
                           <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span>

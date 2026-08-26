@@ -6,6 +6,7 @@ import { exportarCSV, fecha, ETIQUETA_TIPO } from "@/lib/utils";
 
 type Fila = {
   producto_id: string; sku: string; producto: string; categoria: string | null;
+  categoria_id: string; subcategoria: string | null; subcategoria_id: string | null;
   talla: string | null; stock_minimo: number; precio: number | null;
   almacen_id: string; almacen: string; almacen_tipo: string;
   cantidad: number; bajo_minimo: boolean;
@@ -98,16 +99,20 @@ export default function ReportesCliente() {
   }, [filas]);
 
   const porCategoria = useMemo(() => {
-    const map = new Map<string, { categoria: string; unidades: number; skus: Set<string>; valor: number }>();
+    const map = new Map<string, { categoria: string; subcategoria: string; unidades: number; skus: Set<string>; valor: number }>();
     filas.forEach((f) => {
-      const k = f.categoria ?? "Sin categoría";
-      if (!map.has(k)) map.set(k, { categoria: k, unidades: 0, skus: new Set(), valor: 0 });
+      const categoria = f.categoria ?? "Sin categoría";
+      const subcategoria = f.subcategoria ?? "Sin subcategoría";
+      const k = `${f.categoria_id || categoria}\u241f${f.subcategoria_id || subcategoria}`;
+      if (!map.has(k)) map.set(k, { categoria, subcategoria, unidades: 0, skus: new Set(), valor: 0 });
       const o = map.get(k)!;
       o.unidades += f.cantidad;
       if (f.cantidad > 0) o.skus.add(f.producto_id);
       o.valor += (f.precio ?? 0) * f.cantidad;
     });
-    return Array.from(map.values()).sort((a, b) => b.unidades - a.unidades);
+    return Array.from(map.values()).sort((a, b) =>
+      a.categoria.localeCompare(b.categoria) || a.subcategoria.localeCompare(b.subcategoria)
+    );
   }, [filas]);
 
   const bajoMinimo = useMemo(
@@ -121,7 +126,7 @@ export default function ReportesCliente() {
     const map = new Map<string, any>();
     filas.forEach((f) => {
       if (!map.has(f.producto_id)) {
-        map.set(f.producto_id, { sku: f.sku, producto: f.producto, categoria: f.categoria, talla: f.talla, total: 0 });
+        map.set(f.producto_id, { sku: f.sku, producto: f.producto, categoria: f.categoria, subcategoria: f.subcategoria, talla: f.talla, total: 0 });
         almacenes.forEach((a) => (map.get(f.producto_id)[a] = 0));
       }
       const o = map.get(f.producto_id);
@@ -133,8 +138,11 @@ export default function ReportesCliente() {
   }, [filas]);
 
   const productosUnicos = useMemo(() => {
-    const m = new Map<string, { id: string; sku: string; nombre: string }>();
-    filas.forEach((f) => m.set(f.producto_id, { id: f.producto_id, sku: f.sku, nombre: f.producto }));
+    const m = new Map<string, { id: string; sku: string; nombre: string; categoria: string | null; subcategoria: string | null }>();
+    filas.forEach((f) => m.set(f.producto_id, {
+      id: f.producto_id, sku: f.sku, nombre: f.producto,
+      categoria: f.categoria, subcategoria: f.subcategoria,
+    }));
     return Array.from(m.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [filas]);
 
@@ -158,7 +166,7 @@ export default function ReportesCliente() {
       </div>
 
       <div className="tabs">
-        {([["almacen", "Por almacén"], ["categoria", "Por categoría"], ["bajo", "Stock bajo"], ["matriz", "Matriz por tienda"], ["kardex", "Kardex de producto"]] as [Tab, string][])
+        {([["almacen", "Por almacén"], ["categoria", "Por categoría / subcategoría"], ["bajo", "Stock bajo"], ["matriz", "Matriz por tienda"], ["kardex", "Kardex de producto"]] as [Tab, string][])
           .map(([k, label]) => (
             <div key={k} className={`tab ${tab === k ? "activo" : ""}`} onClick={() => setTab(k)}>{label}</div>
           ))}
@@ -194,23 +202,24 @@ export default function ReportesCliente() {
       {tab === "categoria" && (
         <div className="card">
           <div className="header-row">
-            <h3>Stock por categoría</h3>
+            <h3>Stock por categoría y subcategoría</h3>
             <button className="secondary" onClick={() => exportarCSV("reporte_por_categoria", porCategoria.map((r) => ({
-              Categoria: r.categoria, Unidades: r.unidades, SKUs: r.skus.size, Valor: r.valor.toFixed(2),
+              Categoria: r.categoria, Subcategoria: r.subcategoria, Unidades: r.unidades, SKUs: r.skus.size, Valor: r.valor.toFixed(2),
             })))}>Exportar a Excel</button>
           </div>
           <table>
-            <thead><tr><th>Categoría</th><th className="num">Unidades</th><th className="num">SKUs</th><th className="num">Valor</th></tr></thead>
+            <thead><tr><th>Categoría</th><th>Subcategoría</th><th className="num">Unidades</th><th className="num">SKUs</th><th className="num">Valor</th></tr></thead>
             <tbody>
               {porCategoria.map((r) => (
-                <tr key={r.categoria}>
+                <tr key={`${r.categoria}-${r.subcategoria}`}>
                   <td><strong>{r.categoria}</strong></td>
+                  <td>{r.subcategoria}</td>
                   <td className="num">{r.unidades.toLocaleString("es-EC")}</td>
                   <td className="num">{r.skus.size}</td>
                   <td className="num">{money(r.valor)}</td>
                 </tr>
               ))}
-              {!porCategoria.length && <tr><td colSpan={4} className="vacio">Sin datos.</td></tr>}
+              {!porCategoria.length && <tr><td colSpan={5} className="vacio">Sin datos.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -221,7 +230,7 @@ export default function ReportesCliente() {
           <div className="header-row">
             <h3>Productos bajo stock mínimo</h3>
             <button className="secondary" disabled={!bajoMinimo.length} onClick={() => exportarCSV("reporte_stock_bajo", bajoMinimo.map((f) => ({
-              SKU: f.sku, Producto: f.producto, Categoria: f.categoria, Talla: f.talla,
+              SKU: f.sku, Producto: f.producto, Categoria: f.categoria, Subcategoria: f.subcategoria, Talla: f.talla,
               Almacen: f.almacen, Cantidad: f.cantidad, StockMinimo: f.stock_minimo,
             })))}>Exportar a Excel</button>
           </div>
@@ -230,15 +239,17 @@ export default function ReportesCliente() {
           </p>
           <div className="tabla-scroll">
             <table>
-              <thead><tr><th>SKU</th><th>Producto</th><th>Talla</th><th>Almacén</th><th className="num">Actual</th><th className="num">Mínimo</th></tr></thead>
+              <thead><tr><th>SKU</th><th>Producto</th><th>Categoría / subcategoría</th><th>Talla</th><th>Almacén</th><th className="num">Actual</th><th className="num">Mínimo</th></tr></thead>
               <tbody>
                 {bajoMinimo.map((f) => (
                   <tr key={`${f.producto_id}-${f.almacen_id}`} className="fila-alerta">
-                    <td>{f.sku}</td><td>{f.producto}</td><td>{f.talla ?? "-"}</td><td>{f.almacen}</td>
+                    <td>{f.sku}</td><td>{f.producto}</td>
+                    <td>{f.categoria ?? "-"}{f.subcategoria ? <div style={{ fontSize: 11, color: "#6b7280" }}>{f.subcategoria}</div> : null}</td>
+                    <td>{f.talla ?? "-"}</td><td>{f.almacen}</td>
                     <td className="num">{f.cantidad}</td><td className="num">{f.stock_minimo}</td>
                   </tr>
                 ))}
-                {!bajoMinimo.length && <tr><td colSpan={6} className="vacio">Ningún producto bajo su mínimo.</td></tr>}
+                {!bajoMinimo.length && <tr><td colSpan={7} className="vacio">Ningún producto bajo su mínimo.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -251,7 +262,7 @@ export default function ReportesCliente() {
             <h3>Matriz producto × almacén</h3>
             <button className="secondary" disabled={!matriz.datos.length}
               onClick={() => exportarCSV("matriz_stock", matriz.datos.map((r) => {
-                const o: any = { SKU: r.sku, Producto: r.producto, Categoria: r.categoria, Talla: r.talla };
+                const o: any = { SKU: r.sku, Producto: r.producto, Categoria: r.categoria, Subcategoria: r.subcategoria, Talla: r.talla };
                 matriz.almacenes.forEach((a) => (o[a] = r[a]));
                 o.TOTAL = r.total;
                 return o;
@@ -261,7 +272,7 @@ export default function ReportesCliente() {
             <table>
               <thead>
                 <tr>
-                  <th>SKU</th><th>Producto</th><th>Talla</th>
+                  <th>SKU</th><th>Producto</th><th>Categoría / subcategoría</th><th>Talla</th>
                   {matriz.almacenes.map((a) => <th key={a} className="num">{a}</th>)}
                   <th className="num">Total</th>
                 </tr>
@@ -269,12 +280,14 @@ export default function ReportesCliente() {
               <tbody>
                 {matriz.datos.slice(0, 300).map((r, i) => (
                   <tr key={i}>
-                    <td>{r.sku}</td><td>{r.producto}</td><td>{r.talla ?? "-"}</td>
+                    <td>{r.sku}</td><td>{r.producto}</td>
+                    <td>{r.categoria ?? "-"}{r.subcategoria ? <div style={{ fontSize: 11, color: "#6b7280" }}>{r.subcategoria}</div> : null}</td>
+                    <td>{r.talla ?? "-"}</td>
                     {matriz.almacenes.map((a) => <td key={a} className="num" style={{ color: r[a] ? "inherit" : "#d1d5db" }}>{r[a]}</td>)}
                     <td className="num"><strong>{r.total}</strong></td>
                   </tr>
                 ))}
-                {!matriz.datos.length && <tr><td colSpan={matriz.almacenes.length + 4} className="vacio">Sin stock registrado.</td></tr>}
+                {!matriz.datos.length && <tr><td colSpan={matriz.almacenes.length + 5} className="vacio">Sin stock registrado.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -290,16 +303,16 @@ export default function ReportesCliente() {
           <div className="filtros">
             <div className="field buscador">
               <label>Buscar producto</label>
-              <input placeholder="Nombre o SKU..." value={buscaKardex} onChange={(e) => setBuscaKardex(e.target.value)} />
+              <input placeholder="Nombre, SKU, categoría o subcategoría..." value={buscaKardex} onChange={(e) => setBuscaKardex(e.target.value)} />
             </div>
             <div className="field" style={{ minWidth: 280 }}>
               <label>Producto</label>
               <select value={kardexProd} onChange={(e) => setKardexProd(e.target.value)} style={{ width: "100%" }}>
                 <option value="">Selecciona...</option>
                 {productosUnicos
-                  .filter((p) => !buscaKardex || p.nombre.toLowerCase().includes(buscaKardex.toLowerCase()) || p.sku.toLowerCase().includes(buscaKardex.toLowerCase()))
+                  .filter((p) => !buscaKardex || p.nombre.toLowerCase().includes(buscaKardex.toLowerCase()) || p.sku.toLowerCase().includes(buscaKardex.toLowerCase()) || (p.categoria ?? "").toLowerCase().includes(buscaKardex.toLowerCase()) || (p.subcategoria ?? "").toLowerCase().includes(buscaKardex.toLowerCase()))
                   .slice(0, 200)
-                  .map((p) => <option key={p.id} value={p.id}>{p.nombre} ({p.sku})</option>)}
+                  .map((p) => <option key={p.id} value={p.id}>{p.nombre} ({p.sku}) · {p.categoria ?? "Sin categoría"}{p.subcategoria ? ` / ${p.subcategoria}` : ""}</option>)}
               </select>
             </div>
             {kardex.length > 0 && (
