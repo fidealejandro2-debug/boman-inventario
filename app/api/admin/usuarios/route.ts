@@ -105,6 +105,36 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    const accion = String(body.accion ?? "invitar");
+    if (accion === "reenviar_invitacion") {
+      const id = String(body.id ?? "");
+      if (!id) return NextResponse.json({ error: "Debes indicar el usuario." }, { status: 400 });
+
+      const admin = createAdminClient();
+      const { data: usuarioAuth, error: usuarioError } = await admin.auth.admin.getUserById(id);
+      const usuario = usuarioAuth.user;
+      if (usuarioError || !usuario?.email) {
+        return NextResponse.json({ error: usuarioError?.message ?? "El usuario no tiene un correo válido." }, { status: 400 });
+      }
+      if (usuario.email_confirmed_at) {
+        return NextResponse.json({ error: "El correo ya fue confirmado. Envía un cambio de contraseña." }, { status: 400 });
+      }
+
+      const urlBase = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? request.nextUrl.origin;
+      const redirectTo = new URL("/auth/callback?next=/establecer-clave", urlBase).toString();
+      const { data: invitacion, error: invitacionError } = await admin.auth.admin.inviteUserByEmail(usuario.email, {
+        data: usuario.user_metadata,
+        redirectTo,
+      });
+      if (invitacionError || !invitacion.user) {
+        return NextResponse.json({ error: invitacionError?.message ?? "No se pudo reenviar la invitación." }, { status: 400 });
+      }
+      if (invitacion.user.id !== id) {
+        return NextResponse.json({ error: "Supabase generó una identidad diferente. No se modificó el perfil; revisa Authentication → Users." }, { status: 409 });
+      }
+      return NextResponse.json({ ok: true, mensaje: `Nueva invitación enviada a ${usuario.email}. El enlace anterior ya no debe utilizarse.` });
+    }
+
     const email = String(body.email ?? "").trim().toLowerCase();
     const nombre = String(body.nombre_completo ?? "").trim();
     const rol = body.rol;

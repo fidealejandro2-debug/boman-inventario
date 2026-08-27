@@ -163,6 +163,25 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
     }
   }
 
+  async function reenviarInvitacion(usuario: Usuario) {
+    if (!window.confirm(`La invitación anterior dejará de utilizarse y se enviará un enlace nuevo a ${usuario.email}.\n\n¿Deseas continuar?`)) return;
+    setMsg(null);
+    setGuardando(true);
+    try {
+      const data = await peticion("/api/admin/usuarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "reenviar_invitacion", id: usuario.id }),
+      });
+      setMsg({ tipo: "ok", texto: data.mensaje ?? "Invitación reenviada." });
+      await cargar();
+    } catch (error) {
+      setMsg({ tipo: "error", texto: error instanceof Error ? error.message : "No se pudo reenviar la invitación." });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   async function eliminarAcceso(usuario: Usuario) {
     if (!window.confirm(
       `Vas a eliminar el acceso de ${usuario.nombre_completo} (${usuario.email}).\n\nYa no podrá ingresar, pero sus movimientos y auditoría se conservarán. Podrás restaurarlo editando el usuario y marcándolo como activo.\n\n¿Confirmas la eliminación del acceso?`
@@ -302,7 +321,9 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                           </>
                         ) : <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           <button className="secondary" disabled={guardando} onClick={() => editar(usuario)}>Editar</button>
-                          <button className="secondary" disabled={guardando || !usuario.activo || !usuario.email || !usuario.confirmado} onClick={() => enviarCambioClave(usuario)} title={!usuario.confirmado ? "La invitación todavía no fue confirmada" : "Enviar enlace seguro al correo"}>Cambiar contraseña</button>
+                          {usuario.confirmado
+                            ? <button className="secondary" disabled={guardando || !usuario.activo || !usuario.email} onClick={() => enviarCambioClave(usuario)} title="Enviar enlace seguro al correo">Cambiar contraseña</button>
+                            : <button className="secondary" disabled={guardando || !usuario.activo || !usuario.email} onClick={() => reenviarInvitacion(usuario)} title="Generar un enlace de activación nuevo">Reenviar invitación</button>}
                           {usuario.id !== usuarioActualId && usuario.activo && <button className="peligro" disabled={guardando} onClick={() => eliminarAcceso(usuario)}>Eliminar acceso</button>}
                         </div>}
                       </td>
