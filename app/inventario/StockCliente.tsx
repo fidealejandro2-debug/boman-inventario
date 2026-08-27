@@ -24,6 +24,8 @@ type Fila = {
   stock_disponible: number;
   transito_entrada: number;
   transito_salida: number;
+  transito_incidencia: number;
+  stock_cuarentena: number;
   sugerido_reponer: number;
   bajo_minimo: boolean;
 };
@@ -79,7 +81,8 @@ export default function StockCliente() {
       if (subcategoria && f.subcategoria_id !== subcategoria) return false;
       if (almacen && f.almacen !== almacen) return false;
       if (soloAlerta && !f.bajo_minimo) return false;
-      if (ocultarCero && f.stock_fisico === 0 && f.transito_entrada === 0) return false;
+      if (ocultarCero && f.stock_fisico === 0 && f.transito_entrada === 0
+        && f.transito_incidencia === 0 && f.stock_cuarentena === 0) return false;
       if (!q) return true;
       return (
         f.producto.toLowerCase().includes(q) ||
@@ -95,6 +98,8 @@ export default function StockCliente() {
   const totalUnidades = filtradas.reduce((a, f) => a + f.stock_fisico, 0);
   const totalDisponible = filtradas.reduce((a, f) => a + f.stock_disponible, 0);
   const totalTransito = filtradas.reduce((a, f) => a + f.transito_entrada, 0);
+  const totalIncidencia = filtradas.reduce((a, f) => a + f.transito_incidencia, 0);
+  const totalCuarentena = filtradas.reduce((a, f) => a + f.stock_cuarentena, 0);
   const enAlerta = filtradas.filter((f) => f.bajo_minimo).length;
   const skusDistintos = new Set(filtradas.map((f) => f.producto_id)).size;
 
@@ -120,6 +125,11 @@ export default function StockCliente() {
           <div className="label">En tránsito</div>
           <div className="valor">{totalTransito.toLocaleString("es-EC")}</div>
           <small>{skusDistintos} SKU(s)</small>
+        </div>
+        <div className={`kpi ${totalIncidencia || totalCuarentena ? "alerta" : "ok"}`}>
+          <div className="label">Bajo seguimiento</div>
+          <div className="valor">{(totalIncidencia + totalCuarentena).toLocaleString("es-EC")}</div>
+          <small>{totalIncidencia} no recibida(s) · {totalCuarentena} en cuarentena</small>
         </div>
         <div className={`kpi ${enAlerta > 0 ? "alerta" : "ok"}`}>
           <div className="label">Bajo mínimo</div>
@@ -180,7 +190,8 @@ export default function StockCliente() {
               Talla: f.talla, Color: f.color, Almacen: f.almacen,
               Ubicacion: f.ubicacion, Fisico: f.stock_fisico, Reservado: f.stock_reservado,
               Disponible: f.stock_disponible, TransitoEntrada: f.transito_entrada,
-              TransitoSalida: f.transito_salida, StockMinimo: f.stock_minimo,
+              TransitoSalida: f.transito_salida, TransitoIncidencia: f.transito_incidencia,
+              Cuarentena: f.stock_cuarentena, StockMinimo: f.stock_minimo,
               PuntoReposicion: f.punto_reposicion, SugeridoReponer: f.sugerido_reponer,
             })))}
             disabled={!filtradas.length}
@@ -200,7 +211,8 @@ export default function StockCliente() {
                   <th>SKU</th><th>Producto</th><th>Categoría / subcategoría</th>
                   <th>Talla</th><th>Almacén / ubicación</th><th className="num">Físico</th>
                   <th className="num">Reserv.</th><th className="num">Disponible</th>
-                  <th className="num">En tránsito</th><th>Estado</th>
+                  <th className="num">En tránsito</th><th className="num">No recibida</th>
+                  <th className="num">Cuarentena</th><th>Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,8 +230,12 @@ export default function StockCliente() {
                     <td className="num">{f.stock_reservado}</td>
                     <td className="num"><strong>{f.stock_disponible}</strong></td>
                     <td className="num">{f.transito_entrada > 0 ? `+${f.transito_entrada}` : "-"}</td>
+                    <td className="num">{f.transito_incidencia || "-"}</td>
+                    <td className="num">{f.stock_cuarentena || "-"}</td>
                     <td>
-                      {f.stock_fisico === 0 && f.transito_entrada === 0
+                      {f.transito_incidencia > 0 || f.stock_cuarentena > 0
+                        ? <span className="badge bajo">Seguimiento</span>
+                        : f.stock_fisico === 0 && f.transito_entrada === 0
                         ? <span className="badge cero">Sin stock</span>
                         : f.bajo_minimo
                           ? <span className="badge bajo">Reponer {f.sugerido_reponer || ""}</span>
@@ -228,7 +244,7 @@ export default function StockCliente() {
                   </tr>
                 ))}
                 {!filtradas.length && (
-                  <tr><td colSpan={10} className="vacio">No hay resultados con esos filtros.</td></tr>
+                  <tr><td colSpan={12} className="vacio">No hay resultados con esos filtros.</td></tr>
                 )}
               </tbody>
             </table>

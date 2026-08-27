@@ -20,7 +20,10 @@ Costo mensual esperado: **$0** (dentro de los free tiers de Supabase y Vercel pa
    `v5_importar_stock.sql`, `v6_seguridad_consistencia.sql`,
    `v7_administracion_usuarios.sql`, `v8_estado_productos.sql`,
    `v9_reparar_estado_productos.sql`, `v10_categorias_subcategorias.sql` y
-   `v11_importar_catalogo_productos.sql` y `v12_fase_erp_operativa.sql`.
+   `v11_importar_catalogo_productos.sql`, `v12_fase_erp_operativa.sql`,
+   `v13_ventas_xml.sql`, `v14_anulacion_ventas_xml.sql`,
+   `v15_admin_aprueba_conteo_propio.sql`, `v16_incidencias_transferencia_sgc.sql`
+   y `v17_rectificacion_recepciones.sql`.
    La migración v6 es obligatoria: corrige permisos, ajustes a cero, anulaciones,
    importaciones por almacén y agrega auditoría de cambios de notas.
 5. Ve a **Project Settings → API**. Copia dos valores, los vas a necesitar:
@@ -77,11 +80,11 @@ Para las invitaciones, agrega en **Supabase → Authentication → URL Configura
 - **Tienda**: solicita reposición, recibe físicamente cada transferencia y realiza conteos ciegos.
 - **Bodega**: aprueba solicitudes, prepara picking, despacha, y registra entradas/salidas excepcionales con referencia.
 - **Logística**: marca la mercadería en tránsito y consulta la ruta documental.
-- **Control**: realiza segundo conteo, aprueba diferencias, cierra incidencias y anula movimientos manuales.
+- **Control**: realiza segundo conteo, investiga no conformidades, registra disposiciones y anula movimientos manuales.
 - **Admin**: administra catálogo, usuarios y configuraciones; no sustituye la recepción física de tienda.
 - **Gerencia**: consulta stock físico/disponible/en tránsito, documentos y reportes.
 
-## Estado de la Fase ERP operativa (v12)
+## Estado de la Fase ERP operativa (v16)
 
 - Compilación de producción verificada.
 - Movimientos e importaciones protegidos mediante funciones atómicas de Supabase.
@@ -97,7 +100,10 @@ Para las invitaciones, agrega en **Supabase → Authentication → URL Configura
 - Importación auditada del catálogo maestro desde Excel/CSV: altas, categorías, precios y mínimos sin alterar stock.
 - Solicitudes de reposición y transferencias multilínea con número de documento.
 - Picking, despacho, tránsito y recepción real; el destino solo aumenta al confirmar lo recibido.
-- Diferencias de recepción enviadas al Centro de Control.
+- Recepción con clasificación total: conforme, no conforme o no recibida.
+- No conformes bloqueados en cuarentena y faltantes visibles como tránsito con incidencia.
+- Investigación, disposición parcial/final, causa raíz y acción correctiva auditadas; solo Admin reconoce pérdidas.
+- Rectificación administrativa de recepciones erróneas mediante movimientos compensatorios, sin borrar el registro original.
 - Conteos ciegos totales o parciales, segundo conteo y aplicación aprobada al kardex.
 - Stock físico, reservado, disponible y en tránsito por tienda y bodega.
 - Mínimos, máximos, seguridad, punto de reposición y ubicación por producto/almacén.
@@ -107,7 +113,6 @@ Para las invitaciones, agrega en **Supabase → Authentication → URL Configura
 
 ### Puesta en marcha de esta fase
 
-Si la base real ya tiene v11, ejecuta **una sola vez** `sql/v12_fase_erp_operativa.sql` en Supabase.
-Después configura los roles/almacenes desde la app y realiza la prueba de aceptación descrita en
-`sql/verificacion_v12.sql`. La v12 bloquea las transferencias y tomas físicas antiguas para evitar
-que convivan dos formas distintas de modificar stock.
+Si la base real ya tiene v11, ejecuta **una sola vez y en orden** las migraciones v12 a v17.
+Después de cada una ejecuta su archivo `sql/verificacion_vNN.sql`. Instala v16 antes de publicar
+la interfaz actual: las pantallas de Operaciones, Control y Stock consultan sus nuevas columnas.

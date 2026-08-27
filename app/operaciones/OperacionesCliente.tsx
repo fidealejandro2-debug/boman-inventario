@@ -20,6 +20,8 @@ type Linea = {
   cantidad_despachada: number | null;
   cantidad_recibida: number | null;
   cantidad_rechazada: number | null;
+  cantidad_no_conforme: number;
+  cantidad_no_recibida: number;
   observacion: string | null;
   producto: ProductoDocumento | null;
 };
@@ -62,8 +64,10 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const [nota, setNota] = useState("");
   const [origenSolicitud, setOrigenSolicitud] = useState<Record<string, string>>({});
   const [recibiendo, setRecibiendo] = useState<Documento | null>(null);
-  const [recepcion, setRecepcion] = useState<Record<string, { recibida: number; rechazada: number; observacion: string }>>({});
+  const [recepcion, setRecepcion] = useState<Record<string, { recibida: number; noConforme: number; noRecibida: number; observacion: string }>>({});
   const [notaRecepcion, setNotaRecepcion] = useState("");
+  const [rectificando, setRectificando] = useState<Documento | null>(null);
+  const [motivoRectificacion, setMotivoRectificacion] = useState("");
 
   const rolGlobal = ["admin", "control", "gerencia"].includes(perfil.rol);
   const puedeSolicitar = ["admin", "control", "bodega", "tienda"].includes(perfil.rol);
@@ -86,7 +90,8 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
         creador:perfiles!documentos_inventario_creado_por_fkey(nombre_completo),
         lineas:documento_inventario_lineas(
           id, producto_id, cantidad_solicitada, cantidad_aprobada, cantidad_preparada,
-          cantidad_despachada, cantidad_recibida, cantidad_rechazada, observacion,
+          cantidad_despachada, cantidad_recibida, cantidad_rechazada,
+          cantidad_no_conforme, cantidad_no_recibida, observacion,
           producto:productos(id, sku, nombre, talla, color)
         )
       `).in("tipo", ["solicitud_reposicion", "transferencia"]).order("created_at", { ascending: false }).limit(300),
@@ -195,9 +200,31 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   function abrirRecepcion(documento: Documento) {
     const valores: typeof recepcion = {};
     documento.lineas.forEach((l) => {
-      valores[l.producto_id] = { recibida: l.cantidad_despachada ?? 0, rechazada: 0, observacion: "" };
+      valores[l.producto_id] = {
+        recibida: l.cantidad_despachada ?? 0,
+        noConforme: 0,
+        noRecibida: 0,
+        observacion: "",
+      };
     });
     setRecepcion(valores); setNotaRecepcion(""); setRecibiendo(documento);
+  }
+
+  function actualizarClasificacion(
+    linea: Linea,
+    campo: "recibida" | "noConforme" | "noRecibida" | "observacion",
+    valor: number | string
+  ) {
+    const actual = recepcion[linea.producto_id] ?? { recibida: 0, noConforme: 0, noRecibida: 0, observacion: "" };
+    const siguiente = { ...actual };
+    if (campo === "observacion") siguiente.observacion = String(valor);
+    else siguiente[campo] = Number(valor);
+    if (campo === "recibida" || campo === "noConforme") {
+      siguiente.noRecibida = Math.max(
+        (linea.cantidad_despachada ?? 0) - siguiente.recibida - siguiente.noConforme, 0
+      );
+    }
+    setRecepcion((valores) => ({ ...valores, [linea.producto_id]: siguiente }));
   }
 
   async function guardarRecepcion() {
@@ -205,13 +232,22 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
     const items = recibiendo.lineas.map((l) => ({
       producto_id: l.producto_id,
       cantidad_recibida: recepcion[l.producto_id]?.recibida ?? 0,
-      cantidad_rechazada: recepcion[l.producto_id]?.rechazada ?? 0,
+      cantidad_no_conforme: recepcion[l.producto_id]?.noConforme ?? 0,
+      cantidad_no_recibida: recepcion[l.producto_id]?.noRecibida ?? 0,
       observacion: recepcion[l.producto_id]?.observacion || null,
     }));
     const hayDiferencia = recibiendo.lineas.some((l) => {
       const r = recepcion[l.producto_id];
-      return (r?.recibida ?? 0) + (r?.rechazada ?? 0) !== (l.cantidad_despachada ?? 0) || (r?.rechazada ?? 0) > 0;
+      return (r?.noConforme ?? 0) > 0 || (r?.noRecibida ?? 0) > 0;
     });
+    const incompleta = recibiendo.lineas.some((l) => {
+      const r = recepcion[l.producto_id];
+      return (r?.recibida ?? 0) + (r?.noConforme ?? 0) + (r?.noRecibida ?? 0)
+        !== (l.cantidad_despachada ?? 0);
+    });
+    if (incompleta) {
+      setMsg({ tipo: "error", texto: "Clasifica exactamente todas las unidades como conformes, no conformes o no recibidas." }); return;
+    }
     if (hayDiferencia && !notaRecepcion.trim()) {
       setMsg({ tipo: "error", texto: "Explica la diferencia o el rechazo antes de recibir." }); return;
     }
@@ -223,6 +259,25 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
     setRecibiendo(null);
     setMsg({ tipo: "ok", texto: data === "recibido" ? "Recepción completa aplicada al stock." : "Recepción aplicada y diferencia enviada a Control." });
+    await cargar();
+  }
+
+  async function rectificarRecepcion() {
+    if (!rectificando) return;
+    if (motivoRectificacion.trim().length < 10) {
+      setMsg({ tipo: "error", texto: "Describe con claridad el error y la evidencia de la rectificación (mínimo 10 caracteres)." });
+      return;
+    }
+    setProcesando(rectificando.id); setMsg(null);
+    const { error } = await supabase.rpc("admin_rectificar_recepcion_transferencia", {
+      p_documento_id: rectificando.id,
+      p_motivo: motivoRectificacion.trim(),
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setProcesando(null);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    setRectificando(null); setMotivoRectificacion("");
+    setMsg({ tipo: "ok", texto: "Recepción rectificada. La transferencia volvió a tránsito y debe recibirse nuevamente." });
     await cargar();
   }
 
@@ -279,7 +334,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
               </div>
               <div className="ruta-documento"><span>{documento.origen?.nombre ?? "Origen por asignar"}</span><b>→</b><span>{documento.destino?.nombre ?? "-"}</span></div>
               <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th className="num">Solic.</th><th className="num">Aprob.</th><th className="num">Prepar.</th><th className="num">Desp.</th><th className="num">Recib.</th></tr></thead><tbody>
-                {documento.lineas.map((l) => <tr key={l.id}><td>{l.producto?.sku}</td><td>{l.producto?.nombre}{l.producto?.talla ? <small> · {l.producto.talla}</small> : null}</td><td className="num">{l.cantidad_solicitada ?? "-"}</td><td className="num">{l.cantidad_aprobada ?? "-"}</td><td className="num">{l.cantidad_preparada ?? "-"}</td><td className="num">{l.cantidad_despachada ?? "-"}</td><td className="num">{l.cantidad_recibida ?? "-"}</td></tr>)}
+                {documento.lineas.map((l) => <tr key={l.id}><td>{l.producto?.sku}</td><td>{l.producto?.nombre}{l.producto?.talla ? <small> · {l.producto.talla}</small> : null}</td><td className="num">{l.cantidad_solicitada ?? "-"}</td><td className="num">{l.cantidad_aprobada ?? "-"}</td><td className="num">{l.cantidad_preparada ?? "-"}</td><td className="num">{l.cantidad_despachada ?? "-"}</td><td className="num">{l.cantidad_recibida ?? "-"}{(l.cantidad_no_conforme > 0 || l.cantidad_no_recibida > 0) && <small className="detalle-incidencia-linea">NC {l.cantidad_no_conforme} · No llegó {l.cantidad_no_recibida}</small>}</td></tr>)}
               </tbody></table></div>
               {documento.nota && <p className="nota-documento">{documento.nota}</p>}
               <div className="acciones-documento">
@@ -292,6 +347,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
                 {documento.tipo === "transferencia" && documento.estado === "preparando" && puedeCrearTransferencia && <button disabled={procesando === documento.id} onClick={() => despachar(documento)}>Despachar mercadería</button>}
                 {documento.tipo === "transferencia" && documento.estado === "despachado" && puedeTransportar && <button disabled={procesando === documento.id} onClick={() => marcarTransito(documento)}>Marcar en tránsito</button>}
                 {documento.tipo === "transferencia" && ["despachado", "en_transito"].includes(documento.estado) && puedeRecibir && (["admin", "control"].includes(perfil.rol) || almacenesPropios.some((a) => a.id === documento.destino_id)) && <button disabled={procesando === documento.id} onClick={() => abrirRecepcion(documento)}>Recibir en tienda</button>}
+                {documento.tipo === "transferencia" && perfil.rol === "admin" && ["recibido", "recibido_con_diferencia", "cerrado_con_diferencia"].includes(documento.estado) && <button className="peligro" disabled={procesando === documento.id} onClick={() => { setRectificando(documento); setMotivoRectificacion(""); setMsg(null); }}>Rectificar recepción</button>}
               </div>
             </article>
           ))}
@@ -303,12 +359,24 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
         <div className="modal-operativo" role="dialog" aria-modal="true">
           <div className="modal-contenido">
             <div className="header-row"><h3>Recibir {recibiendo.numero}</h3><button className="chip-limpiar" onClick={() => setRecibiendo(null)}>Cerrar</button></div>
-            <p className="info-box">Confirma lo que llegó físicamente. El stock de destino se actualizará solo al guardar.</p>
-            <div className="tabla-scroll"><table><thead><tr><th>Producto</th><th className="num">Enviado</th><th className="num">Recibido</th><th className="num">Rechazado</th><th>Observación</th></tr></thead><tbody>
-              {recibiendo.lineas.map((l) => { const valor = recepcion[l.producto_id]; return <tr key={l.id}><td><strong>{l.producto?.sku}</strong><br />{l.producto?.nombre}</td><td className="num">{l.cantidad_despachada}</td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.recibida ?? 0} onChange={(e) => setRecepcion({ ...recepcion, [l.producto_id]: { ...valor, recibida: Number(e.target.value) || 0 } })} style={{ width: 75 }} /></td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.rechazada ?? 0} onChange={(e) => setRecepcion({ ...recepcion, [l.producto_id]: { ...valor, rechazada: Number(e.target.value) || 0 } })} style={{ width: 75 }} /></td><td><input value={valor?.observacion ?? ""} onChange={(e) => setRecepcion({ ...recepcion, [l.producto_id]: { ...valor, observacion: e.target.value } })} /></td></tr>; })}
+            <div className="info-box"><strong>Clasifica el 100% de lo despachado.</strong> Conforme entra al stock disponible; no conforme entra a cuarentena; no recibida permanece en tránsito con incidencia.</div>
+            <div className="tabla-scroll"><table><thead><tr><th>Producto</th><th className="num">Despachado</th><th className="num">Conforme</th><th className="num">No conforme</th><th className="num">No recibida</th><th className="num">Control</th><th>Observación</th></tr></thead><tbody>
+              {recibiendo.lineas.map((l) => { const valor = recepcion[l.producto_id]; const total = (valor?.recibida ?? 0) + (valor?.noConforme ?? 0) + (valor?.noRecibida ?? 0); const completo = total === (l.cantidad_despachada ?? 0); return <tr key={l.id} className={!completo ? "fila-alerta" : ""}><td><strong>{l.producto?.sku}</strong><br />{l.producto?.nombre}</td><td className="num">{l.cantidad_despachada}</td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.recibida ?? 0} onChange={(e) => actualizarClasificacion(l, "recibida", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.noConforme ?? 0} onChange={(e) => actualizarClasificacion(l, "noConforme", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.noRecibida ?? 0} onChange={(e) => actualizarClasificacion(l, "noRecibida", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><span className={`badge ${completo ? "ok" : "bajo"}`}>{total}/{l.cantidad_despachada}</span></td><td><input value={valor?.observacion ?? ""} onChange={(e) => actualizarClasificacion(l, "observacion", e.target.value)} /></td></tr>; })}
             </tbody></table></div>
-            <div className="field"><label>Acta / observación de recepción</label><textarea rows={3} value={notaRecepcion} onChange={(e) => setNotaRecepcion(e.target.value)} style={{ width: "100%" }} /></div>
+            <div className="field"><label>Acta / evidencia inicial de recepción</label><textarea rows={3} value={notaRecepcion} onChange={(e) => setNotaRecepcion(e.target.value)} placeholder="Obligatoria cuando exista producto no conforme o no recibido" style={{ width: "100%" }} /></div>
             <button disabled={procesando === recibiendo.id} onClick={guardarRecepcion}>{procesando === recibiendo.id ? "Aplicando..." : "Confirmar recepción"}</button>
+          </div>
+        </div>
+      )}
+
+      {rectificando && (
+        <div className="modal-operativo" role="dialog" aria-modal="true">
+          <div className="modal-contenido">
+            <div className="header-row"><div><h3 style={{ margin: 0 }}>Rectificar {rectificando.numero}</h3><span className="conteo">Acción exclusiva de Administración</span></div><button className="chip-limpiar" onClick={() => setRectificando(null)}>Cerrar</button></div>
+            <div className="error-box"><strong>No elimina la recepción original.</strong> El sistema retirará del destino las cantidades registradas, liberará la clasificación anterior y devolverá el documento a tránsito para repetir la recepción. Si detecta ventas, transferencias, conteos o disposiciones posteriores, bloqueará la operación.</div>
+            <div className="tabla-scroll"><table><thead><tr><th>Producto</th><th className="num">Conforme a revertir</th><th className="num">Cuarentena a revertir</th><th className="num">No recibida</th></tr></thead><tbody>{rectificando.lineas.map((l) => <tr key={l.id}><td><strong>{l.producto?.sku}</strong><div className="conteo">{l.producto?.nombre}</div></td><td className="num">{l.cantidad_recibida ?? 0}</td><td className="num">{l.cantidad_no_conforme ?? 0}</td><td className="num">{l.cantidad_no_recibida ?? 0}</td></tr>)}</tbody></table></div>
+            <div className="field"><label>Motivo y evidencia de la rectificación *</label><textarea rows={4} value={motivoRectificacion} onChange={(e) => setMotivoRectificacion(e.target.value)} placeholder="Ej.: Se digitó 2 unidades conformes, pero el acta física confirma 3. Verificado con guía..." style={{ width: "100%" }} /></div>
+            <div className="acciones-documento"><button className="peligro" disabled={procesando === rectificando.id} onClick={rectificarRecepcion}>{procesando === rectificando.id ? "Rectificando..." : "Confirmar rectificación"}</button><button className="secondary" disabled={procesando === rectificando.id} onClick={() => setRectificando(null)}>Cancelar</button></div>
           </div>
         </div>
       )}

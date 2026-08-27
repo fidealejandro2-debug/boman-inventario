@@ -88,6 +88,10 @@ sql/
   verificacion_v14.sql       comprobaciones de instalación de la anulación administrativa
   v15_admin_aprueba_conteo_propio.sql excepción auditada para que admin resuelva su propio conteo
   verificacion_v15.sql       comprueba la excepción exclusiva de admin
+  v16_incidencias_transferencia_sgc.sql clasificación total, cuarentena y disposición de diferencias
+  verificacion_v16.sql       comprueba trazabilidad, seguridad y saldos de incidencias
+  v17_rectificacion_recepciones.sql reversión compensatoria y auditada exclusiva de admin
+  verificacion_v17.sql       comprueba seguridad e integridad de las rectificaciones
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 
@@ -190,6 +194,8 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - **Exportación CSV** en cada pantalla (separador `;`, BOM UTF-8 para que Excel respete los acentos).
 - **Importar stock** con vista previa comparativa antes de aplicar.
 - **Ventas desde XML SRI:** carga local, validación de autorización, asignación de líneas genéricas entre varios SKU, memoria de equivalencias, control de stock e historial.
+- **No conformidades de transferencia:** toda unidad despachada se clasifica como conforme, no conforme o no recibida; lo no conforme queda en cuarentena y lo faltante continúa bajo seguimiento hasta su disposición documentada.
+- **Rectificación de recepción:** Admin puede revertir una recepción mal digitada y devolverla a tránsito; se bloquea si existen movimientos, conteos o disposiciones posteriores.
 
 ---
 
@@ -201,6 +207,8 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - [ ] Después de aprobar v12, ejecutar `sql/v13_ventas_xml.sql` y luego `sql/verificacion_v13.sql`.
 - [ ] Después de validar v13, ejecutar `sql/v14_anulacion_ventas_xml.sql` y luego `sql/verificacion_v14.sql`.
 - [ ] Ejecutar `sql/v15_admin_aprueba_conteo_propio.sql` y validar con `sql/verificacion_v15.sql`.
+- [ ] Ejecutar `sql/v16_incidencias_transferencia_sgc.sql` y validar con `sql/verificacion_v16.sql` antes de desplegar la interfaz v16.
+- [ ] Ejecutar `sql/v17_rectificacion_recepciones.sql`, validar con `sql/verificacion_v17.sql` y después desplegar la interfaz.
 - [ ] Probar v13 con una factura real primero en un almacén de prueba y confirmar la distribución por talla/color antes de aplicarla.
 - [ ] Asignar roles a los usuarios restantes:
       Jonathan Guaygua y Tatiana Sánchez → `bodega` / Bodega Central ·
@@ -229,7 +237,7 @@ Fotos de producto · código de barras · alertas por correo · costos/valoraci�
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** hasta `v15`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14 y v15.
+1. Ejecuta los SQL **en orden** hasta `v17`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14, v15, v16 y v17.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.
