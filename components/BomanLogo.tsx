@@ -14,6 +14,7 @@ export default function BomanLogo({ className, priority = false }: BomanLogoProp
       height={150}
       className={className}
       priority={priority}
+      unoptimized
     />
   );
 }

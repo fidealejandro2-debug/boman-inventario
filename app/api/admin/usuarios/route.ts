@@ -106,6 +106,65 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const accion = String(body.accion ?? "invitar");
+    if (accion === "generar_enlace_acceso") {
+      const id = String(body.id ?? "");
+      if (!id) return NextResponse.json({ error: "Debes indicar el usuario." }, { status: 400 });
+
+      const { data: perfil, error: perfilError } = await contexto.supabase
+        .from("perfiles")
+        .select("activo")
+        .eq("id", id)
+        .single();
+      if (perfilError || !perfil) {
+        return NextResponse.json({ error: "El usuario no existe." }, { status: 404 });
+      }
+      if (!perfil.activo) {
+        return NextResponse.json({ error: "Restaura el acceso del usuario antes de generar un enlace." }, { status: 400 });
+      }
+
+      const admin = createAdminClient();
+      const { data: usuarioAuth, error: usuarioError } = await admin.auth.admin.getUserById(id);
+      const usuario = usuarioAuth.user;
+      if (usuarioError || !usuario?.email) {
+        return NextResponse.json({ error: usuarioError?.message ?? "El usuario no tiene un correo válido." }, { status: 400 });
+      }
+
+      const urlBase = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? request.nextUrl.origin;
+      const redirectTo = new URL("/auth/callback?next=/establecer-clave", urlBase).toString();
+      const tipo = usuario.email_confirmed_at ? "recovery" : "invite";
+      const resultado = tipo === "recovery"
+        ? await admin.auth.admin.generateLink({
+            type: "recovery",
+            email: usuario.email,
+            options: { redirectTo },
+          })
+        : await admin.auth.admin.generateLink({
+            type: "invite",
+            email: usuario.email,
+            options: { data: usuario.user_metadata, redirectTo },
+          });
+      const enlace = resultado.data?.properties?.action_link;
+      if (resultado.error || !enlace) {
+        return NextResponse.json(
+          { error: resultado.error?.message ?? "Supabase no pudo generar el enlace seguro." },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          ok: true,
+          email: usuario.email,
+          enlace,
+          tipo: tipo === "invite" ? "activacion" : "recuperacion",
+          mensaje: tipo === "invite"
+            ? `Enlace de activación generado para ${usuario.email}.`
+            : `Enlace de cambio de contraseña generado para ${usuario.email}.`,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     if (accion === "reenviar_invitacion") {
       const id = String(body.id ?? "");
       if (!id) return NextResponse.json({ error: "Debes indicar el usuario." }, { status: 400 });
@@ -127,7 +186,12 @@ export async function POST(request: NextRequest) {
         redirectTo,
       });
       if (invitacionError || !invitacion.user) {
-        return NextResponse.json({ error: invitacionError?.message ?? "No se pudo reenviar la invitación." }, { status: 400 });
+        const detalle = invitacionError?.message ?? "No se pudo reenviar la invitación.";
+        return NextResponse.json({
+          error: detalle.toLowerCase().includes("rate limit")
+            ? "Se alcanzó el límite de correos de Supabase. Usa “Generar enlace de activación” para enviarlo desde otro proveedor."
+            : detalle,
+        }, { status: 400 });
       }
       if (invitacion.user.id !== id) {
         return NextResponse.json({ error: "Supabase generó una identidad diferente. No se modificó el perfil; revisa Authentication → Users." }, { status: 409 });

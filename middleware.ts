@@ -72,5 +72,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Los recursos públicos deben llegar directamente al navegador. Si pasan por
+  // autenticación, Next/Image recibe la redirección al login en lugar del PNG.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml|webmanifest)$).*)",
+  ],
 };

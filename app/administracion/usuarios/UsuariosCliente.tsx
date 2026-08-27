@@ -17,6 +17,11 @@ type Usuario = {
   ultimo_acceso: string | null;
   created_at: string;
 };
+type EnlaceAcceso = {
+  email: string;
+  enlace: string;
+  tipo: "activacion" | "recuperacion";
+};
 
 const ROLES: { valor: Rol; etiqueta: string }[] = [
   { valor: "admin", etiqueta: "Administrador" },
@@ -45,6 +50,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
   const [edicion, setEdicion] = useState<Partial<Usuario>>({});
   const [busqueda, setBusqueda] = useState("");
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
+  const [enlaceAcceso, setEnlaceAcceso] = useState<EnlaceAcceso | null>(null);
 
   async function peticion(url: string, opciones?: RequestInit) {
     const response = await fetch(url, opciones);
@@ -182,6 +188,50 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
     }
   }
 
+  async function generarEnlaceAcceso(usuario: Usuario) {
+    const finalidad = usuario.confirmado ? "cambiar su contraseña" : "activar su cuenta";
+    if (!window.confirm(
+      `Se generará un enlace personal y temporal para que ${usuario.email} pueda ${finalidad}.\n\nPodrás copiarlo o preparar un correo desde otro proveedor. ¿Deseas continuar?`
+    )) return;
+
+    setMsg(null);
+    setEnlaceAcceso(null);
+    setGuardando(true);
+    try {
+      const data = await peticion("/api/admin/usuarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion: "generar_enlace_acceso", id: usuario.id }),
+      });
+      const generado: EnlaceAcceso = {
+        email: data.email,
+        enlace: data.enlace,
+        tipo: data.tipo,
+      };
+      setEnlaceAcceso(generado);
+      try {
+        await navigator.clipboard.writeText(generado.enlace);
+        setMsg({ tipo: "ok", texto: `${data.mensaje} También se copió al portapapeles.` });
+      } catch {
+        setMsg({ tipo: "ok", texto: `${data.mensaje} Cópialo desde el recuadro inferior.` });
+      }
+    } catch (error) {
+      setMsg({ tipo: "error", texto: error instanceof Error ? error.message : "No se pudo generar el enlace seguro." });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function copiarEnlaceAcceso() {
+    if (!enlaceAcceso) return;
+    try {
+      await navigator.clipboard.writeText(enlaceAcceso.enlace);
+      setMsg({ tipo: "ok", texto: "Enlace copiado al portapapeles." });
+    } catch {
+      setMsg({ tipo: "error", texto: "El navegador no permitió copiar automáticamente. Selecciona el enlace y cópialo manualmente." });
+    }
+  }
+
   async function eliminarAcceso(usuario: Usuario) {
     if (!window.confirm(
       `Vas a eliminar el acceso de ${usuario.nombre_completo} (${usuario.email}).\n\nYa no podrá ingresar, pero sus movimientos y auditoría se conservarán. Podrás restaurarlo editando el usuario y marcándolo como activo.\n\n¿Confirmas la eliminación del acceso?`
@@ -219,6 +269,26 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
       </div>
 
       {msg && <div className={msg.tipo === "error" ? "error" : "success"} style={{ marginBottom: 14 }}>{msg.texto}</div>}
+
+      {enlaceAcceso && (() => {
+        const finalidad = enlaceAcceso.tipo === "activacion" ? "activar tu cuenta" : "crear una nueva contraseña";
+        const asunto = enlaceAcceso.tipo === "activacion" ? "Activa tu acceso a Boman Sport" : "Cambia tu contraseña de Boman Sport";
+        const cuerpo = `Hola,\n\nUtiliza este enlace personal para ${finalidad}:\n\n${enlaceAcceso.enlace}\n\nEl enlace es temporal y debe utilizarse una sola vez.`;
+        const mailto = `mailto:${enlaceAcceso.email}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+        return <div className="enlace-acceso-panel" role="status">
+          <div>
+            <strong>{asunto}</strong>
+            <p>Destinatario: {enlaceAcceso.email}. Trátalo como información confidencial.</p>
+          </div>
+          <div className="enlace-acceso-url">
+            <input readOnly value={enlaceAcceso.enlace} onFocus={(e) => e.currentTarget.select()} aria-label="Enlace seguro generado" />
+            <button type="button" onClick={copiarEnlaceAcceso}>Copiar enlace</button>
+            <a className="boton-link" href={mailto}>Preparar correo</a>
+            <button type="button" className="chip-limpiar" onClick={() => setEnlaceAcceso(null)}>Cerrar</button>
+          </div>
+          <small>El sistema no envió ningún correo y esta acción no consume la cuota SMTP.</small>
+        </div>;
+      })()}
 
       {mostrarInvitacion && (
         <div className="card">
@@ -324,6 +394,9 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                           {usuario.confirmado
                             ? <button className="secondary" disabled={guardando || !usuario.activo || !usuario.email} onClick={() => enviarCambioClave(usuario)} title="Enviar enlace seguro al correo">Cambiar contraseña</button>
                             : <button className="secondary" disabled={guardando || !usuario.activo || !usuario.email} onClick={() => reenviarInvitacion(usuario)} title="Generar un enlace de activación nuevo">Reenviar invitación</button>}
+                          <button className="secondary" disabled={guardando || !usuario.activo || !usuario.email} onClick={() => generarEnlaceAcceso(usuario)} title="Crear un enlace para enviarlo manualmente desde otro proveedor">
+                            {usuario.confirmado ? "Generar enlace de clave" : "Generar enlace de activación"}
+                          </button>
                           {usuario.id !== usuarioActualId && usuario.activo && <button className="peligro" disabled={guardando} onClick={() => eliminarAcceso(usuario)}>Eliminar acceso</button>}
                         </div>}
                       </td>

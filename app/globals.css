@@ -562,6 +562,12 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
 .auth-requisitos li.cumplido::before { content: "✓"; }
 .texto-ok { color: #15803d !important; font-weight: 700; }
 .texto-error { color: #b91c1c !important; font-weight: 700; }
+.enlace-acceso-panel { display: grid; gap: 11px; margin: 0 0 14px; padding: 16px; border: 1px solid #93c5fd; border-radius: 10px; background: #eff6ff; }
+.enlace-acceso-panel p { margin: 4px 0 0; color: #475569; font-size: 12px; }
+.enlace-acceso-panel small { color: #475569; }
+.enlace-acceso-url { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; gap: 8px; align-items: center; }
+.enlace-acceso-url input { min-width: 0; width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.enlace-acceso-url .boton-link { text-align: center; white-space: nowrap; }
 .auth-shell-simple { display: flex; justify-content: center; background: linear-gradient(145deg, #edf4fb, #f8fafc); }
 .auth-shell-simple .auth-acceso { width: 100%; }
 
@@ -593,6 +599,7 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
 }
 
 @media (max-width: 760px) {
+  .enlace-acceso-url { grid-template-columns: 1fr; }
   .buscador-producto-fila { grid-template-columns: 1fr 86px; }
   .sugerencias-documento button { grid-template-columns: 82px minmax(0,1fr); }
   .sugerencias-documento button small { grid-column: 2; }
