@@ -10,5 +10,13 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f4f7fb",
     theme_color: "#1f3864",
     lang: "es-EC",
+    icons: [
+      {
+        src: "/boman-logo.png",
+        sizes: "250x150",
+        type: "image/png",
+        purpose: "any",
+      },
+    ],
   };
 }

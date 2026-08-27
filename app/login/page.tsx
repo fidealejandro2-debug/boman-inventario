@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BomanLogo from "@/components/BomanLogo";
 
 type ModoAcceso = "ingreso" | "primera-vez" | "recuperar";
 
@@ -81,7 +82,7 @@ export default function LoginPage() {
   return (
     <main className="auth-shell">
       <section className="auth-presentacion">
-        <div className="auth-marca"><span>BOMAN SPORT</span><strong>ERP DE INVENTARIO</strong></div>
+        <div className="auth-marca"><BomanLogo className="auth-logo" priority /><strong>ERP DE INVENTARIO</strong></div>
         <div><h1>Inventario confiable, operación trazable.</h1><p>Solicitudes, transferencias, conteos, ventas e incidencias en un solo sistema.</p></div>
         <small>Acceso exclusivo para personal autorizado.</small>
       </section>
@@ -89,7 +90,7 @@ export default function LoginPage() {
       <section className="auth-acceso">
         <div className="auth-card">
           <div className="auth-cabecera">
-            <span className="auth-icono" aria-hidden="true">B</span>
+            <BomanLogo className="auth-logo-cabecera" />
             <div>
               <h2>{modo === "ingreso" ? "Bienvenido" : modo === "primera-vez" ? "Activa tu cuenta" : "Crea una nueva contraseña"}</h2>
               <p>{modo === "ingreso" ? "Ingresa con tu cuenta de Boman Sport." : modo === "primera-vez" ? "Abre la invitación que recibiste por correo." : "Recibirás un enlace seguro en tu correo."}</p>

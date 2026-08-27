@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BomanLogo from "@/components/BomanLogo";
 
 export default function EstablecerClavePage() {
   const router = useRouter();
@@ -58,6 +59,7 @@ export default function EstablecerClavePage() {
     <main className="auth-shell auth-shell-simple">
       <section className="auth-acceso">
         <div className="auth-card">
+          <BomanLogo className="auth-logo-formulario" priority />
           <div className="auth-cabecera">
             <span className="auth-icono" aria-hidden="true">✓</span>
             <div><h2>Crea tu contraseña</h2><p>{email ? `Cuenta: ${email}` : "Protege tu acceso a Boman Sport."}</p></div>

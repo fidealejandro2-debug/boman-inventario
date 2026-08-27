@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BomanLogo from "@/components/BomanLogo";
 
 function destinoSeguro(valor: string | null) {
   return valor && valor.startsWith("/") && !valor.startsWith("//") ? valor : "/establecer-clave";
@@ -56,6 +57,7 @@ export default function AuthCallbackPage() {
     <main className="auth-shell auth-shell-simple">
       <section className="auth-acceso">
         <div className="auth-card">
+          <BomanLogo className="auth-logo-formulario" priority />
           <div className="auth-cabecera"><span className="auth-icono" aria-hidden="true">B</span><div><h2>Validando tu acceso</h2><p>Estamos comprobando que el enlace sea seguro.</p></div></div>
           {error ? <><div className="error-box">{error}</div><button className="auth-principal" onClick={() => router.replace("/login?motivo=enlace-invalido")}>Solicitar otro enlace</button></> : <div className="info-box">Un momento, serás dirigido a crear tu contraseña...</div>}
         </div>

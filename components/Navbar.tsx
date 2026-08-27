@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/getPerfil";
+import BomanLogo from "@/components/BomanLogo";
 
 type OpcionMenu = {
   href: string;
@@ -126,7 +127,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       <div className="nav-principal">
         <div className="nav-encabezado">
           <Link href="/dashboard" className="brand" onClick={cerrarMenu}>
-            <span className="brand-marca">BOMAN SPORT</span>
+            <BomanLogo className="brand-logo" priority />
             <span className="brand-sistema">ERP DE INVENTARIO</span>
           </Link>
           <button
