@@ -206,15 +206,126 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    const { error: asignacionError } = await contexto.supabase.rpc("admin_asignar_almacenes", {
-      p_perfil_id: id,
-      p_almacen_ids: ["admin", "control", "gerencia"].includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
-    });
-    if (asignacionError) {
-      return NextResponse.json({ error: asignacionError.message }, { status: 400 });
+    if (activo) {
+      const { error: asignacionError } = await contexto.supabase.rpc("admin_asignar_almacenes", {
+        p_perfil_id: id,
+        p_almacen_ids: ["admin", "control", "gerencia"].includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
+      });
+      if (asignacionError) {
+        return NextResponse.json({ error: asignacionError.message }, { status: 400 });
+      }
     }
 
-    return NextResponse.json({ ok: true });
+    const admin = createAdminClient();
+    const { error: accesoError } = await admin.auth.admin.updateUserById(id, {
+      ban_duration: activo ? "none" : "876000h",
+    });
+
+    return NextResponse.json({
+      ok: true,
+      advertencia: accesoError
+        ? `El perfil fue actualizado, pero Supabase no pudo sincronizar el bloqueo: ${accesoError.message}`
+        : null,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: textoError(error) }, { status: 500 });
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  if (!validarOrigen(request)) {
+    return NextResponse.json({ error: "Origen de solicitud no permitido." }, { status: 403 });
+  }
+  const contexto = await obtenerAdmin();
+  if ("error" in contexto) return contexto.error;
+
+  try {
+    const body = await request.json();
+    const id = String(body.id ?? "");
+    if (!id) return NextResponse.json({ error: "Debes indicar el usuario." }, { status: 400 });
+
+    const { data: perfil, error: perfilError } = await contexto.supabase
+      .from("perfiles")
+      .select("activo")
+      .eq("id", id)
+      .single();
+    if (perfilError || !perfil) {
+      return NextResponse.json({ error: "El usuario no existe." }, { status: 404 });
+    }
+    if (!perfil.activo) {
+      return NextResponse.json({ error: "Restaura el acceso del usuario antes de cambiar su contraseña." }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { data: usuarioAuth, error: usuarioError } = await admin.auth.admin.getUserById(id);
+    const email = usuarioAuth.user?.email;
+    if (usuarioError || !email) {
+      return NextResponse.json({ error: usuarioError?.message ?? "El usuario no tiene un correo válido." }, { status: 400 });
+    }
+
+    const urlBase = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? request.nextUrl.origin;
+    const redirectTo = new URL("/auth/callback?next=/establecer-clave", urlBase).toString();
+    const { error: envioError } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
+    if (envioError) {
+      return NextResponse.json({ error: envioError.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ ok: true, mensaje: `Enlace de cambio de contraseña enviado a ${email}.` });
+  } catch (error) {
+    return NextResponse.json({ error: textoError(error) }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  if (!validarOrigen(request)) {
+    return NextResponse.json({ error: "Origen de solicitud no permitido." }, { status: 403 });
+  }
+  const contexto = await obtenerAdmin();
+  if ("error" in contexto) return contexto.error;
+
+  try {
+    const body = await request.json();
+    const id = String(body.id ?? "");
+    if (!id) return NextResponse.json({ error: "Debes indicar el usuario." }, { status: 400 });
+    if (id === contexto.usuario.id) {
+      return NextResponse.json({ error: "No puedes eliminar tu propio acceso administrativo." }, { status: 400 });
+    }
+
+    const { data: perfil, error: perfilError } = await contexto.supabase
+      .from("perfiles")
+      .select("nombre_completo, rol, entidad_id, activo")
+      .eq("id", id)
+      .single();
+    if (perfilError || !perfil) {
+      return NextResponse.json({ error: "El usuario no existe." }, { status: 404 });
+    }
+    if (!perfil.activo) {
+      return NextResponse.json({ ok: true, mensaje: "El acceso de este usuario ya estaba eliminado." });
+    }
+
+    const { error: desactivarError } = await contexto.supabase.rpc("admin_actualizar_perfil", {
+      p_perfil_id: id,
+      p_nombre_completo: perfil.nombre_completo,
+      p_rol: perfil.rol,
+      p_entidad_id: perfil.entidad_id,
+      p_activo: false,
+    });
+    if (desactivarError) {
+      return NextResponse.json({ error: desactivarError.message }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { error: bloqueoError } = await admin.auth.admin.updateUserById(id, {
+      ban_duration: "876000h",
+    });
+
+    return NextResponse.json({
+      ok: true,
+      mensaje: "Acceso eliminado. El historial operativo del usuario fue conservado.",
+      advertencia: bloqueoError
+        ? `La aplicación ya bloqueó el acceso, pero Supabase no pudo sincronizar la prohibición: ${bloqueoError.message}`
+        : null,
+    });
   } catch (error) {
     return NextResponse.json({ error: textoError(error) }, { status: 500 });
   }

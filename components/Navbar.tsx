@@ -109,7 +109,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       etiqueta: "Administración",
       icono: "⚙",
       opciones: [
-        { href: "/administracion/usuarios", etiqueta: "Usuarios y permisos", descripcion: "Roles, accesos y almacenes asignados", visible: puedeAdministrar },
+        { href: "/administracion/usuarios", etiqueta: "Usuarios y permisos", descripcion: "Roles, almacenes, contraseñas y eliminación de accesos", visible: puedeAdministrar },
       ],
     },
   ];

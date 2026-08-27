@@ -124,7 +124,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
     setMsg(null);
     setGuardando(true);
     try {
-      await peticion("/api/admin/usuarios", {
+      const data = await peticion("/api/admin/usuarios", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -136,10 +136,52 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
         }),
       });
       setEditando(null);
-      setMsg({ tipo: "ok", texto: "Usuario actualizado." });
+      setMsg({ tipo: data.advertencia ? "error" : "ok", texto: data.advertencia ?? "Usuario actualizado." });
       await cargar();
     } catch (error) {
       setMsg({ tipo: "error", texto: error instanceof Error ? error.message : "No se pudo actualizar el usuario." });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function enviarCambioClave(usuario: Usuario) {
+    if (!window.confirm(`Se enviará un enlace seguro para cambiar la contraseña a ${usuario.email}.\n\n¿Deseas continuar?`)) return;
+    setMsg(null);
+    setGuardando(true);
+    try {
+      const data = await peticion("/api/admin/usuarios", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: usuario.id }),
+      });
+      setMsg({ tipo: "ok", texto: data.mensaje ?? "Enlace de cambio de contraseña enviado." });
+    } catch (error) {
+      setMsg({ tipo: "error", texto: error instanceof Error ? error.message : "No se pudo enviar el cambio de contraseña." });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function eliminarAcceso(usuario: Usuario) {
+    if (!window.confirm(
+      `Vas a eliminar el acceso de ${usuario.nombre_completo} (${usuario.email}).\n\nYa no podrá ingresar, pero sus movimientos y auditoría se conservarán. Podrás restaurarlo editando el usuario y marcándolo como activo.\n\n¿Confirmas la eliminación del acceso?`
+    )) return;
+    setMsg(null);
+    setGuardando(true);
+    try {
+      const data = await peticion("/api/admin/usuarios", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: usuario.id }),
+      });
+      setMsg({
+        tipo: data.advertencia ? "error" : "ok",
+        texto: data.advertencia ?? data.mensaje ?? "Acceso eliminado.",
+      });
+      await cargar();
+    } catch (error) {
+      setMsg({ tipo: "error", texto: error instanceof Error ? error.message : "No se pudo eliminar el acceso." });
     } finally {
       setGuardando(false);
     }
@@ -258,9 +300,11 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                             <button disabled={guardando} onClick={() => guardar(usuario)} style={{ marginRight: 6 }}>Guardar</button>
                             <button className="chip-limpiar" onClick={() => setEditando(null)}>Cancelar</button>
                           </>
-                        ) : (
-                          <button className="secondary" onClick={() => editar(usuario)}>Editar</button>
-                        )}
+                        ) : <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <button className="secondary" disabled={guardando} onClick={() => editar(usuario)}>Editar</button>
+                          <button className="secondary" disabled={guardando || !usuario.activo || !usuario.email || !usuario.confirmado} onClick={() => enviarCambioClave(usuario)} title={!usuario.confirmado ? "La invitación todavía no fue confirmada" : "Enviar enlace seguro al correo"}>Cambiar contraseña</button>
+                          {usuario.id !== usuarioActualId && usuario.activo && <button className="peligro" disabled={guardando} onClick={() => eliminarAcceso(usuario)}>Eliminar acceso</button>}
+                        </div>}
                       </td>
                     </tr>
                   );
