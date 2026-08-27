@@ -72,8 +72,17 @@ Abre http://localhost:3000
 4. Clic en **Deploy**. En ~2 minutos tienes una URL pública (ej: `boman-inventario.vercel.app`)
    que pueden abrir desde el celular o computador.
 
-Para las invitaciones, agrega en **Supabase → Authentication → URL Configuration** la URL
-`https://tu-dominio.vercel.app/auth/callback` dentro de las Redirect URLs permitidas.
+Para invitaciones y cambios de contraseña:
+
+1. En **Supabase → Authentication → URL Configuration**, configura `https://tu-dominio.vercel.app` como Site URL.
+2. Agrega `https://tu-dominio.vercel.app/auth/callback` dentro de las Redirect URLs permitidas.
+3. Opcionalmente, para usar confirmación SSR con `token_hash`, configura el botón de la plantilla **Invite user** con:
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/establecer-clave`
+4. En la plantilla **Reset password**, utiliza:
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/establecer-clave`
+
+El callback de la aplicación también acepta los enlaces estándar de Supabase, pero las plantillas con
+`token_hash` permiten confirmar la invitación de forma segura aunque el correo se abra en otro dispositivo.
 
 ## 5. Uso diario
 
