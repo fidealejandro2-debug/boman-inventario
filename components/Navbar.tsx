@@ -110,6 +110,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       etiqueta: "Administración",
       icono: "⚙",
       opciones: [
+        { href: "/administracion/empresas", etiqueta: "Grupo y empresas", descripcion: "RUC, tiendas, bodegas y operadoras del grupo económico", visible: puedeAdministrar },
         { href: "/administracion/usuarios", etiqueta: "Usuarios y permisos", descripcion: "Roles, almacenes, contraseñas y eliminación de accesos", visible: puedeAdministrar },
       ],
     },

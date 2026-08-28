@@ -165,6 +165,10 @@ Expone stock físico, reservado, disponible, tránsito de entrada/salida y repos
 
 ## Decisiones de diseño (no revertir sin hablarlo)
 
+**El grupo económico opera consolidado, pero cada RUC conserva identidad legal.** Desde v18 el catálogo y el inventario físico continúan compartidos; `empresas`, `empresa_almacenes` y `perfil_empresas` identifican qué CIA, SAS, persona natural o establecimiento responde por cada operación. Una tienda puede relacionarse con varios RUC, pero solo tiene una operadora principal para la clasificación automática. Esta atribución operativa no debe confundirse con la propiedad contable de las unidades.
+
+**No inventar titularidad histórica de inventario.** Los movimientos anteriores a v18 que no puedan relacionarse inequívocamente con un RUC permanecen visibles como pendientes de clasificación en `vista_pendientes_multiempresa`. La titularidad, cesiones intercompañía y eliminaciones para estados consolidados deben implementarse en un libro separado, sin partir ni sobrescribir `inventario`.
+
 **Los movimientos NO se borran.** `DELETE` está revocado a nivel de base de datos. Solo anulación lógica: el registro queda visible tachado, con etiqueta ANULADO, motivo, quién y cuándo. Boman está construyendo su SGC ISO 9001:2015 y la trazabilidad es requisito, no adorno.
 
 **La importación de stock genera ajustes, no sobrescribe en silencio.** Por eso cada línea de una toma física es individualmente anulable y aparece en el kardex del producto.
@@ -209,6 +213,7 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - [ ] Ejecutar `sql/v15_admin_aprueba_conteo_propio.sql` y validar con `sql/verificacion_v15.sql`.
 - [ ] Ejecutar `sql/v16_incidencias_transferencia_sgc.sql` y validar con `sql/verificacion_v16.sql` antes de desplegar la interfaz v16.
 - [ ] Ejecutar `sql/v17_rectificacion_recepciones.sql`, validar con `sql/verificacion_v17.sql` y después desplegar la interfaz.
+- [ ] Ejecutar `sql/v18_grupo_economico_multiempresa.sql`, validar con `sql/verificacion_v18.sql` y registrar todos los RUC antes de activar titularidad contable o documentos intercompañía.
 - [ ] Probar v13 con una factura real primero en un almacén de prueba y confirmar la distribución por talla/color antes de aplicarla.
 - [ ] Asignar roles a los usuarios restantes:
       Jonathan Guaygua y Tatiana Sánchez → `bodega` / Bodega Central ·
@@ -237,7 +242,7 @@ Fotos de producto · código de barras · alertas por correo · costos/valoraci�
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** hasta `v17`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14, v15, v16 y v17.
+1. Ejecuta los SQL **en orden** hasta `v18`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14, v15, v16, v17 y v18.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.
