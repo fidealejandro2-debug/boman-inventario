@@ -13,32 +13,51 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const [movimientosHoy, setMovimientosHoy] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [empresas, setEmpresas] = useState<{ id: string; razon_social: string }[]>([]);
+  const [empresaId, setEmpresaId] = useState("");
 
   useEffect(() => {
     (async () => {
+      const [s, e] = await Promise.all([
+        supabase.from("vista_stock_operativo").select("producto_id, stock_fisico, stock_disponible, transito_entrada, bajo_minimo, sugerido_reponer, almacen, producto, sku, categoria, subcategoria, talla, stock_minimo"),
+        supabase.from("empresas").select("id, razon_social").eq("activo", true).order("razon_social"),
+      ]);
+      if (s.error) setError(s.error.message);
+      if (s.data) setFilas(s.data);
+      if (e.data) setEmpresas(e.data);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      setCargando(true);
       const inicioHoy = new Date();
       inicioHoy.setHours(0, 0, 0, 0);
       const finHoy = new Date(inicioHoy);
       finHoy.setDate(finHoy.getDate() + 1);
 
-      const [s, m, h] = await Promise.all([
-        supabase.from("vista_stock_operativo").select("producto_id, stock_fisico, stock_disponible, transito_entrada, bajo_minimo, sugerido_reponer, almacen, producto, sku, categoria, subcategoria, talla, stock_minimo"),
-        supabase.from("movimientos")
-          .select("id, tipo, cantidad, created_at, anulado, productos(nombre, sku, categoria, subcategoria), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
-          .order("created_at", { ascending: false }).limit(10),
-        supabase.from("movimientos")
-          .select("id", { count: "exact", head: true })
-          .eq("anulado", false)
-          .gte("created_at", inicioHoy.toISOString())
-          .lt("created_at", finHoy.toISOString()),
+      let movsQuery = supabase.from("movimientos")
+        .select("id, tipo, cantidad, created_at, anulado, productos(nombre, sku, categoria, subcategoria), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)");
+      let hoyQuery = supabase.from("movimientos")
+        .select("id", { count: "exact", head: true })
+        .eq("anulado", false)
+        .gte("created_at", inicioHoy.toISOString())
+        .lt("created_at", finHoy.toISOString());
+      if (empresaId) {
+        movsQuery = movsQuery.eq("empresa_id", empresaId);
+        hoyQuery = hoyQuery.eq("empresa_id", empresaId);
+      }
+
+      const [m, h] = await Promise.all([
+        movsQuery.order("created_at", { ascending: false }).limit(10),
+        hoyQuery,
       ]);
-      if (s.error || m.error || h.error) setError(s.error?.message ?? m.error?.message ?? h.error?.message ?? null);
-      if (s.data) setFilas(s.data);
+      if (m.error || h.error) setError(m.error?.message ?? h.error?.message ?? null);
       if (m.data) setMovs(m.data);
       setMovimientosHoy(h.count ?? 0);
       setCargando(false);
     })();
-  }, []);
+  }, [empresaId]);
 
   const totalUnidades = filas.reduce((a, f) => a + f.stock_fisico, 0);
   const totalDisponible = filas.reduce((a, f) => a + f.stock_disponible, 0);
@@ -124,7 +143,13 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
           <div className="card">
             <div className="header-row">
               <h3>Actividad reciente</h3>
-              <Link href="/movimientos" style={{ fontSize: 13, color: "#2e75b6" }}>Ver todo →</Link>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
+                  <option value="">Todas las empresas</option>
+                  {empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}
+                </select>
+                <Link href="/movimientos" style={{ fontSize: 13, color: "#2e75b6" }}>Ver todo →</Link>
+              </div>
             </div>
             <table>
               <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th className="num">Cant.</th><th>Usuario</th></tr></thead>

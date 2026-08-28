@@ -56,6 +56,7 @@ type DocumentoVentaXML = {
 };
 
 type Tab = "rotacion" | "incidencias" | "conciliacion";
+type Empresa = { id: string; razon_social: string };
 
 const ETIQUETA_ESTADO_INCIDENCIA: Record<string, string> = {
   abierta: "Abierta",
@@ -73,10 +74,12 @@ export default function ReportesAvanzados() {
   // Rotación
   const [productos, setProductos] = useState<ProductoBase[]>([]);
   const [movsSalida, setMovsSalida] = useState<MovSalida[]>([]);
+  const [empresaRotacion, setEmpresaRotacion] = useState("");
 
   // Incidencias SGC
   const [incidencias, setIncidencias] = useState<Incidencia[]>([]);
   const [filtroEstado, setFiltroEstado] = useState<string>("");
+  const [empresaIncidencias, setEmpresaIncidencias] = useState("");
 
   // Conciliación ventas XML
   const [documentosXML, setDocumentosXML] = useState<DocumentoVentaXML[]>([]);
@@ -86,30 +89,44 @@ export default function ReportesAvanzados() {
   const [desde, setDesde] = useState(hace30);
   const [hasta, setHasta] = useState(hoyISO);
   const [filtroAlmacenXML, setFiltroAlmacenXML] = useState("");
+  const [empresaXML, setEmpresaXML] = useState("");
+
+  // Empresas (para los 3 selectores de filtro)
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
 
   useEffect(() => {
     (async () => {
       setCargando(true);
       setError(null);
 
-      const [prodRes, almacenesRes] = await Promise.all([
+      const [prodRes, almacenesRes, empresasRes] = await Promise.all([
         supabase.from("productos").select("id, sku, nombre").eq("activo", true),
         supabase.from("almacenes").select("id, nombre").eq("activo", true),
+        supabase.from("empresas").select("id, razon_social").eq("activo", true).order("razon_social"),
       ]);
       if (prodRes.error) setError(prodRes.error.message);
       if (prodRes.data) setProductos(prodRes.data as ProductoBase[]);
       if (almacenesRes.data) setAlmacenesLista(almacenesRes.data as { id: string; nombre: string }[]);
+      if (empresasRes.data) setEmpresas(empresasRes.data as Empresa[]);
 
-      // Movimientos de salida (paginados: pueden ser miles)
+      setCargando(false);
+    })();
+  }, []);
+
+  // Rotación: movimientos de salida (paginados, pueden ser miles) — se recarga con el filtro de empresa
+  useEffect(() => {
+    (async () => {
       const acumulado: MovSalida[] = [];
       const tamanoPagina = 1000;
       let desdeIdx = 0;
       for (;;) {
-        const { data, error: eMov } = await supabase
+        let query = supabase
           .from("movimientos")
           .select("producto_id, cantidad, created_at")
           .in("tipo", ["salida", "venta_xml"])
-          .eq("anulado", false)
+          .eq("anulado", false);
+        if (empresaRotacion) query = query.eq("empresa_id", empresaRotacion);
+        const { data, error: eMov } = await query
           .order("created_at", { ascending: false })
           .range(desdeIdx, desdeIdx + tamanoPagina - 1);
         if (eMov) { setError(eMov.message); break; }
@@ -119,32 +136,36 @@ export default function ReportesAvanzados() {
         desdeIdx += tamanoPagina;
       }
       setMovsSalida(acumulado);
+    })();
+  }, [empresaRotacion]);
 
-      const { data: inc, error: eInc } = await supabase
+  // Incidencias SGC — se recarga con el filtro de empresa (via documentos_inventario.empresa_responsable_id)
+  useEffect(() => {
+    (async () => {
+      let query = supabase
         .from("incidencias_transferencia")
         .select(`
           id, documento_id, estado, descripcion_inicial, causa_raiz, accion_correctiva,
           fecha_limite, created_at, resuelto_at,
-          documentos_inventario(numero),
+          documentos_inventario${empresaIncidencias ? "!inner" : ""}(numero, empresa_responsable_id),
           creador:perfiles!incidencias_transferencia_creado_por_fkey(nombre_completo),
           resolutor:perfiles!incidencias_transferencia_resuelto_por_fkey(nombre_completo),
           lineas:incidencia_transferencia_lineas(
             producto_id, cantidad_no_conforme_inicial, cantidad_no_recibida_inicial, observacion,
             productos(sku, nombre)
           )
-        `)
-        .order("created_at", { ascending: false });
+        `);
+      if (empresaIncidencias) query = query.eq("documentos_inventario.empresa_responsable_id", empresaIncidencias);
+      const { data: inc, error: eInc } = await query.order("created_at", { ascending: false });
       if (eInc) setError(eInc.message);
       setIncidencias((inc as unknown as Incidencia[]) ?? []);
-
-      setCargando(false);
     })();
-  }, []);
+  }, [empresaIncidencias]);
 
-  // Ventas XML: se recarga cuando cambia el rango de fechas
+  // Ventas XML: se recarga cuando cambia el rango de fechas o la empresa
   useEffect(() => {
     (async () => {
-      const { data, error: eXML } = await supabase
+      let query = supabase
         .from("documentos_venta_xml")
         .select(`
           id, numero_documento, fecha_emision, importe_total, unidades_inventario,
@@ -152,12 +173,13 @@ export default function ReportesAvanzados() {
           lineas:documento_venta_xml_lineas(cantidad, afecta_inventario)
         `)
         .gte("fecha_emision", desde)
-        .lte("fecha_emision", hasta)
-        .order("fecha_emision", { ascending: false });
+        .lte("fecha_emision", hasta);
+      if (empresaXML) query = query.eq("empresa_id", empresaXML);
+      const { data, error: eXML } = await query.order("fecha_emision", { ascending: false });
       if (eXML) setError(eXML.message);
       setDocumentosXML((data as unknown as DocumentoVentaXML[]) ?? []);
     })();
-  }, [desde, hasta]);
+  }, [desde, hasta, empresaXML]);
 
   // ---- Rotación ----
   const rotacion = useMemo<FilaRotacion[]>(() => {
@@ -247,6 +269,13 @@ export default function ReportesAvanzados() {
                 Salidas (ventas y despachos manuales) de los últimos 90 días. Ordenado de más estancado a más activo.
               </p>
             </div>
+            <div className="field">
+              <label>Empresa</label>
+              <select value={empresaRotacion} onChange={(e) => setEmpresaRotacion(e.target.value)}>
+                <option value="">Todas las empresas</option>
+                {empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}
+              </select>
+            </div>
             <button className="secondary" disabled={!rotacion.length} onClick={() => exportarCSV("rotacion_inventario", rotacion.map((r) => ({
               SKU: r.sku, Producto: r.producto, Salidas90dias: r.ventas90,
               UltimaSalida: r.ultimaSalida ? fecha(r.ultimaSalida) : "Sin movimientos",
@@ -291,6 +320,13 @@ export default function ReportesAvanzados() {
                 <option value="en_investigacion">En investigación</option>
                 <option value="pendiente_aprobacion">Pendiente de aprobación</option>
                 <option value="resuelta">Resuelta</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Empresa</label>
+              <select value={empresaIncidencias} onChange={(e) => setEmpresaIncidencias(e.target.value)}>
+                <option value="">Todas las empresas</option>
+                {empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}
               </select>
             </div>
             <button className="secondary" disabled={!incidenciasFiltradas.length} onClick={() => exportarCSV("incidencias_sgc", incidenciasFiltradas.map((i) => ({
@@ -365,6 +401,13 @@ export default function ReportesAvanzados() {
               <select value={filtroAlmacenXML} onChange={(e) => setFiltroAlmacenXML(e.target.value)}>
                 <option value="">Todos</option>
                 {almacenesLista.map((a) => <option key={a.id} value={a.nombre}>{a.nombre}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Empresa</label>
+              <select value={empresaXML} onChange={(e) => setEmpresaXML(e.target.value)}>
+                <option value="">Todas las empresas</option>
+                {empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}
               </select>
             </div>
             <button className="secondary" disabled={!conciliacion.length} onClick={() => exportarCSV("conciliacion_ventas_xml", conciliacion.map((c) => ({

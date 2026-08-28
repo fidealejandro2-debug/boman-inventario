@@ -21,6 +21,7 @@ type Mov = {
 };
 
 type Tab = "almacen" | "categoria" | "bajo" | "matriz" | "kardex";
+type Empresa = { id: string; razon_social: string };
 
 export default function ReportesCliente() {
   const supabase = createClient();
@@ -32,6 +33,8 @@ export default function ReportesCliente() {
   const [tab, setTab] = useState<Tab>("almacen");
   const [kardexProd, setKardexProd] = useState("");
   const [buscaKardex, setBuscaKardex] = useState("");
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [kardexEmpresa, setKardexEmpresa] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -39,6 +42,13 @@ export default function ReportesCliente() {
       if (s.error) setError(s.error.message);
       if (s.data) setFilas(s.data as Fila[]);
       setCargando(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const e = await supabase.from("empresas").select("id, razon_social").eq("activo", true).order("razon_social");
+      if (e.data) setEmpresas(e.data as Empresa[]);
     })();
   }, []);
 
@@ -57,9 +67,11 @@ export default function ReportesCliente() {
       let desde = 0;
 
       while (!cancelado) {
-        const { data, error: errorKardex } = await supabase.from("movimientos")
+        let query = supabase.from("movimientos")
           .select("id, tipo, cantidad, nota, created_at, anulado, motivo_anulacion, productos(nombre, sku), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
-          .eq("producto_id", kardexProd)
+          .eq("producto_id", kardexProd);
+        if (kardexEmpresa) query = query.eq("empresa_id", kardexEmpresa);
+        const { data, error: errorKardex } = await query
           .order("created_at", { ascending: false })
           .range(desde, desde + tamanoPagina - 1);
 
@@ -81,7 +93,7 @@ export default function ReportesCliente() {
     })();
 
     return () => { cancelado = true; };
-  }, [kardexProd]);
+  }, [kardexProd, kardexEmpresa]);
 
   // ---- Agregados ----
   const porAlmacen = useMemo(() => {
@@ -313,6 +325,13 @@ export default function ReportesCliente() {
                   .filter((p) => !buscaKardex || p.nombre.toLowerCase().includes(buscaKardex.toLowerCase()) || p.sku.toLowerCase().includes(buscaKardex.toLowerCase()) || (p.categoria ?? "").toLowerCase().includes(buscaKardex.toLowerCase()) || (p.subcategoria ?? "").toLowerCase().includes(buscaKardex.toLowerCase()))
                   .slice(0, 200)
                   .map((p) => <option key={p.id} value={p.id}>{p.nombre} ({p.sku}) · {p.categoria ?? "Sin categoría"}{p.subcategoria ? ` / ${p.subcategoria}` : ""}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Empresa</label>
+              <select value={kardexEmpresa} onChange={(e) => setKardexEmpresa(e.target.value)}>
+                <option value="">Todas las empresas</option>
+                {empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}
               </select>
             </div>
             {kardex.length > 0 && (

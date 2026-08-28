@@ -13,12 +13,16 @@ type Stock = {
   sugerido_reponer: number; precio: number | null;
 };
 
+type Empresa = { id: string; razon_social: string };
+
 export default function ReportesOperativos() {
   const supabase = createClient();
   const [stock, setStock] = useState<Stock[]>([]);
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [tab, setTab] = useState<"disponibilidad" | "reposicion" | "transferencias" | "conteos">("disponibilidad");
   const [almacen, setAlmacen] = useState("");
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [empresaId, setEmpresaId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
 
@@ -31,7 +35,15 @@ export default function ReportesOperativos() {
         const pagina = (data ?? []) as Stock[]; todas.push(...pagina);
         if (pagina.length < 1000) break;
       }
-      const { data: docs, error: eDocs } = await supabase.from("documentos_inventario").select(`
+      const { data: emp } = await supabase.from("empresas").select("id, razon_social").eq("activo", true).order("razon_social");
+      if (emp) setEmpresas(emp as Empresa[]);
+      setStock(todas); setCargando(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      let query = supabase.from("documentos_inventario").select(`
         id, numero, tipo, estado, created_at, despachado_at, recibido_at, aplicado_at, nota,
         origen:almacenes!documentos_inventario_origen_id_fkey(nombre),
         destino:almacenes!documentos_inventario_destino_id_fkey(nombre),
@@ -40,11 +52,13 @@ export default function ReportesOperativos() {
           stock_sistema, cantidad_contada, cantidad_reconteo, cantidad_despachada,
           cantidad_recibida, cantidad_rechazada, producto:productos(sku, nombre, precio)
         )
-      `).order("created_at", { ascending: false }).limit(1000);
+      `);
+      if (empresaId) query = query.eq("empresa_responsable_id", empresaId);
+      const { data: docs, error: eDocs } = await query.order("created_at", { ascending: false }).limit(1000);
       if (eDocs) setError(eDocs.message);
-      setStock(todas); setDocumentos(docs ?? []); setCargando(false);
+      setDocumentos(docs ?? []);
     })();
-  }, []);
+  }, [empresaId]);
 
   const almacenes = useMemo(() => Array.from(new Set(stock.map((s) => s.almacen))).sort(), [stock]);
   const stockFiltrado = useMemo(() => stock.filter((s) => !almacen || s.almacen === almacen), [stock, almacen]);
@@ -83,7 +97,7 @@ export default function ReportesOperativos() {
   if (cargando) return <div className="card"><div className="vacio">Cargando reportes operativos...</div></div>;
 
   return <section style={{ marginTop: 28 }}>
-    <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Reportes operativos ERP</h2><p className="conteo">Disponible, reservado, tránsito, reposición, transferencias y diferencias.</p></div><select value={almacen} onChange={(e) => setAlmacen(e.target.value)}><option value="">Todos los almacenes</option>{almacenes.map((a) => <option key={a}>{a}</option>)}</select></div>
+    <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Reportes operativos ERP</h2><p className="conteo">Disponible, reservado, tránsito, reposición, transferencias y diferencias.</p></div><div style={{ display: "flex", gap: 8 }}><select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} title="Filtra transferencias y conteos por empresa responsable"><option value="">Todas las empresas</option>{empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}</select><select value={almacen} onChange={(e) => setAlmacen(e.target.value)}><option value="">Todos los almacenes</option>{almacenes.map((a) => <option key={a}>{a}</option>)}</select></div></div>
     {error && <div className="error">{error}</div>}
     <div className="kpis"><div className="kpi"><div className="label">Stock físico</div><div className="valor">{totalFisico}</div></div><div className="kpi"><div className="label">Reservado para picking</div><div className="valor">{totalReservado}</div></div><div className="kpi"><div className="label">En tránsito de entrada</div><div className="valor">{totalTransito}</div></div><div className="kpi"><div className="label">Disponible</div><div className="valor">{totalDisponible}</div></div></div>
     <div className="tabs"><button className={`tab ${tab === "disponibilidad" ? "activo" : ""}`} onClick={() => setTab("disponibilidad")}>Disponibilidad</button><button className={`tab ${tab === "reposicion" ? "activo" : ""}`} onClick={() => setTab("reposicion")}>Reposición ({reposicion.length})</button><button className={`tab ${tab === "transferencias" ? "activo" : ""}`} onClick={() => setTab("transferencias")}>Transferencias</button><button className={`tab ${tab === "conteos" ? "activo" : ""}`} onClick={() => setTab("conteos")}>Conteos y mermas</button></div>

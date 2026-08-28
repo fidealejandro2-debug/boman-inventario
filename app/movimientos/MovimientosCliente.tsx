@@ -27,13 +27,16 @@ type Movimiento = {
   almacenes: { nombre: string } | null;
   almacen_destino: { nombre: string } | null;
   perfiles: { nombre_completo: string } | null;
+  empresa_id: string | null;
 };
+type Empresa = { id: string; razon_social: string };
 
 export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [movs, setMovs] = useState<Movimiento[]>([]);
   const [cargando, setCargando] = useState(true);
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
@@ -55,6 +58,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   const [fSubcategoria, setFSubcategoria] = useState("");
   const [fDesde, setFDesde] = useState("");
   const [fHasta, setFHasta] = useState("");
+  const [fEmpresa, setFEmpresa] = useState("");
   const [verAnulados, setVerAnulados] = useState(true);
 
   const puedeRegistrar = ["admin", "bodega"].includes(perfil.rol);
@@ -94,13 +98,15 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
 
   async function cargar() {
     setCargando(true);
-    const [p, a] = await Promise.all([
+    const [p, a, e] = await Promise.all([
       supabase.from("productos").select("id, sku, nombre, categoria, categoria_id, subcategoria, subcategoria_id, talla").eq("activo", true).order("nombre"),
       supabase.from("almacenes").select("id, nombre, tipo").eq("activo", true).order("tipo"),
+      supabase.from("empresas").select("id, razon_social").eq("activo", true).order("razon_social"),
     ]);
 
     if (p.data) setProductos(p.data as Producto[]);
     if (a.data) setAlmacenes(a.data as Almacen[]);
+    if (e.data) setEmpresas(e.data as Empresa[]);
     if (p.error || a.error) {
       setMsg({ tipo: "error", texto: p.error?.message ?? a.error!.message });
       setCargando(false);
@@ -112,7 +118,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
     let desde = 0;
     while (true) {
       const m = await supabase.from("movimientos")
-        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, anulador:perfiles!movimientos_anulado_por_fkey(nombre_completo), productos(nombre, sku, categoria, categoria_id, subcategoria, subcategoria_id), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
+        .select("id, tipo, cantidad, nota, created_at, grupo_id, anulado, anulado_at, motivo_anulacion, empresa_id, anulador:perfiles!movimientos_anulado_por_fkey(nombre_completo), productos(nombre, sku, categoria, categoria_id, subcategoria, subcategoria_id), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)")
         .order("created_at", { ascending: false })
         .range(desde, desde + tamanoPagina - 1);
 
@@ -174,6 +180,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
       if (fAlmacen && m.almacenes?.nombre !== fAlmacen && m.almacen_destino?.nombre !== fAlmacen) return false;
       if (fCategoria && m.productos?.categoria_id !== fCategoria) return false;
       if (fSubcategoria && m.productos?.subcategoria_id !== fSubcategoria) return false;
+      if (fEmpresa && m.empresa_id !== fEmpresa) return false;
       if (fDesde && new Date(m.created_at) < new Date(fDesde + "T00:00:00")) return false;
       if (fHasta && new Date(m.created_at) > new Date(fHasta + "T23:59:59")) return false;
       if (!q) return true;
@@ -186,7 +193,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
         (m.perfiles?.nombre_completo ?? "").toLowerCase().includes(q)
       );
     });
-  }, [movs, fTexto, fTipo, fAlmacen, fCategoria, fSubcategoria, fDesde, fHasta, verAnulados]);
+  }, [movs, fTexto, fTipo, fAlmacen, fCategoria, fSubcategoria, fEmpresa, fDesde, fHasta, verAnulados]);
 
   async function registrar(e: React.FormEvent) {
     e.preventDefault();
@@ -328,12 +335,19 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
           <div className="field"><label>Desde</label><input type="date" value={fDesde} onChange={(e) => setFDesde(e.target.value)} /></div>
           <div className="field"><label>Hasta</label><input type="date" value={fHasta} onChange={(e) => setFHasta(e.target.value)} /></div>
           <div className="field">
+            <label>Empresa</label>
+            <select value={fEmpresa} onChange={(e) => setFEmpresa(e.target.value)}>
+              <option value="">Todas</option>
+              {empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}
+            </select>
+          </div>
+          <div className="field">
             <label style={{ fontWeight: 500 }}>
               <input type="checkbox" checked={verAnulados} onChange={(e) => setVerAnulados(e.target.checked)} style={{ marginRight: 6 }} />
               Mostrar anulados
             </label>
           </div>
-          <button className="chip-limpiar" onClick={() => { setFTexto(""); setFTipo(""); setFAlmacen(""); setFCategoria(""); setFSubcategoria(""); setFDesde(""); setFHasta(""); setVerAnulados(true); }}>Limpiar</button>
+          <button className="chip-limpiar" onClick={() => { setFTexto(""); setFTipo(""); setFAlmacen(""); setFCategoria(""); setFSubcategoria(""); setFEmpresa(""); setFDesde(""); setFHasta(""); setVerAnulados(true); }}>Limpiar</button>
         </div>
 
         <div className="header-row">
