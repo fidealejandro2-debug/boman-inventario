@@ -39,6 +39,18 @@ type Almacen = {
   activo: boolean;
 };
 
+type AlmacenFormulario = {
+  id: string | null;
+  nombre: string;
+  codigo: string;
+  tipo: "bodega" | "tienda";
+  activo: boolean;
+  empresa_operadora_id: string;
+  permite_ventas: boolean;
+  permite_compras: boolean;
+  custodia_inventario: boolean;
+};
+
 type VinculoAlmacen = {
   empresa_id: string;
   almacen_id: string;
@@ -157,6 +169,7 @@ export default function EmpresasCliente() {
   const [establecimientos, setEstablecimientos] = useState<EstablecimientoEmpresa[]>([]);
   const [pendientes, setPendientes] = useState<Pendiente[]>([]);
   const [formulario, setFormulario] = useState<Formulario | null>(null);
+  const [almacenFormulario, setAlmacenFormulario] = useState<AlmacenFormulario | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
@@ -168,7 +181,7 @@ export default function EmpresasCliente() {
       supabase.from("grupos_economicos").select("id,codigo,nombre,moneda").eq("activo", true).limit(1).maybeSingle(),
       supabase.from("empresas").select("id,grupo_id,codigo,ruc,razon_social,nombre_comercial,tipo,obligado_contabilidad,activo").order("razon_social"),
       supabase.from("vista_resumen_multiempresa").select("*").order("razon_social"),
-      supabase.from("almacenes").select("id,nombre,codigo,tipo,activo").eq("activo", true).order("nombre"),
+      supabase.from("almacenes").select("id,nombre,codigo,tipo,activo").order("nombre"),
       supabase.from("empresa_almacenes").select("empresa_id,almacen_id,es_operadora_principal,permite_ventas,permite_compras,custodia_inventario"),
       supabase.from("vista_establecimientos_empresa").select("id,empresa_id,codigo,nombre,almacen_id,direccion,es_matriz,activo,puntos_emision,equivalencias_xml").order("codigo"),
       supabase.from("vista_pendientes_multiempresa").select("tipo,cantidad,detalle").order("tipo"),
@@ -178,7 +191,7 @@ export default function EmpresasCliente() {
     if (error) {
       setMsg({
         tipo: "error",
-        texto: `No se pudo cargar el módulo multiempresa. Ejecuta las migraciones v18 y v19: ${error.message}`,
+        texto: `No se pudo cargar el módulo multiempresa. Ejecuta las migraciones v18 a v20: ${error.message}`,
       });
     } else {
       setGrupo((grupoRes.data as Grupo | null) ?? null);
@@ -211,9 +224,75 @@ export default function EmpresasCliente() {
     setMsg(null);
   }
 
+  function nuevoAlmacen() {
+    setAlmacenFormulario({
+      id: null, nombre: "", codigo: "", tipo: "tienda", activo: true,
+      empresa_operadora_id: empresas.find((empresa) => empresa.activo)?.id ?? "",
+      permite_ventas: true, permite_compras: true, custodia_inventario: true,
+    });
+    setMsg(null);
+  }
+
+  function editarAlmacen(almacen: Almacen) {
+    const principal = vinculos.find((vinculo) =>
+      vinculo.almacen_id === almacen.id && vinculo.es_operadora_principal
+    );
+    setAlmacenFormulario({
+      id: almacen.id,
+      nombre: almacen.nombre,
+      codigo: almacen.codigo,
+      tipo: almacen.tipo as "bodega" | "tienda",
+      activo: almacen.activo,
+      empresa_operadora_id: principal?.empresa_id ?? "",
+      permite_ventas: principal?.permite_ventas ?? true,
+      permite_compras: principal?.permite_compras ?? true,
+      custodia_inventario: principal?.custodia_inventario ?? true,
+    });
+    setMsg(null);
+  }
+
+  async function guardarAlmacen(evento: React.FormEvent) {
+    evento.preventDefault();
+    if (!almacenFormulario) return;
+    if (!almacenFormulario.empresa_operadora_id) {
+      setMsg({ tipo: "error", texto: "Selecciona la empresa operadora principal." });
+      return;
+    }
+    setGuardando(true); setMsg(null);
+    const { error } = await supabase.rpc("admin_guardar_almacen_v20", {
+      p_almacen_id: almacenFormulario.id,
+      p_nombre: almacenFormulario.nombre.trim(),
+      p_codigo: almacenFormulario.codigo.trim().toUpperCase(),
+      p_tipo: almacenFormulario.tipo,
+      p_activo: almacenFormulario.activo,
+      p_empresa_operadora_id: almacenFormulario.empresa_operadora_id,
+      p_permite_ventas: almacenFormulario.permite_ventas,
+      p_permite_compras: almacenFormulario.permite_compras,
+      p_custodia_inventario: almacenFormulario.custodia_inventario,
+    });
+    setGuardando(false);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    setAlmacenFormulario(null);
+    setMsg({ tipo: "ok", texto: "Tienda o bodega guardada y vinculada con su operadora principal." });
+    await cargar();
+  }
+
+  async function reclasificarPendientes() {
+    setGuardando(true); setMsg(null);
+    const { data, error } = await supabase.rpc("admin_reclasificar_pendientes_multiempresa");
+    setGuardando(false);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    const resultado = data as { documentos?: number; movimientos?: number } | null;
+    setMsg({ tipo: "ok", texto: `Reclasificación terminada: ${resultado?.documentos ?? 0} documento(s) y ${resultado?.movimientos ?? 0} movimiento(s).` });
+    await cargar();
+  }
+
   function editarEmpresa(empresa: Empresa) {
     const asignados: Formulario["almacenes"] = {};
-    vinculos.filter((vinculo) => vinculo.empresa_id === empresa.id).forEach((vinculo) => {
+    vinculos.filter((vinculo) =>
+      vinculo.empresa_id === empresa.id
+      && almacenes.some((almacen) => almacen.id === vinculo.almacen_id && almacen.activo)
+    ).forEach((vinculo) => {
       asignados[vinculo.almacen_id] = {
         es_operadora_principal: vinculo.es_operadora_principal,
         permite_ventas: vinculo.permite_ventas,
@@ -401,7 +480,7 @@ export default function EmpresasCliente() {
             {grupo ? `${grupo.nombre} · ${empresas.length} RUC registrado(s)` : "Configuración multiempresa"}
           </p>
         </div>
-        <button onClick={nuevaEmpresa}>+ Registrar empresa / RUC</button>
+        <div className="acciones-documento"><button onClick={nuevoAlmacen}>+ Crear tienda / bodega</button><button className="secondary" onClick={nuevaEmpresa}>+ Registrar empresa / RUC</button></div>
       </div>
 
       <div className="info-box" style={{ marginBottom: 14 }}>
@@ -413,6 +492,27 @@ export default function EmpresasCliente() {
 
       {msg && <div className={msg.tipo === "error" ? "error" : "success"} style={{ marginBottom: 14 }}>{msg.texto}</div>}
 
+      {almacenFormulario && <form className="card" onSubmit={guardarAlmacen} style={{ marginBottom: 14 }}>
+        <div className="header-row"><div><h3 style={{ margin: 0 }}>{almacenFormulario.id ? "Editar tienda o bodega" : "Crear tienda o bodega"}</h3><span className="conteo">La operadora principal clasifica automáticamente documentos y movimientos sin empresa.</span></div><button type="button" className="chip-limpiar" onClick={() => setAlmacenFormulario(null)}>Cerrar</button></div>
+        <div className="grid-2" style={{ marginTop: 14 }}>
+          <div className="field"><label>Nombre</label><input required value={almacenFormulario.nombre} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, nombre: e.target.value })} placeholder="Ej.: Puyo, Bodega de materia prima" /></div>
+          <div className="field"><label>Código interno</label><input required minLength={2} maxLength={40} value={almacenFormulario.codigo} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, codigo: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") })} placeholder="TIENDA-PUYO" /></div>
+          <div className="field"><label>Tipo</label><select value={almacenFormulario.tipo} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, tipo: e.target.value as AlmacenFormulario["tipo"] })}><option value="tienda">Tienda</option><option value="bodega">Bodega</option></select></div>
+          <div className="field"><label>Empresa operadora principal</label><select required value={almacenFormulario.empresa_operadora_id} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, empresa_operadora_id: e.target.value })}><option value="">Seleccionar RUC…</option>{empresas.filter((empresa) => empresa.activo).map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.codigo} · {empresa.razon_social}</option>)}</select></div>
+        </div>
+        <div className="acciones-documento" style={{ marginTop: 8 }}><label><input type="checkbox" checked={almacenFormulario.permite_ventas} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, permite_ventas: e.target.checked })} /> Permite ventas</label><label><input type="checkbox" checked={almacenFormulario.permite_compras} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, permite_compras: e.target.checked })} /> Permite compras</label><label><input type="checkbox" checked={almacenFormulario.custodia_inventario} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, custodia_inventario: e.target.checked })} /> Custodia inventario</label><label><input type="checkbox" checked={almacenFormulario.activo} onChange={(e) => setAlmacenFormulario({ ...almacenFormulario, activo: e.target.checked })} /> Activo</label></div>
+        <div className="acciones-documento" style={{ marginTop: 14 }}><button type="submit" disabled={guardando}>{guardando ? "Guardando…" : "Guardar unidad operativa"}</button><button type="button" className="secondary" onClick={() => setAlmacenFormulario(null)}>Cancelar</button></div>
+      </form>}
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="header-row"><div><h3 style={{ margin: 0 }}>Tiendas y bodegas del grupo</h3><span className="conteo">Cada ubicación activa debe tener exactamente una operadora principal.</span></div><button className="secondary" onClick={nuevoAlmacen}>+ Nueva ubicación</button></div>
+        <div className="tabla-scroll" style={{ marginTop: 10 }}><table><thead><tr><th>Unidad operativa</th><th>Tipo</th><th>Operadora principal</th><th>Capacidades</th><th>Estado</th><th></th></tr></thead><tbody>{almacenes.map((almacen) => {
+          const principal = vinculos.find((vinculo) => vinculo.almacen_id === almacen.id && vinculo.es_operadora_principal);
+          const empresa = empresas.find((item) => item.id === principal?.empresa_id);
+          return <tr key={almacen.id}><td><strong>{almacen.nombre}</strong><div className="conteo">{almacen.codigo}</div></td><td>{almacen.tipo === "bodega" ? "Bodega" : "Tienda"}</td><td>{empresa ? <><strong>{empresa.codigo}</strong><div className="conteo">{empresa.razon_social}</div></> : <span className="badge alerta">SIN OPERADORA</span>}</td><td>{principal ? <span className="conteo">{principal.permite_ventas ? "Ventas · " : ""}{principal.permite_compras ? "Compras · " : ""}{principal.custodia_inventario ? "Custodia" : "Sin custodia"}</span> : "—"}</td><td><span className={`badge ${almacen.activo ? "ok" : "cero"}`}>{almacen.activo ? "Activa" : "Inactiva"}</span></td><td><button className="secondary" onClick={() => editarAlmacen(almacen)}>Editar / asignar</button></td></tr>;
+        })}{!almacenes.length && <tr><td colSpan={6} className="vacio">Crea la primera tienda o bodega del grupo.</td></tr>}</tbody></table></div>
+      </div>
+
       {!cargando && pendientes.length > 0 && (
         <div className="card" style={{ marginBottom: 14 }}>
           <div className="header-row">
@@ -420,7 +520,7 @@ export default function EmpresasCliente() {
               <h3 style={{ margin: 0 }}>Pendientes de clasificación</h3>
               <span className="conteo">No detienen la operación actual, pero deben resolverse antes de activar contabilidad por empresa.</span>
             </div>
-            <span className={`badge ${totalPendiente ? "alerta" : "ok"}`}>{totalPendiente} pendientes</span>
+            <div className="acciones-documento"><span className={`badge ${totalPendiente ? "alerta" : "ok"}`}>{totalPendiente} pendientes</span><button className="secondary" disabled={guardando} onClick={reclasificarPendientes}>{guardando ? "Reclasificando…" : "Reclasificar históricos"}</button></div>
           </div>
           <div className="grid-2" style={{ marginTop: 12 }}>
             {pendientes.map((pendiente) => (
@@ -487,7 +587,7 @@ export default function EmpresasCliente() {
                 <tr><th>Asignar</th><th>Unidad operativa</th><th>Empresa predeterminada</th><th>Ventas</th><th>Compras</th><th>Custodia stock</th></tr>
               </thead>
               <tbody>
-                {almacenes.map((almacen) => {
+                {almacenes.filter((almacen) => almacen.activo).map((almacen) => {
                   const configuracion = formulario.almacenes[almacen.id];
                   return (
                     <tr key={almacen.id}>
@@ -526,7 +626,7 @@ export default function EmpresasCliente() {
                     <td><select value={establecimiento.almacen_id ?? ""}
                       onChange={(e) => cambiarEstablecimiento(indice, { almacen_id: e.target.value || null })}>
                       <option value="">Sin vincular</option>
-                      {almacenes.filter((almacen) => Boolean(formulario.almacenes[almacen.id])).map((almacen) =>
+                      {almacenes.filter((almacen) => almacen.activo && Boolean(formulario.almacenes[almacen.id])).map((almacen) =>
                         <option key={almacen.id} value={almacen.id}>{almacen.nombre}</option>)}
                     </select></td>
                     <td><input value={establecimiento.direccion}

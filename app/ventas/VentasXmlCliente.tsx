@@ -41,12 +41,23 @@ type DocumentoVenta = {
   unidades_inventario: number;
   created_at: string;
   anulado: boolean;
+  anulacion_stock_estado: "sin_anulacion" | "sin_retorno" | "devuelto_parcial" | "devuelto_total" | "reversion_tecnica" | "reversion_tecnica_legacy";
+  ultima_devolucion_at: string | null;
   motivo_anulacion: string | null;
   anulado_at: string | null;
   almacen: { nombre: string } | null;
   creador: { nombre_completo: string } | null;
   anulador: { nombre_completo: string } | null;
 };
+type SaldoDevolucion = {
+  producto_id: string;
+  sku: string;
+  producto: string;
+  vendido: number;
+  devuelto: number;
+  pendiente: number;
+};
+type ItemDevolucion = { cantidad: string; destinoEstado: "disponible" | "cuarentena" };
 
 const normalizar = (valor: string | null | undefined) => (valor ?? "")
   .trim().toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -65,6 +76,10 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   const [equivalencias, setEquivalencias] = useState<EquivalenciaFacturacion[]>([]);
   const [emisores, setEmisores] = useState<string[]>([]);
   const [historial, setHistorial] = useState<DocumentoVenta[]>([]);
+  const [devolviendo, setDevolviendo] = useState<DocumentoVenta | null>(null);
+  const [saldoDevolucion, setSaldoDevolucion] = useState<SaldoDevolucion[]>([]);
+  const [itemsDevolucion, setItemsDevolucion] = useState<Record<string, ItemDevolucion>>({});
+  const [motivoDevolucion, setMotivoDevolucion] = useState("");
   const [factura, setFactura] = useState<FacturaSri | null>(null);
   const [archivoNombre, setArchivoNombre] = useState("");
   const [archivoHash, setArchivoHash] = useState("");
@@ -95,13 +110,14 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
       supabase.from("documentos_venta_xml").select(`
         id, numero_documento, razon_social_emisor, fecha_emision, importe_total,
         unidades_inventario, created_at, anulado, motivo_anulacion, anulado_at,
+        anulacion_stock_estado, ultima_devolucion_at,
         almacen:almacenes!documentos_venta_xml_almacen_id_fkey(nombre),
         creador:perfiles!documentos_venta_xml_creado_por_fkey(nombre_completo),
         anulador:perfiles!documentos_venta_xml_anulado_por_fkey(nombre_completo)
       `).order("created_at", { ascending: false }).limit(150),
     ]);
     const error = a.error ?? pa.error ?? p.error ?? c.error ?? e.error ?? eq.error ?? em.error ?? h.error;
-    if (error) setMsg({ tipo: "error", texto: `No se pudo cargar Ventas XML. Verifica que las migraciones v13-v19 estén instaladas: ${error.message}` });
+    if (error) setMsg({ tipo: "error", texto: `No se pudo cargar Ventas XML. Verifica que las migraciones v13-v20 estén instaladas: ${error.message}` });
     setAlmacenes((a.data ?? []) as Almacen[]);
     setPermitidos((pa.data ?? []).map((fila: any) => fila.almacen_id));
     setProductos((p.data ?? []) as Producto[]);
@@ -388,7 +404,7 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
         numero_linea: linea.numeroLinea, producto_id: a.productoId, cantidad: Number(a.cantidad),
       }))
     );
-    const { data, error } = await supabase.rpc("aplicar_factura_venta_xml_v19", {
+    const { data, error } = await supabase.rpc("aplicar_factura_venta_xml_v20", {
       p_documento: documento, p_almacen_id: almacenId, p_asignaciones: asignaciones, p_nota: nota || null,
       p_confirmar_codigo_no_estandar: validacionCodigo?.tipo !== "oficial" ? codigoConfirmado : false,
       p_codigo_nota: validacionCodigo?.tipo !== "oficial" ? codigoNota.trim() || null : null,
@@ -405,13 +421,13 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
 
   async function anularFactura(documento: DocumentoVenta) {
     const motivo = window.prompt(
-      `Motivo obligatorio para anular la factura ${documento.numero_documento}:\n\n` +
-      "Esta acción revierte el inventario, pero no anula el comprobante en el sistema de facturación ni ante el SRI."
+      `Motivo obligatorio para registrar la anulación fiscal de ${documento.numero_documento}:\n\n` +
+      "Esta acción NO modifica el inventario. Si la mercadería regresó, deberás registrar también su devolución física."
     )?.trim();
     if (!motivo) return;
     if (!window.confirm(
-      `Se reintegrarán ${documento.unidades_inventario} unidades a ${documento.almacen?.nombre ?? "su almacén"}.\n\n` +
-      "La factura y sus movimientos permanecerán visibles como ANULADOS. ¿Deseas continuar?"
+      "Se marcará el documento como anulado para trazabilidad, sin sumar stock.\n\n" +
+      "La anulación real ante el SRI o facturador debe realizarse por separado. ¿Deseas continuar?"
     )) return;
 
     setProcesando(true); setMsg(null);
@@ -422,8 +438,109 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     setProcesando(false);
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
     const resultado = data as { mensaje?: string } | null;
-    setMsg({ tipo: "ok", texto: resultado?.mensaje ?? "Factura anulada y stock reintegrado." });
+    setMsg({ tipo: "ok", texto: resultado?.mensaje ?? "Anulación fiscal registrada sin modificar stock." });
     await cargarDatos();
+  }
+
+  async function abrirDevolucion(documento: DocumentoVenta) {
+    setProcesando(true); setMsg(null);
+    const { data, error } = await supabase.rpc("consultar_saldo_devolucion_venta_xml", {
+      p_documento_id: documento.id,
+    });
+    setProcesando(false);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    const resultado = data as { lineas?: SaldoDevolucion[] } | null;
+    const saldos = (resultado?.lineas ?? []).filter((linea) => linea.pendiente > 0);
+    if (!saldos.length) {
+      setMsg({ tipo: "error", texto: "Esta factura ya no tiene unidades pendientes de devolución." });
+      return;
+    }
+    setDevolviendo(documento);
+    setSaldoDevolucion(saldos);
+    setItemsDevolucion(Object.fromEntries(saldos.map((linea) => [
+      linea.producto_id, { cantidad: "0", destinoEstado: "disponible" as const },
+    ])));
+    setMotivoDevolucion("");
+  }
+
+  async function registrarDevolucion() {
+    if (!devolviendo) return;
+    const items = saldoDevolucion.flatMap((linea) => {
+      const item = itemsDevolucion[linea.producto_id];
+      const cantidad = Number(item?.cantidad || 0);
+      return cantidad > 0 ? [{
+        producto_id: linea.producto_id,
+        cantidad,
+        destino_estado: item.destinoEstado,
+      }] : [];
+    });
+    if (!motivoDevolucion.trim()) {
+      setMsg({ tipo: "error", texto: "Indica el motivo o referencia de la devolución." });
+      return;
+    }
+    if (!items.length || items.some((item) => !Number.isInteger(item.cantidad))) {
+      setMsg({ tipo: "error", texto: "Ingresa al menos una cantidad entera para devolver." });
+      return;
+    }
+    if (items.some((item) => item.cantidad > (saldoDevolucion.find((linea) => linea.producto_id === item.producto_id)?.pendiente ?? 0))) {
+      setMsg({ tipo: "error", texto: "Una cantidad supera el saldo pendiente de devolución." });
+      return;
+    }
+    const disponibles = items.filter((item) => item.destino_estado === "disponible").reduce((s, item) => s + item.cantidad, 0);
+    const cuarentena = items.filter((item) => item.destino_estado === "cuarentena").reduce((s, item) => s + item.cantidad, 0);
+    if (!window.confirm(
+      `Factura ${devolviendo.numero_documento}\nDisponible: ${disponibles} unidad(es)\nCuarentena: ${cuarentena} unidad(es)\n\n` +
+      "Confirma solamente mercadería recibida y verificada físicamente."
+    )) return;
+
+    setProcesando(true); setMsg(null);
+    const { data, error } = await supabase.rpc("registrar_devolucion_venta_xml", {
+      p_documento_id: devolviendo.id,
+      p_items: items,
+      p_motivo: motivoDevolucion.trim(),
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    setProcesando(false);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    const resultado = data as { mensaje?: string; numero?: string } | null;
+    setMsg({ tipo: "ok", texto: `${resultado?.mensaje ?? "Devolución aplicada."}${resultado?.numero ? ` Documento ${resultado.numero}.` : ""}` });
+    setDevolviendo(null); setSaldoDevolucion([]); setItemsDevolucion({}); setMotivoDevolucion("");
+    await cargarDatos();
+  }
+
+  async function revertirImportacion(documento: DocumentoVenta) {
+    const motivo = window.prompt(
+      `Motivo de la reversión técnica de ${documento.numero_documento}:\n\n` +
+      "Úsala solo si el XML se importó por error. El sistema bloqueará la operación si existen movimientos posteriores o devoluciones."
+    )?.trim();
+    if (!motivo) return;
+    if (!window.confirm(
+      `Se creará una reversa compensatoria de ${documento.unidades_inventario} unidades.\n\n` +
+      "No reemplaza una devolución de cliente ni una anulación ante el SRI. ¿Confirmas?"
+    )) return;
+    setProcesando(true); setMsg(null);
+    const { data, error } = await supabase.rpc("admin_revertir_importacion_venta_xml", {
+      p_documento_id: documento.id,
+      p_motivo: motivo,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    setProcesando(false);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    const resultado = data as { mensaje?: string } | null;
+    setMsg({ tipo: "ok", texto: resultado?.mensaje ?? "Importación revertida con movimiento compensatorio." });
+    await cargarDatos();
+  }
+
+  function estadoStock(documento: DocumentoVenta) {
+    const etiquetas: Record<DocumentoVenta["anulacion_stock_estado"], string> = {
+      sin_anulacion: "Sin devolución",
+      sin_retorno: "Anulada · retorno pendiente",
+      devuelto_parcial: "Devolución parcial",
+      devuelto_total: "Devuelta totalmente",
+      reversion_tecnica: "Importación revertida",
+      reversion_tecnica_legacy: "Reversa histórica",
+    };
+    return etiquetas[documento.anulacion_stock_estado] ?? documento.anulacion_stock_estado;
   }
 
   function sugerencias(numeroLinea: number) {
@@ -565,8 +682,22 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
 
       {tab === "historial" && <section className="card">
         <h3 style={{ marginTop: 0 }}>Facturas aplicadas</h3>
-        {cargando ? <div className="vacio">Cargando…</div> : <div className="tabla-scroll"><table><thead><tr><th>Factura</th><th>Emisor</th><th>Fecha venta</th><th>Almacén</th><th className="num">Unidades</th><th className="num">Total</th><th>Aplicada por</th><th>Importada</th><th>Estado</th><th></th></tr></thead><tbody>{historial.map((doc) => <tr key={doc.id} className={doc.anulado ? "fila-anulada" : ""}><td><strong>{doc.numero_documento}</strong></td><td>{doc.razon_social_emisor}</td><td>{doc.fecha_emision}</td><td>{doc.almacen?.nombre ?? "-"}</td><td className="num">{doc.unidades_inventario}</td><td className="num">{dinero.format(Number(doc.importe_total))}</td><td>{doc.creador?.nombre_completo ?? "-"}</td><td>{fecha(doc.created_at)}</td><td>{doc.anulado ? <span className="badge anulado" title={`${doc.motivo_anulacion ?? ""} · ${doc.anulador?.nombre_completo ?? ""} · ${doc.anulado_at ? fecha(doc.anulado_at) : ""}`}>ANULADA</span> : <span className="badge ok">APLICADA</span>}</td><td>{perfil.rol === "admin" && !doc.anulado && <button className="peligro" disabled={procesando} onClick={() => anularFactura(doc)}>Anular</button>}{doc.anulado && <small>{doc.motivo_anulacion}</small>}</td></tr>)}{!historial.length && <tr><td colSpan={10} className="vacio">Todavía no hay facturas XML aplicadas.</td></tr>}</tbody></table></div>}
+        <div className="info-box" style={{ marginBottom: 12 }}><strong>V20 separa tres hechos:</strong> anulación fiscal, devolución física de mercadería y reversión técnica de una importación errónea. Solo las dos últimas pueden modificar stock y dejan un movimiento compensatorio.</div>
+        {cargando ? <div className="vacio">Cargando…</div> : <div className="tabla-scroll"><table><thead><tr><th>Factura</th><th>Emisor</th><th>Fecha venta</th><th>Almacén</th><th className="num">Unidades</th><th className="num">Total</th><th>Aplicada por</th><th>Importada</th><th>Estado fiscal</th><th>Estado stock</th><th>Acciones</th></tr></thead><tbody>{historial.map((doc) => <tr key={doc.id} className={doc.anulado ? "fila-anulada" : ""}><td><strong>{doc.numero_documento}</strong></td><td>{doc.razon_social_emisor}</td><td>{doc.fecha_emision}</td><td>{doc.almacen?.nombre ?? "-"}</td><td className="num">{doc.unidades_inventario}</td><td className="num">{dinero.format(Number(doc.importe_total))}</td><td>{doc.creador?.nombre_completo ?? "-"}</td><td>{fecha(doc.created_at)}</td><td>{doc.anulado ? <span className="badge anulado" title={`${doc.motivo_anulacion ?? ""} · ${doc.anulador?.nombre_completo ?? ""} · ${doc.anulado_at ? fecha(doc.anulado_at) : ""}`}>ANULADA</span> : <span className="badge ok">VIGENTE</span>}</td><td><span className={`badge ${doc.anulacion_stock_estado === "devuelto_total" ? "ok" : doc.anulacion_stock_estado.includes("reversion") ? "anulado" : "estado-pendiente_revision"}`}>{estadoStock(doc)}</span></td><td><div className="acciones-documento">{puedeImportar && !["devuelto_total", "reversion_tecnica", "reversion_tecnica_legacy"].includes(doc.anulacion_stock_estado) && <button className="secondary" disabled={procesando} onClick={() => abrirDevolucion(doc)}>Registrar devolución</button>}{perfil.rol === "admin" && !doc.anulado && <button className="peligro" disabled={procesando} onClick={() => anularFactura(doc)}>Anular fiscalmente</button>}{perfil.rol === "admin" && !["devuelto_parcial", "devuelto_total", "reversion_tecnica", "reversion_tecnica_legacy"].includes(doc.anulacion_stock_estado) && <button className="chip-limpiar" disabled={procesando} onClick={() => revertirImportacion(doc)}>Reversión técnica</button>}{doc.anulado && <small>{doc.motivo_anulacion}</small>}</div></td></tr>)}{!historial.length && <tr><td colSpan={11} className="vacio">Todavía no hay facturas XML aplicadas.</td></tr>}</tbody></table></div>}
       </section>}
+
+      {devolviendo && <div className="modal-operativo" role="dialog" aria-modal="true" aria-label="Registrar devolución de venta">
+        <div className="modal-contenido ancho">
+          <div className="header-row"><div><h3 style={{ margin: 0 }}>Devolución física · {devolviendo.numero_documento}</h3><p className="conteo">Almacén receptor: {devolviendo.almacen?.nombre ?? "-"}</p></div><button className="chip-limpiar" type="button" onClick={() => setDevolviendo(null)}>Cerrar</button></div>
+          <div className="info-box"><strong>Inspecciona antes de registrar:</strong> usa “Disponible” solo si el producto puede volver a venderse. Producto dañado, usado, incompleto o dudoso debe ir a cuarentena.</div>
+          <div className="tabla-scroll"><table><thead><tr><th>Producto</th><th className="num">Vendido</th><th className="num">Ya devuelto</th><th className="num">Pendiente</th><th className="num">Recibido ahora</th><th>Destino</th></tr></thead><tbody>{saldoDevolucion.map((linea) => {
+            const item = itemsDevolucion[linea.producto_id] ?? { cantidad: "0", destinoEstado: "disponible" as const };
+            return <tr key={linea.producto_id}><td><strong>{linea.sku}</strong><div className="conteo">{linea.producto}</div></td><td className="num">{linea.vendido}</td><td className="num">{linea.devuelto}</td><td className="num">{linea.pendiente}</td><td className="num"><input type="number" min={0} max={linea.pendiente} step={1} value={item.cantidad} onChange={(e) => setItemsDevolucion({ ...itemsDevolucion, [linea.producto_id]: { ...item, cantidad: e.target.value } })} style={{ width: 90 }} /></td><td><select value={item.destinoEstado} onChange={(e) => setItemsDevolucion({ ...itemsDevolucion, [linea.producto_id]: { ...item, destinoEstado: e.target.value as ItemDevolucion["destinoEstado"] } })}><option value="disponible">Disponible para venta</option><option value="cuarentena">Cuarentena / inspección</option></select></td></tr>;
+          })}</tbody></table></div>
+          <div className="field"><label>Motivo, comprobante o referencia *</label><textarea rows={3} value={motivoDevolucion} onChange={(e) => setMotivoDevolucion(e.target.value)} placeholder="Ej.: devolución del cliente, nota de crédito N.º…, prendas verificadas por…" /></div>
+          <div className="acciones-documento"><button disabled={procesando} onClick={registrarDevolucion}>{procesando ? "Registrando…" : "Confirmar recepción física"}</button><button className="secondary" disabled={procesando} onClick={() => setDevolviendo(null)}>Cancelar</button></div>
+        </div>
+      </div>}
 
       {selectorLinea != null && factura && <div className="modal-operativo" role="dialog" aria-modal="true" aria-label="Seleccionar productos del catálogo">
         <div className="modal-contenido ancho selector-catalogo-xml">

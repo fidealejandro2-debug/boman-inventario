@@ -62,19 +62,17 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
   const [verAnulados, setVerAnulados] = useState(true);
 
   const puedeRegistrar = ["admin", "bodega"].includes(perfil.rol);
-  const puedeAnular = perfil.rol === "control";
+  const puedeAnular = ["admin", "control"].includes(perfil.rol);
   const [anulando, setAnulando] = useState<string | null>(null);
   const [editNota, setEditNota] = useState<string | null>(null);
   const [notaTmp, setNotaTmp] = useState("");
 
   async function anular(m: Movimiento) {
     const etiqueta = ETIQUETA_TIPO[m.tipo] ?? m.tipo;
-    const extra = m.tipo === "transferencia_envio"
-      ? "\nSe anulará también la recepción en la tienda destino."
-      : "";
     const motivo = window.prompt(
-      `Anular: ${etiqueta} de ${m.cantidad} × ${m.productos?.nombre} (${m.almacenes?.nombre})${extra}\n\n` +
-      `El stock se corregirá y el movimiento quedará registrado como ANULADO.\n\n` +
+      `Anular: ${etiqueta} de ${m.cantidad} × ${m.productos?.nombre} (${m.almacenes?.nombre})\n\n` +
+      `Se creará una reversa compensatoria y el movimiento original quedará ANULADO.\n` +
+      `Los movimientos de documentos se corrigen desde Ventas, Operaciones o Control.\n\n` +
       `Indica el motivo de la anulación:`
     );
     if (motivo === null) return;
@@ -85,7 +83,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
     const { error } = await supabase.rpc("control_anular_movimiento", { p_movimiento_id: m.id, p_motivo: motivo.trim() });
     setAnulando(null);
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
-    setMsg({ tipo: "ok", texto: "Movimiento anulado. Queda en el historial para trazabilidad y el stock ya se corrigió." });
+    setMsg({ tipo: "ok", texto: "Movimiento manual anulado. La reversa compensatoria quedó en el kardex." });
     cargar();
   }
 
@@ -378,7 +376,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                 <tr>
                   <th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th>
                   <th>Destino</th><th className="num">Cant.</th><th>Usuario</th><th>Nota</th>
-                  {puedeRegistrar && <th>Acciones</th>}
+                  {puedeAnular && <th>Acciones</th>}
                 </tr>
               </thead>
               <tbody>
@@ -432,8 +430,8 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                       <td style={{ whiteSpace: "nowrap" }}>
                         {m.anulado ? (
                           <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span>
-                        ) : m.tipo === "transferencia_recibo" ? (
-                          <span style={{ fontSize: 12, color: "#9ca3af" }}>Anula el despacho</span>
+                        ) : !["entrada", "salida", "ajuste"].includes(m.tipo) ? (
+                          <span style={{ fontSize: 12, color: "#9ca3af" }}>Se corrige desde su documento</span>
                         ) : (
                           <button className="peligro" disabled={anulando === m.id}
                             onClick={() => anular(m)} style={{ padding: "5px 10px" }}>
@@ -444,7 +442,7 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
                     )}
                   </tr>
                 ))}
-                {!movsFiltrados.length && <tr><td colSpan={puedeRegistrar ? 9 : 8} className="vacio">Sin movimientos con esos filtros.</td></tr>}
+                {!movsFiltrados.length && <tr><td colSpan={8 + (puedeAnular ? 1 : 0)} className="vacio">Sin movimientos con esos filtros.</td></tr>}
               </tbody>
             </table>
           </div>

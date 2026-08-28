@@ -38,6 +38,11 @@ export const ETIQUETA_TIPO: Record<string, string> = {
   salida: "Salida",
   transferencia_envio: "Despacho",
   transferencia_recibo: "Recepción",
+  transferencia_retorno: "Retorno de transferencia",
+  cuarentena_liberacion: "Liberación de cuarentena",
+  movimiento_manual_reversa: "Reversa de movimiento manual",
   ajuste: "Ajuste",
   venta_xml: "Venta XML",
+  devolucion_venta: "Devolución de venta",
+  venta_xml_reversa: "Reversa técnica XML",
 };
