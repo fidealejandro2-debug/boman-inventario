@@ -19,6 +19,16 @@ type Conteo = {
   creador: { nombre_completo: string } | null; lineas: Linea[];
 };
 
+function cantidadActual(linea: Linea) {
+  return linea.cantidad_reconteo ?? linea.cantidad_contada ?? 0;
+}
+
+function lineasResultado(conteo: Conteo) {
+  return conteo.lineas.filter((linea) =>
+    (linea.stock_sistema ?? 0) !== 0 || cantidadActual(linea) !== 0
+  );
+}
+
 export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
@@ -144,11 +154,27 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
     setValores(siguientes);
   }
 
-  function imprimirHoja(conteo: Conteo) {
+  function imprimirHojaCiega(conteo: Conteo) {
     imprimirDocumento(conteo.numero, `<h1>${conteo.numero} · Hoja de conteo ciego</h1>
       <p><b>Almacén:</b> ${conteo.origen?.nombre ?? ""} &nbsp; <b>Fecha:</b> ${fecha(conteo.created_at)}</p>
       <table><thead><tr><th>Ubicación</th><th>SKU</th><th>Producto</th><th>Talla</th><th class="num">Conteo</th></tr></thead><tbody>
       ${conteo.lineas.map((l) => `<tr><td></td><td>${l.producto?.sku ?? ""}</td><td>${l.producto?.nombre ?? ""}</td><td>${l.producto?.talla ?? ""}</td><td></td></tr>`).join("")}
+      </tbody></table>`);
+  }
+
+  function imprimirResultado(conteo: Conteo) {
+    const visibles = lineasResultado(conteo);
+    const ocultas = conteo.lineas.length - visibles.length;
+    const diferencias = visibles.filter((linea) => cantidadActual(linea) !== (linea.stock_sistema ?? 0)).length;
+    imprimirDocumento(conteo.numero, `<h1>${conteo.numero} · Resultado de conteo</h1>
+      <p><b>Almacén:</b> ${conteo.origen?.nombre ?? ""} &nbsp; <b>Fecha:</b> ${fecha(conteo.created_at)}</p>
+      <p><b>${visibles.length}</b> líneas con existencias o movimiento &nbsp; <b>${diferencias}</b> diferencia(s) &nbsp; <b>${ocultas}</b> líneas 0 → 0 omitidas</p>
+      <table><thead><tr><th>SKU</th><th>Producto</th><th>Talla</th><th class="num">Stock anterior</th><th class="num">Conteo actual</th><th class="num">Diferencia</th></tr></thead><tbody>
+      ${visibles.length ? visibles.map((linea) => {
+        const actual = cantidadActual(linea);
+        const diferencia = actual - (linea.stock_sistema ?? 0);
+        return `<tr><td>${linea.producto?.sku ?? ""}</td><td>${linea.producto?.nombre ?? ""}</td><td>${linea.producto?.talla ?? ""}</td><td class="num">${linea.stock_sistema ?? 0}</td><td class="num">${actual}</td><td class="num">${diferencia > 0 ? "+" : ""}${diferencia}</td></tr>`;
+      }).join("") : `<tr><td colspan="6">Sin existencias ni diferencias: todas las líneas fueron 0 → 0.</td></tr>`}
       </tbody></table>`);
   }
 
@@ -166,13 +192,13 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
       </form>}
 
       {activo && <section className="card conteo-activo">
-        <div className="header-row"><div><h3 style={{ margin: 0 }}>{activo.numero}</h3><span className="badge estado-en_conteo">Conteo ciego · {activo.origen?.nombre}</span></div><button className="secondary" onClick={() => imprimirHoja(activo)}>Imprimir hoja</button></div>
+        <div className="header-row"><div><h3 style={{ margin: 0 }}>{activo.numero}</h3><span className="badge estado-en_conteo">Conteo ciego · {activo.origen?.nombre}</span></div><button className="secondary" onClick={() => imprimirHojaCiega(activo)}>Imprimir hoja</button></div>
         <p className="info-box">El stock del sistema permanece oculto. Cuenta físicamente cada SKU. Al finalizar, cualquier campo vacío se registrará como <strong>0</strong> después de pedirte confirmación.</p>
         <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th>Talla</th><th className="num">Cantidad física</th><th>Observación</th></tr></thead><tbody>{activo.lineas.map((l) => <tr key={l.id}><td><strong>{l.producto?.sku}</strong></td><td>{l.producto?.nombre}</td><td>{l.producto?.talla ?? "-"}</td><td className="num"><input type="number" min={0} value={valores[l.producto_id] ?? ""} onChange={(e) => setValores({ ...valores, [l.producto_id]: e.target.value })} style={{ width: 90, textAlign: "right" }} /></td><td><input value={observaciones[l.producto_id] ?? ""} onChange={(e) => setObservaciones({ ...observaciones, [l.producto_id]: e.target.value })} /></td></tr>)}</tbody></table></div>
         <div className="acciones-documento"><button className="secondary" disabled={procesando} onClick={completarVaciosConCero}>Completar vacíos con 0</button><button className="secondary" disabled={procesando} onClick={() => guardarConteo(false)}>Guardar avance</button><button disabled={procesando} onClick={() => guardarConteo(true)}>Finalizar y enviar a Control</button><button className="chip-limpiar" onClick={() => setActivo(null)}>Cerrar</button></div>
       </section>}
 
-      <div className="card"><h3 style={{ marginTop: 0 }}>Historial de conteos</h3>{cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Almacén</th><th>Fecha</th><th>Responsable</th><th>Estado</th><th className="num">Líneas</th><th></th></tr></thead><tbody>{conteos.map((c) => <tr key={c.id}><td><strong>{c.numero}</strong></td><td>{c.origen?.nombre}</td><td>{fecha(c.created_at)}</td><td>{c.creador?.nombre_completo}</td><td><span className={`badge estado-${c.estado}`}>{ETIQUETAS_ESTADO[c.estado] ?? c.estado}</span></td><td className="num">{c.lineas.length}</td><td>{c.estado === "en_conteo" && puedeContar ? <button className="secondary" onClick={() => abrirConteo(c)}>Continuar</button> : <button className="secondary" onClick={() => imprimirHoja(c)}>Ver hoja</button>}</td></tr>)}{!conteos.length && <tr><td colSpan={7} className="vacio">No hay conteos registrados.</td></tr>}</tbody></table></div>}</div>
+      <div className="card"><h3 style={{ marginTop: 0 }}>Historial de conteos</h3>{cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Almacén</th><th>Fecha</th><th>Responsable</th><th>Estado</th><th className="num">Líneas relevantes</th><th></th></tr></thead><tbody>{conteos.map((c) => <tr key={c.id}><td><strong>{c.numero}</strong></td><td>{c.origen?.nombre}</td><td>{fecha(c.created_at)}</td><td>{c.creador?.nombre_completo}</td><td><span className={`badge estado-${c.estado}`}>{ETIQUETAS_ESTADO[c.estado] ?? c.estado}</span></td><td className="num">{c.estado === "en_conteo" ? c.lineas.length : lineasResultado(c).length}</td><td>{c.estado === "en_conteo" && puedeContar ? <button className="secondary" onClick={() => abrirConteo(c)}>Continuar</button> : <button className="secondary" onClick={() => imprimirResultado(c)}>Ver resultado</button>}</td></tr>)}{!conteos.length && <tr><td colSpan={7} className="vacio">No hay conteos registrados.</td></tr>}</tbody></table></div>}</div>
     </>
   );
 }
