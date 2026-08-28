@@ -2,6 +2,8 @@
 
 Contexto del proyecto para retomar el desarrollo. Lee esto antes de tocar código.
 
+> 🔧 **En curso (2026-08-28, Claude):** agregando selector de empresa (filtro por `empresa_id`) a Reportes (`ReportesCliente.tsx`, `ReportesOperativos.tsx`, `ReportesAvanzados.tsx`), Dashboard (`DashboardCliente.tsx`) y Movimientos (`MovimientosCliente.tsx`), sobre el modelo multiempresa de `v18_grupo_economico_multiempresa.sql`. No toca `app/administracion/empresas/`, `emisores_facturacion` ni `establecimientos` — eso es de Codex. Borrar esta nota cuando el trabajo esté comiteado y confirmado.
+
 ---
 
 ## Qué es
@@ -160,12 +162,15 @@ Expone stock físico, reservado, disponible, tránsito de entrada/salida y repos
 | `admin_importar_catalogo_productos(p_items, p_nota)` | Crea/actualiza el catálogo maestro, categorías, precios y mínimos en una transacción auditada. No modifica stock. |
 | `aplicar_factura_venta_xml(p_documento, p_almacen_id, p_asignaciones, p_nota)` | Valida una factura SRI autorizada, evita duplicados, aprende equivalencias y descuenta stock atómicamente. |
 | `admin_anular_factura_venta_xml(p_documento_id, p_motivo)` | Solo admin: reintegra el stock y marca factura/movimientos como anulados sin borrar evidencia. |
+| `admin_guardar_empresa_completa_v19(...)` | Guarda en una transacción el RUC, sus tiendas/bodegas relacionadas, establecimientos SRI y puntos de emisión. |
 
 ---
 
 ## Decisiones de diseño (no revertir sin hablarlo)
 
-**El grupo económico opera consolidado, pero cada RUC conserva identidad legal.** Desde v18 el catálogo y el inventario físico continúan compartidos; `empresas`, `empresa_almacenes` y `perfil_empresas` identifican qué CIA, SAS, persona natural o establecimiento responde por cada operación. Una tienda puede relacionarse con varios RUC, pero solo tiene una operadora principal para la clasificación automática. Esta atribución operativa no debe confundirse con la propiedad contable de las unidades.
+**El grupo económico opera consolidado, pero cada RUC conserva identidad legal.** Desde v18 el catálogo y el inventario físico continúan compartidos; `empresas`, `empresa_almacenes` y `perfil_empresas` identifican qué CIA, SAS o persona natural responde por cada operación. Una tienda puede relacionarse con varios RUC, pero solo tiene una empresa predeterminada para clasificar automáticamente una operación ambigua. La columna histórica se llama `es_operadora_principal`; no representa propiedad contable de las unidades.
+
+**Un establecimiento SRI no es otra empresa.** Desde v19 la jerarquía es `grupo económico → empresa/RUC → establecimiento SRI → punto de emisión`, y el establecimiento puede vincularse a una tienda o bodega física. Por ejemplo, Puyo y Riobamba se registran como establecimientos de la CIA si facturan con el mismo RUC; no deben crearse como empresas separadas. `empresa_establecimientos` conserva el código de tres dígitos y `empresa_puntos_emision` sus puntos de emisión.
 
 **No inventar titularidad histórica de inventario.** Los movimientos anteriores a v18 que no puedan relacionarse inequívocamente con un RUC permanecen visibles como pendientes de clasificación en `vista_pendientes_multiempresa`. La titularidad, cesiones intercompañía y eliminaciones para estados consolidados deben implementarse en un libro separado, sin partir ni sobrescribir `inventario`.
 
@@ -214,6 +219,7 @@ Solo admin/control ven y operan globalmente; gerencia tiene lectura global.
 - [ ] Ejecutar `sql/v16_incidencias_transferencia_sgc.sql` y validar con `sql/verificacion_v16.sql` antes de desplegar la interfaz v16.
 - [ ] Ejecutar `sql/v17_rectificacion_recepciones.sql`, validar con `sql/verificacion_v17.sql` y después desplegar la interfaz.
 - [ ] Ejecutar `sql/v18_grupo_economico_multiempresa.sql`, validar con `sql/verificacion_v18.sql` y registrar todos los RUC antes de activar titularidad contable o documentos intercompañía.
+- [ ] Ejecutar `sql/v19_establecimientos_por_ruc.sql`, validar con `sql/verificacion_v19.sql` y registrar Puyo/Riobamba como establecimientos de la CIA con sus puntos de emisión.
 - [ ] Probar v13 con una factura real primero en un almacén de prueba y confirmar la distribución por talla/color antes de aplicarla.
 - [ ] Asignar roles a los usuarios restantes:
       Jonathan Guaygua y Tatiana Sánchez → `bodega` / Bodega Central ·
@@ -242,7 +248,7 @@ Fotos de producto · código de barras · alertas por correo · costos/valoraci�
 
 ## Trabajar con esto
 
-1. Ejecuta los SQL **en orden** hasta `v18`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14, v15, v16, v17 y v18.
+1. Ejecuta los SQL **en orden** hasta `v19`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14, v15, v16, v17, v18 y v19.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.
