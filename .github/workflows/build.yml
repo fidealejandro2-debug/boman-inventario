@@ -1,0 +1,34 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # package.json no fija una versión de Node (sin "engines" ni .nvmrc);
+          # se usa 20 LTS, la misma familia mayor que Vercel usa por defecto.
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          # Dummies solo para que `next build` no truene por falta de env vars.
+          # Vercel inyecta los valores reales en el deploy; aquí no se usan
+          # datos reales, solo se necesita que las variables existan.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build-only
+        run: npm run build

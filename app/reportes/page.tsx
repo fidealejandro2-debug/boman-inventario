@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import ReportesCliente from "./ReportesCliente";
 import ReportesOperativos from "./ReportesOperativos";
+import ReportesAvanzados from "./ReportesAvanzados";
 
 export default async function ReportesPage() {
   const perfil = await getPerfilActual();
@@ -16,6 +17,7 @@ export default async function ReportesPage() {
       <div className="container">
         <ReportesCliente />
         <ReportesOperativos />
+        <ReportesAvanzados />
       </div>
     </>
   );
