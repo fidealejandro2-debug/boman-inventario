@@ -2,8 +2,6 @@
 
 Contexto del proyecto para retomar el desarrollo. Lee esto antes de tocar código.
 
-> 🔧 **En curso (2026-08-28, Claude):** agregando selector de empresa (filtro por `empresa_id`) a Reportes (`ReportesCliente.tsx`, `ReportesOperativos.tsx`, `ReportesAvanzados.tsx`), Dashboard (`DashboardCliente.tsx`) y Movimientos (`MovimientosCliente.tsx`), sobre el modelo multiempresa de `v18_grupo_economico_multiempresa.sql`. No toca `app/administracion/empresas/`, `emisores_facturacion` ni `establecimientos` — eso es de Codex. Borrar esta nota cuando el trabajo esté comiteado y confirmado.
-
 ---
 
 ## Qué es
