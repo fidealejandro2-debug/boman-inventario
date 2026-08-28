@@ -9,7 +9,27 @@ import { calcularHashXml, parsearFacturaSri, type FacturaSri, type LineaFacturaS
 type Almacen = { id: string; nombre: string; tipo: string };
 type Producto = { id: string; sku: string; nombre: string; talla: string | null; color: string | null };
 type CodigoAprendido = { emisor_ruc: string; codigo_externo: string; producto_id: string; usos: number };
-type Establecimiento = { emisor_ruc: string; establecimiento: string; punto_emision: string; almacen_id: string };
+type Establecimiento = {
+  emisor_ruc: string;
+  establecimiento: string;
+  punto_emision: string;
+  almacen_id: string;
+  empresa_establecimiento_id: string | null;
+  empresa_punto_emision_id: string | null;
+  empresa_equivalencia_id: string | null;
+};
+type EquivalenciaFacturacion = {
+  id: string;
+  emisor_ruc: string;
+  establecimiento_xml: string;
+  punto_emision_xml: string;
+  establecimiento_oficial: string;
+  establecimiento_nombre: string;
+  punto_emision_oficial: string;
+  almacen_id: string | null;
+  almacen: string | null;
+  motivo: string;
+};
 type Asignacion = { productoId: string; cantidad: string };
 type EstadoLinea = { afectaInventario: boolean; asignaciones: Asignacion[] };
 type DocumentoVenta = {
@@ -42,6 +62,7 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [codigos, setCodigos] = useState<CodigoAprendido[]>([]);
   const [establecimientos, setEstablecimientos] = useState<Establecimiento[]>([]);
+  const [equivalencias, setEquivalencias] = useState<EquivalenciaFacturacion[]>([]);
   const [emisores, setEmisores] = useState<string[]>([]);
   const [historial, setHistorial] = useState<DocumentoVenta[]>([]);
   const [factura, setFactura] = useState<FacturaSri | null>(null);
@@ -55,18 +76,21 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   const [busquedaCatalogo, setBusquedaCatalogo] = useState("");
   const [stock, setStock] = useState<Record<string, number>>({});
   const [nota, setNota] = useState("");
+  const [codigoConfirmado, setCodigoConfirmado] = useState(false);
+  const [codigoNota, setCodigoNota] = useState("");
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
 
   async function cargarDatos() {
     setCargando(true);
-    const [a, pa, p, c, e, em, h] = await Promise.all([
+    const [a, pa, p, c, e, eq, em, h] = await Promise.all([
       supabase.from("almacenes").select("id, nombre, tipo").eq("activo", true).order("nombre"),
       supabase.from("perfil_almacenes").select("almacen_id").eq("perfil_id", perfil.id),
       supabase.from("productos").select("id, sku, nombre, talla, color").eq("activo", true).order("nombre"),
       supabase.from("producto_codigos_facturacion").select("emisor_ruc, codigo_externo, producto_id, usos"),
-      supabase.from("establecimiento_almacen_facturacion").select("emisor_ruc, establecimiento, punto_emision, almacen_id"),
+      supabase.from("establecimiento_almacen_facturacion").select("emisor_ruc, establecimiento, punto_emision, almacen_id, empresa_establecimiento_id, empresa_punto_emision_id, empresa_equivalencia_id"),
+      supabase.from("vista_equivalencias_facturacion").select("id,emisor_ruc,establecimiento_xml,punto_emision_xml,establecimiento_oficial,establecimiento_nombre,punto_emision_oficial,almacen_id,almacen,motivo").eq("activo", true),
       supabase.from("emisores_facturacion").select("ruc").eq("activo", true),
       supabase.from("documentos_venta_xml").select(`
         id, numero_documento, razon_social_emisor, fecha_emision, importe_total,
@@ -76,13 +100,14 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
         anulador:perfiles!documentos_venta_xml_anulado_por_fkey(nombre_completo)
       `).order("created_at", { ascending: false }).limit(150),
     ]);
-    const error = a.error ?? pa.error ?? p.error ?? c.error ?? e.error ?? em.error ?? h.error;
-    if (error) setMsg({ tipo: "error", texto: `No se pudo cargar Ventas XML. Verifica que la migración v13 esté instalada: ${error.message}` });
+    const error = a.error ?? pa.error ?? p.error ?? c.error ?? e.error ?? eq.error ?? em.error ?? h.error;
+    if (error) setMsg({ tipo: "error", texto: `No se pudo cargar Ventas XML. Verifica que las migraciones v13-v19 estén instaladas: ${error.message}` });
     setAlmacenes((a.data ?? []) as Almacen[]);
     setPermitidos((pa.data ?? []).map((fila: any) => fila.almacen_id));
     setProductos((p.data ?? []) as Producto[]);
     setCodigos((c.data ?? []) as CodigoAprendido[]);
     setEstablecimientos((e.data ?? []) as Establecimiento[]);
+    setEquivalencias((eq.data ?? []) as EquivalenciaFacturacion[]);
     setEmisores((em.data ?? []).map((fila: any) => fila.ruc));
     setHistorial((h.data ?? []) as any as DocumentoVenta[]);
     if (!almacenId && (pa.data ?? []).length) setAlmacenId((pa.data as any[])[0].almacen_id);
@@ -143,6 +168,11 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
       const mapeo = establecimientos.find((item) =>
         item.emisor_ruc === nueva.emisorRuc && item.establecimiento === nueva.establecimiento && item.punto_emision === nueva.puntoEmision
       );
+      const equivalencia = equivalencias.find((item) =>
+        item.emisor_ruc === nueva.emisorRuc
+        && item.establecimiento_xml === nueva.establecimiento
+        && item.punto_emision_xml === nueva.puntoEmision
+      );
       if (mapeo) setAlmacenId(mapeo.almacen_id);
       else if (almacenesDisponibles.length === 1) setAlmacenId(almacenesDisponibles[0].id);
       setFactura(nueva);
@@ -151,6 +181,8 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
       setLineas(estadoInicial(nueva));
       setBusquedas({});
       setNota("");
+      setCodigoConfirmado(false);
+      setCodigoNota(equivalencia?.motivo ?? "");
     } catch (error: any) {
       setFactura(null);
       setMsg({ tipo: "error", texto: error.message || "No se pudo leer el XML." });
@@ -264,12 +296,42 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     return totales;
   }, [lineas]);
 
+  const validacionCodigo = useMemo(() => {
+    if (!factura) return null;
+    const equivalencia = equivalencias.find((item) =>
+      item.emisor_ruc === factura.emisorRuc
+      && item.establecimiento_xml === factura.establecimiento
+      && item.punto_emision_xml === factura.puntoEmision
+    );
+    if (equivalencia) return { tipo: "equivalencia" as const, equivalencia };
+    const mapeo = establecimientos.find((item) =>
+      item.emisor_ruc === factura.emisorRuc
+      && item.establecimiento === factura.establecimiento
+      && item.punto_emision === factura.puntoEmision
+    );
+    if (mapeo?.empresa_establecimiento_id && mapeo.empresa_punto_emision_id) {
+      return { tipo: "oficial" as const, mapeo };
+    }
+    return { tipo: "pendiente" as const, mapeo };
+  }, [equivalencias, establecimientos, factura]);
+
   const errores = useMemo(() => {
     if (!factura) return [];
     const lista: string[] = [];
     if (!almacenId) lista.push("Selecciona el almacén que realizó la venta.");
     if (emisores.length > 0 && !emisores.includes(factura.emisorRuc)) lista.push("El RUC emisor no está habilitado en el sistema.");
     if (emisores.length === 0 && !["admin", "control"].includes(perfil.rol)) lista.push("Administración o Control deben confirmar el primer RUC emisor.");
+    if (validacionCodigo?.tipo !== "oficial" && !codigoConfirmado) {
+      lista.push("Confirma la validación de la numeración del establecimiento y punto de emisión.");
+    }
+    if (validacionCodigo?.tipo === "pendiente" && !codigoNota.trim()) {
+      lista.push("Describe por qué la numeración del XML no coincide con la estructura legal.");
+    }
+    if (validacionCodigo?.tipo === "equivalencia"
+        && validacionCodigo.equivalencia.almacen_id
+        && validacionCodigo.equivalencia.almacen_id !== almacenId) {
+      lista.push(`La equivalencia validada corresponde al almacén ${validacionCodigo.equivalencia.almacen ?? "configurado"}.`);
+    }
     factura.lineas.forEach((linea) => {
       const estado = lineas[linea.numeroLinea];
       if (!estado?.afectaInventario) return;
@@ -285,12 +347,15 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
       }
     });
     return Array.from(new Set(lista));
-  }, [factura, almacenId, emisores, lineas, perfil.rol, productos, stock, totalesProducto]);
+  }, [factura, almacenId, emisores, lineas, perfil.rol, productos, stock, totalesProducto, validacionCodigo, codigoConfirmado, codigoNota]);
 
   async function aplicarFactura() {
     if (!factura || errores.length) return;
     const unidades = Object.values(totalesProducto).reduce((suma, cantidad) => suma + cantidad, 0);
-    if (!window.confirm(`Se descontarán ${unidades} unidades del inventario.\n\nFactura: ${factura.numeroDocumento}\nAlmacén: ${almacenes.find((a) => a.id === almacenId)?.nombre}\n\n¿Confirmas la aplicación definitiva?`)) return;
+    const avisoCodigo = validacionCodigo?.tipo === "oficial"
+      ? ""
+      : `\nNovedad confirmada: XML ${factura.establecimiento}-${factura.puntoEmision}.`;
+    if (!window.confirm(`Se descontarán ${unidades} unidades del inventario.\n\nFactura: ${factura.numeroDocumento}\nAlmacén: ${almacenes.find((a) => a.id === almacenId)?.nombre}${avisoCodigo}\n\n¿Confirmas la aplicación definitiva?`)) return;
     setProcesando(true); setMsg(null);
     const documento = {
       clave_acceso: factura.claveAcceso,
@@ -323,14 +388,17 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
         numero_linea: linea.numeroLinea, producto_id: a.productoId, cantidad: Number(a.cantidad),
       }))
     );
-    const { data, error } = await supabase.rpc("aplicar_factura_venta_xml", {
+    const { data, error } = await supabase.rpc("aplicar_factura_venta_xml_v19", {
       p_documento: documento, p_almacen_id: almacenId, p_asignaciones: asignaciones, p_nota: nota || null,
+      p_confirmar_codigo_no_estandar: validacionCodigo?.tipo !== "oficial" ? codigoConfirmado : false,
+      p_codigo_nota: validacionCodigo?.tipo !== "oficial" ? codigoNota.trim() || null : null,
     });
     setProcesando(false);
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
     const resultado = data as { mensaje?: string; numero_documento?: string } | null;
     setMsg({ tipo: "ok", texto: resultado?.mensaje ?? "Factura aplicada correctamente." });
     setFactura(null); setLineas({}); setArchivoNombre(""); setArchivoHash(""); setNota("");
+    setCodigoConfirmado(false); setCodigoNota("");
     setTab("historial");
     await cargarDatos();
   }
@@ -428,6 +496,28 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
               <div><small>Total</small><strong>{dinero.format(factura.importeTotal)}</strong></div>
             </div>
             {emisores.length === 0 && ["admin", "control"].includes(perfil.rol) && <p className="info-box">Este será el primer emisor habilitado: <strong>{factura.razonSocialEmisor} · {factura.emisorRuc}</strong>. Confirma que corresponda al facturador oficial de Boman Sport.</p>}
+            {validacionCodigo?.tipo === "oficial" && <div className="success" style={{ marginTop: 12 }}>
+              Numeración validada: establecimiento {factura.establecimiento} · punto de emisión {factura.puntoEmision}.
+            </div>}
+            {validacionCodigo?.tipo === "equivalencia" && <div className="info-box" style={{ marginTop: 12, borderColor: "#d97706" }}>
+              <strong>Novedad conocida del facturador:</strong> el XML dice {factura.establecimiento}-{factura.puntoEmision}, pero corresponde a <strong>{validacionCodigo.equivalencia.establecimiento_oficial} · {validacionCodigo.equivalencia.establecimiento_nombre} / punto {validacionCodigo.equivalencia.punto_emision_oficial}</strong>.
+              <div>{validacionCodigo.equivalencia.motivo}</div>
+              <label className="opcion-destacada compacta" style={{ marginTop: 8 }}>
+                <input type="checkbox" checked={codigoConfirmado} onChange={(e) => setCodigoConfirmado(e.target.checked)} />
+                Revisé la equivalencia y confirmo que esta venta corresponde a {validacionCodigo.equivalencia.almacen ?? "la ubicación configurada"}.
+              </label>
+            </div>}
+            {validacionCodigo?.tipo === "pendiente" && <div className="info-box" style={{ marginTop: 12, borderColor: "#dc2626" }}>
+              <strong>Numeración todavía no clasificada:</strong> el XML contiene {factura.establecimiento}-{factura.puntoEmision}. Puedes continuar sin bloquear la carga, pero primero selecciona el almacén correcto y documenta la novedad.
+              <div className="field" style={{ marginTop: 8 }}>
+                <label>Motivo o explicación</label>
+                <input value={codigoNota} onChange={(e) => setCodigoNota(e.target.value)} placeholder="Ej.: el facturador usa 001-006 para identificar Puyo" />
+              </div>
+              <label className="opcion-destacada compacta">
+                <input type="checkbox" checked={codigoConfirmado} onChange={(e) => setCodigoConfirmado(e.target.checked)} />
+                Revisé el XML y confirmo manualmente su ubicación antes de descontar inventario.
+              </label>
+            </div>}
             <div className="field"><label>Almacén que realizó la venta</label><select value={almacenId} onChange={(e) => setAlmacenId(e.target.value)}><option value="">Seleccionar…</option>{almacenesDisponibles.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></div>
           </section>
 

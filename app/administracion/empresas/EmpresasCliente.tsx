@@ -48,6 +48,36 @@ type VinculoAlmacen = {
   custodia_inventario: boolean;
 };
 
+type EstablecimientoEmpresa = {
+  id: string;
+  empresa_id: string;
+  codigo: string;
+  nombre: string;
+  almacen_id: string | null;
+  direccion: string | null;
+  es_matriz: boolean;
+  activo: boolean;
+  puntos_emision: string[];
+  equivalencias_xml: {
+    id: string;
+    establecimiento_xml: string;
+    punto_emision_xml: string;
+    punto_emision_oficial: string;
+    motivo: string;
+  }[];
+};
+
+type EstablecimientoFormulario = Omit<
+  EstablecimientoEmpresa,
+  "id" | "empresa_id" | "direccion" | "puntos_emision" | "equivalencias_xml"
+> & {
+  clave: string;
+  direccion: string;
+  puntos_emision_texto: string;
+  equivalencias_xml_texto: string;
+  motivo_equivalencia: string;
+};
+
 type Pendiente = {
   tipo: string;
   cantidad: number;
@@ -66,13 +96,14 @@ type Formulario = {
   obligado_contabilidad: boolean;
   activo: boolean;
   almacenes: Record<string, Omit<VinculoAlmacen, "empresa_id" | "almacen_id">>;
+  establecimientos: EstablecimientoFormulario[];
 };
 
 const TIPOS: { valor: TipoEmpresa; etiqueta: string }[] = [
   { valor: "cia_ltda", etiqueta: "Compañía limitada" },
   { valor: "sas", etiqueta: "SAS" },
   { valor: "persona_natural", etiqueta: "Persona natural" },
-  { valor: "establecimiento_individual", etiqueta: "RUC de tienda / establecimiento" },
+  { valor: "establecimiento_individual", etiqueta: "RUC independiente de tienda" },
   { valor: "otro", etiqueta: "Otra figura legal" },
 ];
 
@@ -86,10 +117,11 @@ const FORMULARIO_VACIO: Formulario = {
   obligado_contabilidad: false,
   activo: true,
   almacenes: {},
+  establecimientos: [],
 };
 
 const CONFIG_ALMACEN = {
-  es_operadora_principal: true,
+  es_operadora_principal: false,
   permite_ventas: true,
   permite_compras: true,
   custodia_inventario: true,
@@ -100,6 +132,21 @@ function numero(valor: unknown) {
   return Number.isFinite(convertido) ? convertido : 0;
 }
 
+function separarPuntosEmision(valor: string) {
+  return valor.split(",").map((punto) => punto.trim()).filter(Boolean);
+}
+
+function separarEquivalenciasXml(valor: string) {
+  return valor.split(",").map((item) => item.trim()).filter(Boolean).flatMap((item) => {
+    const partes = item.match(/^(\d{3})-(\d{3})>(\d{3})$/);
+    return partes ? [{
+      establecimiento_xml: partes[1],
+      punto_emision_xml: partes[2],
+      punto_emision_oficial: partes[3],
+    }] : [];
+  });
+}
+
 export default function EmpresasCliente() {
   const supabase = createClient();
   const [grupo, setGrupo] = useState<Grupo | null>(null);
@@ -107,6 +154,7 @@ export default function EmpresasCliente() {
   const [resumenes, setResumenes] = useState<Resumen[]>([]);
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
   const [vinculos, setVinculos] = useState<VinculoAlmacen[]>([]);
+  const [establecimientos, setEstablecimientos] = useState<EstablecimientoEmpresa[]>([]);
   const [pendientes, setPendientes] = useState<Pendiente[]>([]);
   const [formulario, setFormulario] = useState<Formulario | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -116,20 +164,21 @@ export default function EmpresasCliente() {
   async function cargar() {
     setCargando(true);
     setMsg(null);
-    const [grupoRes, empresasRes, resumenRes, almacenesRes, vinculosRes, pendientesRes] = await Promise.all([
+    const [grupoRes, empresasRes, resumenRes, almacenesRes, vinculosRes, establecimientosRes, pendientesRes] = await Promise.all([
       supabase.from("grupos_economicos").select("id,codigo,nombre,moneda").eq("activo", true).limit(1).maybeSingle(),
       supabase.from("empresas").select("id,grupo_id,codigo,ruc,razon_social,nombre_comercial,tipo,obligado_contabilidad,activo").order("razon_social"),
       supabase.from("vista_resumen_multiempresa").select("*").order("razon_social"),
       supabase.from("almacenes").select("id,nombre,codigo,tipo,activo").eq("activo", true).order("nombre"),
       supabase.from("empresa_almacenes").select("empresa_id,almacen_id,es_operadora_principal,permite_ventas,permite_compras,custodia_inventario"),
+      supabase.from("vista_establecimientos_empresa").select("id,empresa_id,codigo,nombre,almacen_id,direccion,es_matriz,activo,puntos_emision,equivalencias_xml").order("codigo"),
       supabase.from("vista_pendientes_multiempresa").select("tipo,cantidad,detalle").order("tipo"),
     ]);
 
-    const error = grupoRes.error ?? empresasRes.error ?? resumenRes.error ?? almacenesRes.error ?? vinculosRes.error ?? pendientesRes.error;
+    const error = grupoRes.error ?? empresasRes.error ?? resumenRes.error ?? almacenesRes.error ?? vinculosRes.error ?? establecimientosRes.error ?? pendientesRes.error;
     if (error) {
       setMsg({
         tipo: "error",
-        texto: `No se pudo cargar el módulo multiempresa. Ejecuta primero la migración v18: ${error.message}`,
+        texto: `No se pudo cargar el módulo multiempresa. Ejecuta las migraciones v18 y v19: ${error.message}`,
       });
     } else {
       setGrupo((grupoRes.data as Grupo | null) ?? null);
@@ -144,6 +193,7 @@ export default function EmpresasCliente() {
       })));
       setAlmacenes((almacenesRes.data ?? []) as Almacen[]);
       setVinculos((vinculosRes.data ?? []) as VinculoAlmacen[]);
+      setEstablecimientos((establecimientosRes.data ?? []) as EstablecimientoEmpresa[]);
       setPendientes(((pendientesRes.data ?? []) as Pendiente[]).map((fila) => ({ ...fila, cantidad: numero(fila.cantidad) })));
     }
     setCargando(false);
@@ -157,7 +207,7 @@ export default function EmpresasCliente() {
   );
 
   function nuevaEmpresa() {
-    setFormulario({ ...FORMULARIO_VACIO, almacenes: {} });
+    setFormulario({ ...FORMULARIO_VACIO, almacenes: {}, establecimientos: [] });
     setMsg(null);
   }
 
@@ -171,6 +221,22 @@ export default function EmpresasCliente() {
         custodia_inventario: vinculo.custodia_inventario,
       };
     });
+    const establecimientosEmpresa = establecimientos
+      .filter((establecimiento) => establecimiento.empresa_id === empresa.id)
+      .map((establecimiento) => ({
+        clave: establecimiento.id,
+        codigo: establecimiento.codigo,
+        nombre: establecimiento.nombre,
+        almacen_id: establecimiento.almacen_id,
+        direccion: establecimiento.direccion ?? "",
+        es_matriz: establecimiento.es_matriz,
+        activo: establecimiento.activo,
+        puntos_emision_texto: (establecimiento.puntos_emision ?? []).join(", "),
+        equivalencias_xml_texto: (establecimiento.equivalencias_xml ?? []).map((equivalencia) =>
+          `${equivalencia.establecimiento_xml}-${equivalencia.punto_emision_xml}>${equivalencia.punto_emision_oficial}`
+        ).join(", "),
+        motivo_equivalencia: establecimiento.equivalencias_xml?.[0]?.motivo ?? "",
+      }));
     setFormulario({
       id: empresa.id,
       codigo: empresa.codigo,
@@ -181,6 +247,7 @@ export default function EmpresasCliente() {
       obligado_contabilidad: empresa.obligado_contabilidad,
       activo: empresa.activo,
       almacenes: asignados,
+      establecimientos: establecimientosEmpresa,
     });
     setMsg(null);
   }
@@ -190,7 +257,17 @@ export default function EmpresasCliente() {
     const siguiente = { ...formulario.almacenes };
     if (activo) siguiente[almacenId] = { ...CONFIG_ALMACEN };
     else delete siguiente[almacenId];
-    setFormulario({ ...formulario, almacenes: siguiente });
+    setFormulario({
+      ...formulario,
+      almacenes: siguiente,
+      establecimientos: activo
+        ? formulario.establecimientos
+        : formulario.establecimientos.map((establecimiento) =>
+          establecimiento.almacen_id === almacenId
+            ? { ...establecimiento, almacen_id: null }
+            : establecimiento
+        ),
+    });
   }
 
   function cambiarAlmacen(almacenId: string, cambio: Partial<typeof CONFIG_ALMACEN>) {
@@ -204,11 +281,70 @@ export default function EmpresasCliente() {
     });
   }
 
+  function agregarEstablecimiento() {
+    if (!formulario) return;
+    setFormulario({
+      ...formulario,
+      establecimientos: [
+        ...formulario.establecimientos,
+        {
+          clave: crypto.randomUUID(), codigo: "", nombre: "", almacen_id: null,
+          direccion: "", es_matriz: formulario.establecimientos.length === 0,
+          activo: true, puntos_emision_texto: "001",
+          equivalencias_xml_texto: "", motivo_equivalencia: "",
+        },
+      ],
+    });
+  }
+
+  function cambiarEstablecimiento(indice: number, cambio: Partial<EstablecimientoFormulario>) {
+    if (!formulario) return;
+    const siguientes = formulario.establecimientos.map((establecimiento, posicion) => {
+      if (posicion === indice) return { ...establecimiento, ...cambio };
+      if (cambio.es_matriz) return { ...establecimiento, es_matriz: false };
+      return establecimiento;
+    });
+    setFormulario({ ...formulario, establecimientos: siguientes });
+  }
+
+  function quitarEstablecimiento(indice: number) {
+    if (!formulario) return;
+    setFormulario({
+      ...formulario,
+      establecimientos: formulario.establecimientos.filter((_, posicion) => posicion !== indice),
+    });
+  }
+
   async function guardar(evento: React.FormEvent) {
     evento.preventDefault();
     if (!formulario || !grupo) return;
     if (!/^\d{13}$/.test(formulario.ruc)) {
       setMsg({ tipo: "error", texto: "El RUC debe contener exactamente 13 dígitos." });
+      return;
+    }
+    if (formulario.establecimientos.some((establecimiento) =>
+      !/^\d{3}$/.test(establecimiento.codigo) || !establecimiento.nombre.trim()
+      || separarPuntosEmision(establecimiento.puntos_emision_texto).some((punto) => !/^\d{3}$/.test(punto))
+    )) {
+      setMsg({ tipo: "error", texto: "Revisa los códigos de establecimiento y puntos de emisión: deben tener tres dígitos." });
+      return;
+    }
+    if (formulario.establecimientos.filter((establecimiento) => establecimiento.activo && establecimiento.es_matriz).length > 1) {
+      setMsg({ tipo: "error", texto: "Solo puede existir un establecimiento matriz activo por RUC." });
+      return;
+    }
+    if (formulario.establecimientos.some((establecimiento) => {
+      const entradas = establecimiento.equivalencias_xml_texto.split(",").map((item) => item.trim()).filter(Boolean);
+      const equivalencias = separarEquivalenciasXml(establecimiento.equivalencias_xml_texto);
+      const puntos = separarPuntosEmision(establecimiento.puntos_emision_texto);
+      return entradas.length !== equivalencias.length
+        || equivalencias.some((equivalencia) => !puntos.includes(equivalencia.punto_emision_oficial))
+        || (equivalencias.length > 0 && !establecimiento.motivo_equivalencia.trim());
+    })) {
+      setMsg({
+        tipo: "error",
+        texto: "Revisa las equivalencias XML. Usa el formato 001-006>100, apunta a un punto oficial y escribe el motivo.",
+      });
       return;
     }
 
@@ -218,7 +354,7 @@ export default function EmpresasCliente() {
       almacen_id,
       ...configuracion,
     }));
-    const { error } = await supabase.rpc("admin_guardar_empresa_completa", {
+    const { error } = await supabase.rpc("admin_guardar_empresa_completa_v19", {
       p_empresa_id: formulario.id,
       p_grupo_id: grupo.id,
       p_codigo: formulario.codigo,
@@ -229,6 +365,19 @@ export default function EmpresasCliente() {
       p_obligado_contabilidad: formulario.obligado_contabilidad,
       p_activo: formulario.activo,
       p_almacenes: items,
+      p_establecimientos: formulario.establecimientos.map((establecimiento) => ({
+        codigo: establecimiento.codigo,
+        nombre: establecimiento.nombre,
+        almacen_id: establecimiento.almacen_id,
+        direccion: establecimiento.direccion || null,
+        es_matriz: establecimiento.es_matriz,
+        activo: establecimiento.activo,
+        puntos_emision: Array.from(new Set(separarPuntosEmision(establecimiento.puntos_emision_texto))),
+        equivalencias_xml: separarEquivalenciasXml(establecimiento.equivalencias_xml_texto).map((equivalencia) => ({
+          ...equivalencia,
+          motivo: establecimiento.motivo_equivalencia.trim(),
+        })),
+      })),
     });
     setGuardando(false);
     if (error) {
@@ -237,7 +386,7 @@ export default function EmpresasCliente() {
     }
 
     setFormulario(null);
-    setMsg({ tipo: "ok", texto: "Empresa y unidades operativas guardadas con trazabilidad." });
+    setMsg({ tipo: "ok", texto: "Empresa, establecimientos y unidades operativas guardados con trazabilidad." });
     await cargar();
   }
 
@@ -257,8 +406,9 @@ export default function EmpresasCliente() {
 
       <div className="info-box" style={{ marginBottom: 14 }}>
         <strong>Modelo consolidado:</strong> el catálogo y el stock físico siguen compartidos por todo el grupo.
-        Cada factura, documento y movimiento queda identificado con el RUC responsable. “Operadora principal”
-        clasifica la actividad de una tienda o bodega, pero no declara por sí sola la propiedad contable de sus unidades.
+        Cada factura, documento y movimiento queda identificado con el RUC responsable. Cada RUC puede tener
+        varios establecimientos SRI vinculados a sus tiendas o bodegas físicas. La empresa predeterminada de una
+        ubicación solo clasifica operaciones ambiguas y no declara la propiedad contable de sus unidades.
       </div>
 
       {msg && <div className={msg.tipo === "error" ? "error" : "success"} style={{ marginBottom: 14 }}>{msg.texto}</div>}
@@ -334,7 +484,7 @@ export default function EmpresasCliente() {
           <div className="tabla-scroll">
             <table>
               <thead>
-                <tr><th>Asignar</th><th>Unidad operativa</th><th>Operadora principal</th><th>Ventas</th><th>Compras</th><th>Custodia stock</th></tr>
+                <tr><th>Asignar</th><th>Unidad operativa</th><th>Empresa predeterminada</th><th>Ventas</th><th>Compras</th><th>Custodia stock</th></tr>
               </thead>
               <tbody>
                 {almacenes.map((almacen) => {
@@ -354,6 +504,54 @@ export default function EmpresasCliente() {
             </table>
           </div>
 
+          <div className="header-row" style={{ marginTop: 18 }}>
+            <div>
+              <h4 style={{ margin: 0 }}>Establecimientos del RUC</h4>
+              <span className="conteo">Usa los códigos legales del SRI. Si el XML llega incorrectamente como 001-006 pero corresponde a 006-100, registra la equivalencia 001-006&gt;100.</span>
+            </div>
+            <button type="button" className="secondary" onClick={agregarEstablecimiento}>+ Agregar establecimiento</button>
+          </div>
+          <div className="tabla-scroll" style={{ marginTop: 10 }}>
+            <table>
+              <thead>
+                <tr><th>Código SRI</th><th>Nombre</th><th>Ubicación física</th><th>Dirección</th><th>Matriz</th><th>Puntos oficiales</th><th>Equivalencias XML</th><th>Motivo</th><th>Estado</th><th></th></tr>
+              </thead>
+              <tbody>
+                {formulario.establecimientos.map((establecimiento, indice) => (
+                  <tr key={establecimiento.clave}>
+                    <td><input required inputMode="numeric" maxLength={3} style={{ width: 72 }} value={establecimiento.codigo}
+                      onChange={(e) => cambiarEstablecimiento(indice, { codigo: e.target.value.replace(/\D/g, "").slice(0, 3) })} placeholder="001" /></td>
+                    <td><input required value={establecimiento.nombre}
+                      onChange={(e) => cambiarEstablecimiento(indice, { nombre: e.target.value })} placeholder="Puyo" /></td>
+                    <td><select value={establecimiento.almacen_id ?? ""}
+                      onChange={(e) => cambiarEstablecimiento(indice, { almacen_id: e.target.value || null })}>
+                      <option value="">Sin vincular</option>
+                      {almacenes.filter((almacen) => Boolean(formulario.almacenes[almacen.id])).map((almacen) =>
+                        <option key={almacen.id} value={almacen.id}>{almacen.nombre}</option>)}
+                    </select></td>
+                    <td><input value={establecimiento.direccion}
+                      onChange={(e) => cambiarEstablecimiento(indice, { direccion: e.target.value })} placeholder="Dirección registrada" /></td>
+                    <td><input type="checkbox" checked={establecimiento.es_matriz}
+                      onChange={(e) => cambiarEstablecimiento(indice, { es_matriz: e.target.checked })} /></td>
+                    <td><input value={establecimiento.puntos_emision_texto}
+                      onChange={(e) => cambiarEstablecimiento(indice, { puntos_emision_texto: e.target.value })}
+                      placeholder="001, 002" /></td>
+                    <td><input value={establecimiento.equivalencias_xml_texto}
+                      onChange={(e) => cambiarEstablecimiento(indice, { equivalencias_xml_texto: e.target.value.replace(/\s/g, "") })}
+                      placeholder="001-006>100" title="XML establecimiento-punto > punto oficial" /></td>
+                    <td><input value={establecimiento.motivo_equivalencia}
+                      onChange={(e) => cambiarEstablecimiento(indice, { motivo_equivalencia: e.target.value })}
+                      placeholder="Limitación temporal del facturador" /></td>
+                    <td><label style={{ whiteSpace: "nowrap" }}><input type="checkbox" checked={establecimiento.activo}
+                      onChange={(e) => cambiarEstablecimiento(indice, { activo: e.target.checked })} /> Activo</label></td>
+                    <td><button type="button" className="chip-limpiar" onClick={() => quitarEstablecimiento(indice)}>Quitar</button></td>
+                  </tr>
+                ))}
+                {!formulario.establecimientos.length && <tr><td colSpan={10} className="vacio">Agrega los establecimientos registrados bajo este RUC.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
           <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
             <button type="submit" disabled={guardando}>{guardando ? "Guardando..." : "Guardar empresa"}</button>
             <button type="button" className="secondary" onClick={() => setFormulario(null)}>Cancelar</button>
@@ -369,20 +567,32 @@ export default function EmpresasCliente() {
         <div className="tabla-scroll" style={{ marginTop: 12 }}>
           <table>
             <thead>
-              <tr><th>Empresa / RUC</th><th>Figura</th><th>Unidades operativas</th><th>Operación consolidada</th><th>Estado</th><th>Acciones</th></tr>
+              <tr><th>Empresa / RUC</th><th>Figura</th><th>Establecimientos / unidades</th><th>Operación consolidada</th><th>Estado</th><th>Acciones</th></tr>
             </thead>
             <tbody>
               {empresas.map((empresa) => {
                 const resumen = resumenPorEmpresa.get(empresa.id);
                 const asignados = vinculos.filter((vinculo) => vinculo.empresa_id === empresa.id);
+                const establecimientosEmpresa = establecimientos.filter((item) => item.empresa_id === empresa.id && item.activo);
                 return (
                   <tr key={empresa.id}>
                     <td><strong>{empresa.codigo} · {empresa.razon_social}</strong><div>{empresa.nombre_comercial}</div><small>RUC {empresa.ruc}</small></td>
                     <td>{TIPOS.find((tipo) => tipo.valor === empresa.tipo)?.etiqueta}<div className="conteo">{empresa.obligado_contabilidad ? "Obligado a llevar contabilidad" : "No marcado como obligado"}</div></td>
-                    <td>{asignados.map((vinculo) => {
-                      const almacen = almacenes.find((item) => item.id === vinculo.almacen_id);
-                      return <div key={vinculo.almacen_id}>{almacen?.nombre ?? vinculo.almacen_id}{vinculo.es_operadora_principal ? " · principal" : " · compartida"}</div>;
-                    })}{!asignados.length && <span className="conteo">Sin asignar</span>}</td>
+                    <td>
+                      {establecimientosEmpresa.map((establecimiento) => {
+                        const almacen = almacenes.find((item) => item.id === establecimiento.almacen_id);
+                        return <div key={establecimiento.id}>
+                          <strong>{establecimiento.codigo} · {establecimiento.nombre}</strong>
+                          {establecimiento.es_matriz ? " · matriz" : ""}
+                          <div className="conteo">{almacen ? `Ubicación: ${almacen.nombre}` : "Sin ubicación física"} · PE {establecimiento.puntos_emision.join(", ") || "sin registrar"}</div>
+                        </div>;
+                      })}
+                      {!establecimientosEmpresa.length && asignados.map((vinculo) => {
+                        const almacen = almacenes.find((item) => item.id === vinculo.almacen_id);
+                        return <div key={vinculo.almacen_id}>{almacen?.nombre ?? vinculo.almacen_id}{vinculo.es_operadora_principal ? " · predeterminada" : " · compartida"}</div>;
+                      })}
+                      {!establecimientosEmpresa.length && !asignados.length && <span className="conteo">Sin asignar</span>}
+                    </td>
                     <td><strong>{resumen?.stock_fisico_operado ?? 0}</strong> unidades físicas operadas<div className="conteo">{resumen?.facturas_xml ?? 0} factura(s) XML · {resumen?.usuarios_asignados ?? 0} usuario(s)</div></td>
                     <td><span className={`badge ${empresa.activo ? "ok" : "cero"}`}>{empresa.activo ? "Activa" : "Inactiva"}</span></td>
                     <td><button className="secondary" onClick={() => editarEmpresa(empresa)}>Editar</button></td>
