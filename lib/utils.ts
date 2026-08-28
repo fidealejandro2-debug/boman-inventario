@@ -45,4 +45,6 @@ export const ETIQUETA_TIPO: Record<string, string> = {
   venta_xml: "Venta XML",
   devolucion_venta: "Devolución de venta",
   venta_xml_reversa: "Reversa técnica XML",
+  compra_recepcion: "Recepción de compra",
+  compra_recepcion_reversa: "Reversa de recepción de compra",
 };

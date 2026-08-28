@@ -15,7 +15,7 @@ type OpcionMenu = {
 };
 
 type ModuloMenu = {
-  id: "ventas" | "inventario" | "reportes" | "administracion";
+  id: "ventas" | "compras" | "inventario" | "reportes" | "administracion";
   etiqueta: string;
   icono: string;
   opciones: OpcionMenu[];
@@ -65,6 +65,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeConfigurarStock = perfil.rol === "admin" || perfil.rol === "control";
   const puedeVerControl = ["admin", "control", "gerencia"].includes(perfil.rol);
   const puedeVerVentas = ["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol);
+  const puedeVerCompras = ["admin", "control", "bodega", "gerencia"].includes(perfil.rol);
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -81,6 +82,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       icono: "$",
       opciones: [
         { href: "/ventas", etiqueta: "Facturas XML", descripcion: "Conciliación SRI y descuento de inventario", visible: puedeVerVentas },
+      ],
+    },
+    {
+      id: "compras",
+      etiqueta: "Compras",
+      icono: "OC",
+      opciones: [
+        { href: "/compras", etiqueta: "Órdenes y recepciones", descripcion: "Proveedores, aprobación, recepción parcial y costos", visible: puedeVerCompras },
       ],
     },
     {
