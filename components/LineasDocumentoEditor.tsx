@@ -33,10 +33,12 @@ export default function LineasDocumentoEditor({
   productos,
   lineas,
   onChange,
+  permitirDecimales = false,
 }: {
   productos: ProductoDocumento[];
   lineas: LineaDocumentoEdicion[];
   onChange: (lineas: LineaDocumentoEdicion[]) => void;
+  permitirDecimales?: boolean;
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [cantidadRapida, setCantidadRapida] = useState(1);
@@ -67,7 +69,7 @@ export default function LineasDocumentoEditor({
   }, [busqueda, productos]);
 
   function agregar(producto: ProductoDocumento, cantidad = cantidadRapida) {
-    const cantidadValida = Number.isInteger(cantidad) && cantidad > 0 ? cantidad : 1;
+    const cantidadValida = cantidad > 0 && (permitirDecimales || Number.isInteger(cantidad)) ? cantidad : 1;
     const existente = lineas.find((linea) => linea.producto_id === producto.id);
 
     if (existente) {
@@ -123,7 +125,9 @@ export default function LineasDocumentoEditor({
 
       // Se separa únicamente por ;, tabulación o la última coma. Así los nombres
       // de producto pueden contener espacios sin quedar partidos.
-      const partes = limpia.match(/^(.*?)[;\t]\s*(\d+)\s*$/) ?? limpia.match(/^(.*),\s*(\d+)\s*$/);
+      const patronCantidad = permitirDecimales ? "(\\d+(?:[.,]\\d+)?)" : "(\\d+)";
+      const partes = limpia.match(new RegExp(`^(.*?)[;\\t]\\s*${patronCantidad}\\s*$`))
+        ?? limpia.match(new RegExp(`^(.*),\\s*${patronCantidad}\\s*$`));
       if (!partes) {
         errores.push(`Línea ${indice + 1}: usa "nombre o SKU; cantidad".`);
         filasPendientes.push(limpia);
@@ -131,11 +135,11 @@ export default function LineasDocumentoEditor({
       }
 
       const identificador = partes[1].trim();
-      const cantidad = Number(partes[2]);
+      const cantidad = Number(partes[2].replace(",", "."));
       const coincidencia = buscarProductoExacto(identificador);
 
-      if (!Number.isInteger(cantidad) || cantidad <= 0) {
-        errores.push(`Línea ${indice + 1}: la cantidad debe ser mayor que cero.`);
+      if ((!permitirDecimales && !Number.isInteger(cantidad)) || !Number.isFinite(cantidad) || cantidad <= 0) {
+        errores.push(`Línea ${indice + 1}: la cantidad debe ser ${permitirDecimales ? "numérica y " : "entera y "}mayor que cero.`);
         filasPendientes.push(limpia);
         return;
       }
@@ -210,9 +214,10 @@ export default function LineasDocumentoEditor({
             <span>Cantidad</span>
             <input
               type="number"
-              min={1}
+              min={permitirDecimales ? 0.000001 : 1}
+              step={permitirDecimales ? "any" : 1}
               value={cantidadRapida}
-              onChange={(e) => setCantidadRapida(Math.max(1, Number(e.target.value) || 1))}
+              onChange={(e) => setCantidadRapida(Math.max(permitirDecimales ? 0.000001 : 1, Number(e.target.value) || 1))}
             />
           </label>
         </div>
@@ -244,7 +249,8 @@ export default function LineasDocumentoEditor({
                   <td><strong>{producto?.sku ?? "-"}</strong></td>
                   <td>{producto ? detalleProducto(producto) : "Producto"}</td>
                   <td className="num">
-                    <input type="number" min={1} value={linea.cantidad}
+                    <input type="number" min={permitirDecimales ? 0.000001 : 1}
+                      step={permitirDecimales ? "any" : 1} value={linea.cantidad}
                       onChange={(e) => actualizar(indice, { cantidad: Math.max(0, Number(e.target.value) || 0) })}
                       style={{ width: 82, textAlign: "right" }} />
                   </td>

@@ -15,7 +15,7 @@ type OpcionMenu = {
 };
 
 type ModuloMenu = {
-  id: "ventas" | "compras" | "inventario" | "reportes" | "administracion";
+  id: "ventas" | "compras" | "produccion" | "inventario" | "reportes" | "administracion";
   etiqueta: string;
   icono: string;
   opciones: OpcionMenu[];
@@ -66,6 +66,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerControl = ["admin", "control", "gerencia"].includes(perfil.rol);
   const puedeVerVentas = ["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol);
   const puedeVerCompras = ["admin", "control", "bodega", "gerencia"].includes(perfil.rol);
+  const puedeVerProduccion = ["admin", "control", "bodega", "gerencia"].includes(perfil.rol);
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -90,6 +91,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       icono: "OC",
       opciones: [
         { href: "/compras", etiqueta: "Órdenes y recepciones", descripcion: "Proveedores, aprobación, recepción parcial y costos", visible: puedeVerCompras },
+      ],
+    },
+    {
+      id: "produccion",
+      etiqueta: "Producción",
+      icono: "OP",
+      opciones: [
+        { href: "/produccion", etiqueta: "Fórmulas y costos", descripcion: "Maestro productivo, BOM versionadas y costos por RUC", visible: puedeVerProduccion },
       ],
     },
     {
