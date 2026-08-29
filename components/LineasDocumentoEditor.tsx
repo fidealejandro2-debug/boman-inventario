@@ -8,6 +8,7 @@ export type ProductoDocumento = {
   nombre: string;
   talla: string | null;
   color?: string | null;
+  tipo_inventario?: string;
 };
 
 export type LineaDocumentoEdicion = {
@@ -45,11 +46,20 @@ export default function LineasDocumentoEditor({
   const [pegado, setPegado] = useState("");
   const [resultadoPegado, setResultadoPegado] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 
+  // Las cantidades decimales se usan en las BOM de Producción. En ese flujo
+  // los productos terminados nunca deben sugerirse como materia consumible.
+  const productosBuscables = useMemo(() => permitirDecimales
+    ? productos.filter((producto) => [
+        "materia_prima", "insumo", "empaque", "subproducto",
+      ].includes(producto.tipo_inventario ?? ""))
+    : productos,
+  [permitirDecimales, productos]);
+
   const sugerencias = useMemo(() => {
     const q = normalizar(busqueda);
     if (!q) return [];
 
-    return productos
+    return productosBuscables
       .filter((producto) => normalizar([
         producto.sku,
         producto.nombre,
@@ -66,7 +76,7 @@ export default function LineasDocumentoEditor({
         return prioridadA - prioridadB || nombreA.localeCompare(nombreB) || skuA.localeCompare(skuB);
       })
       .slice(0, 12);
-  }, [busqueda, productos]);
+  }, [busqueda, productosBuscables]);
 
   function agregar(producto: ProductoDocumento, cantidad = cantidadRapida) {
     const cantidadValida = cantidad > 0 && (permitirDecimales || Number.isInteger(cantidad)) ? cantidad : 1;
@@ -90,10 +100,10 @@ export default function LineasDocumentoEditor({
     const q = normalizar(identificador);
     if (!q) return { producto: null, coincidencias: 0 };
 
-    const porSku = productos.filter((producto) => normalizar(producto.sku) === q);
+    const porSku = productosBuscables.filter((producto) => normalizar(producto.sku) === q);
     if (porSku.length === 1) return { producto: porSku[0], coincidencias: 1 };
 
-    const exactos = productos.filter((producto) => {
+    const exactos = productosBuscables.filter((producto) => {
       const nombre = normalizar(producto.nombre);
       const nombreTalla = normalizar([producto.nombre, producto.talla].filter(Boolean).join(" "));
       const descripcion = normalizar([producto.nombre, producto.talla, producto.color].filter(Boolean).join(" "));
@@ -102,7 +112,7 @@ export default function LineasDocumentoEditor({
     if (exactos.length === 1) return { producto: exactos[0], coincidencias: 1 };
     if (exactos.length > 1) return { producto: null, coincidencias: exactos.length };
 
-    const parciales = productos.filter((producto) => normalizar([
+    const parciales = productosBuscables.filter((producto) => normalizar([
       producto.sku,
       producto.nombre,
       producto.talla ?? "",
@@ -221,7 +231,9 @@ export default function LineasDocumentoEditor({
             />
           </label>
         </div>
-        <small className="ayuda-campo">Escribe unas letras, elige el producto sugerido y continúa con el siguiente. Si ya estaba agregado, la cantidad se suma.</small>
+        <small className="ayuda-campo">{permitirDecimales
+          ? "Solo aparecen materias primas, insumos, empaques y subproductos previamente clasificados."
+          : "Escribe unas letras, elige el producto sugerido y continúa con el siguiente. Si ya estaba agregado, la cantidad se suma."}</small>
       </div>
 
       <details className="pegado-masivo">

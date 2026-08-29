@@ -7,6 +7,7 @@ import LineasDocumentoEditor, {
 } from "@/components/LineasDocumentoEditor";
 import type { Perfil } from "@/lib/getPerfil";
 import { createClient } from "@/lib/supabase/client";
+import OrdenesProduccionCliente from "./OrdenesProduccionCliente";
 
 type Grupo = { id: string; codigo: string; nombre: string };
 type Empresa = { id: string; grupo_id: string; codigo: string; razon_social: string };
@@ -68,7 +69,7 @@ function normalizar(valor: string) {
 
 export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
-  const [tab, setTab] = useState<"formulas" | "maestro" | "costos">("formulas");
+  const [tab, setTab] = useState<"ordenes" | "formulas" | "maestro" | "costos">("ordenes");
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [unidades, setUnidades] = useState<Unidad[]>([]);
@@ -82,6 +83,8 @@ export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
   const [busquedaMaestro, setBusquedaMaestro] = useState("");
   const [tipoMaestro, setTipoMaestro] = useState("");
+  const [tipoMasivo, setTipoMasivo] = useState<TipoInventario | "">("");
+  const [unidadMasiva, setUnidadMasiva] = useState("");
   const [ediciones, setEdiciones] = useState<Record<string, EdicionProducto>>({});
   const [motivoMaestro, setMotivoMaestro] = useState("");
   const [formulario, setFormulario] = useState<FormularioFormula | null>(null);
@@ -132,6 +135,33 @@ export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
       return coincide && (!tipoMaestro || producto.tipo_inventario === tipoMaestro);
     }).slice(0, 300);
   }, [busquedaMaestro, productos, tipoMaestro]);
+
+  function aplicarClasificacionMasiva() {
+    if (!tipoMasivo && !unidadMasiva) {
+      setMsg({ tipo: "error", texto: "Selecciona el tipo productivo o la unidad que deseas aplicar." });
+      return;
+    }
+    if (!busquedaMaestro.trim() && !tipoMaestro) {
+      setMsg({ tipo: "error", texto: "Primero busca o filtra los productos para evitar modificar todo el catálogo por accidente." });
+      return;
+    }
+    if (!productosMaestro.length) {
+      setMsg({ tipo: "error", texto: "No hay productos visibles para clasificar." });
+      return;
+    }
+    if (!window.confirm(`Preparar el cambio para ${productosMaestro.length} producto(s) visibles?`)) return;
+    const cambios = { ...ediciones };
+    productosMaestro.forEach((producto) => {
+      const actual = valorEdicion(producto);
+      cambios[producto.id] = {
+        ...actual,
+        tipo_inventario: tipoMasivo || actual.tipo_inventario,
+        unidad_medida: unidadMasiva || actual.unidad_medida,
+      };
+    });
+    setEdiciones(cambios);
+    setMsg({ tipo: "ok", texto: `${productosMaestro.length} producto(s) preparados. Indica el motivo y guarda los cambios auditados.` });
+  }
 
   const resultadosSugeridos = useMemo(() => {
     const q = normalizar(busquedaResultado);
@@ -268,15 +298,27 @@ export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
   if (cargando) return <div className="card"><div className="vacio">Cargando maestro de producción...</div></div>;
 
   return <>
-    <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Producción y costos</h2><p className="conteo">Maestro productivo, fórmulas versionadas y costo teórico por RUC.</p></div>{puedeEditar && tab === "formulas" && <button onClick={nuevaFormula}>+ Nueva fórmula</button>}</div>
+    <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Producción y costos</h2><p className="conteo">Órdenes trazables, materiales en proceso, fórmulas y costo real por RUC.</p></div>{puedeEditar && tab === "formulas" && <button onClick={nuevaFormula}>+ Nueva fórmula</button>}</div>
     {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
-    <div className="info-box"><strong>V23 prepara y valida el proceso.</strong> Todavía no consume materiales ni ingresa producto terminado; la ejecución controlada se habilitará en V24 sobre fórmulas activas.</div>
-    <div className="tabs"><button className={`tab ${tab === "formulas" ? "activo" : ""}`} onClick={() => setTab("formulas")}>Fórmulas / BOM</button><button className={`tab ${tab === "maestro" ? "activo" : ""}`} onClick={() => setTab("maestro")}>Maestro productivo</button><button className={`tab ${tab === "costos" ? "activo" : ""}`} onClick={() => setTab("costos")}>Costos estimados</button></div>
+    <div className="info-box"><strong>Control productivo V24.</strong> Los materiales salen a trabajo en proceso; al cerrar se separan consumo, merma, sobrante retornado, producto conforme y cuarentena.</div>
+    <div className="tabs"><button className={`tab ${tab === "ordenes" ? "activo" : ""}`} onClick={() => setTab("ordenes")}>Órdenes</button><button className={`tab ${tab === "formulas" ? "activo" : ""}`} onClick={() => setTab("formulas")}>Fórmulas / BOM</button><button className={`tab ${tab === "maestro" ? "activo" : ""}`} onClick={() => setTab("maestro")}>Maestro productivo</button><button className={`tab ${tab === "costos" ? "activo" : ""}`} onClick={() => setTab("costos")}>Costos estimados</button></div>
+
+    {tab === "ordenes" && <OrdenesProduccionCliente perfil={perfil} />}
 
     {tab === "formulas" && <>
       {formulario && <form className="card" onSubmit={guardarFormula} style={{ marginBottom: 14 }}><div className="header-row"><div><h3 style={{ margin: 0 }}>{formulario.id ? "Editar borrador" : "Nueva versión de fórmula"}</h3><p className="conteo">Las versiones activas son inmutables; para cambiar una, crea una nueva versión.</p></div><button type="button" className="chip-limpiar" onClick={() => setFormulario(null)}>Cerrar</button></div><div className="grid-form"><div className="field"><label>Grupo económico *</label><select required value={formulario.grupo_id} disabled={Boolean(formulario.id) || formulario.resultado_bloqueado} onChange={(e) => setFormulario({ ...formulario, grupo_id: e.target.value })}><option value="">Seleccionar...</option>{grupos.map((grupo) => <option key={grupo.id} value={grupo.id}>{grupo.codigo} · {grupo.nombre}</option>)}</select></div><div className="field"><label>Código de fórmula *</label><input required value={formulario.codigo} onChange={(e) => setFormulario({ ...formulario, codigo: e.target.value.toUpperCase() })} placeholder="Ej.: BOM-CAMISETA" /></div><div className="field buscador-producto-documento"><label>Producto resultado *</label><div className="buscador-producto-caja"><input value={formulario.producto_resultado_texto || busquedaResultado} disabled={Boolean(formulario.id) || Boolean(formulario.producto_resultado_id)} onChange={(e) => setBusquedaResultado(e.target.value)} placeholder="Buscar producto terminado..." />{formulario.producto_resultado_id && !formulario.resultado_bloqueado && <button type="button" className="chip-limpiar" onClick={() => setFormulario({ ...formulario, producto_resultado_id: "", producto_resultado_texto: "" })}>Cambiar resultado</button>}{resultadosSugeridos.length > 0 && <div className="sugerencias-documento">{resultadosSugeridos.map((producto) => <button type="button" key={producto.id} onClick={() => { setFormulario({ ...formulario, producto_resultado_id: producto.id, producto_resultado_texto: `${producto.sku} · ${producto.nombre}` }); setBusquedaResultado(""); }}><strong>{producto.sku}</strong><span>{producto.nombre} {producto.talla ?? ""}</span></button>)}</div>}</div></div><div className="field"><label>Rendimiento del lote *</label><input type="number" min={0.000001} step="any" required value={formulario.rendimiento_base} onChange={(e) => setFormulario({ ...formulario, rendimiento_base: Number(e.target.value) || 0 })} /></div><div className="field"><label>Mano de obra por lote</label><input type="number" min={0} step="0.0001" value={formulario.costo_mano_obra_lote} onChange={(e) => setFormulario({ ...formulario, costo_mano_obra_lote: Number(e.target.value) || 0 })} /></div><div className="field"><label>Costos indirectos por lote</label><input type="number" min={0} step="0.0001" value={formulario.costo_indirecto_lote} onChange={(e) => setFormulario({ ...formulario, costo_indirecto_lote: Number(e.target.value) || 0 })} /></div></div><h4>Componentes requeridos</h4><LineasDocumentoEditor productos={productos.filter((producto) => producto.id !== formulario.producto_resultado_id)} lineas={formulario.componentes} onChange={cambiarComponentes} permitirDecimales />{formulario.componentes.length > 0 && <div className="tabla-scroll"><table><thead><tr><th>Componente</th><th>Unidad</th><th className="num">Cantidad base</th><th className="num">Merma técnica %</th></tr></thead><tbody>{formulario.componentes.map((componente) => { const producto = productos.find((item) => item.id === componente.producto_id); return <tr key={componente.producto_id}><td><strong>{producto?.sku}</strong> · {producto?.nombre}</td><td>{producto?.unidad_medida}</td><td className="num">{componente.cantidad}</td><td className="num"><input type="number" min={0} max={100} step="0.0001" value={formulario.mermas[componente.producto_id] ?? 0} onChange={(e) => setFormulario({ ...formulario, mermas: { ...formulario.mermas, [componente.producto_id]: Number(e.target.value) || 0 } })} style={{ width: 90 }} /></td></tr>; })}</tbody></table></div>}<div className="field"><label>Nota técnica</label><textarea rows={3} value={formulario.nota} onChange={(e) => setFormulario({ ...formulario, nota: e.target.value })} /></div><div className="acciones-documento"><button disabled={procesando}>{procesando ? "Guardando..." : "Guardar borrador"}</button><button type="button" className="secondary" onClick={() => setFormulario(null)}>Cancelar</button></div></form>}
       <div className="documentos-grid">{formulas.map((formula) => <article className="card documento-card" key={formula.id}><div className="header-row"><div><strong>{formula.codigo} · v{formula.version}</strong><div>{formula.producto?.sku} · {formula.producto?.nombre}</div></div><span className={`badge ${formula.estado === "activa" ? "ok" : formula.estado === "borrador" ? "estado-pendiente_revision" : "cero"}`}>{ETIQUETA_ESTADO[formula.estado]}</span></div><div className="documento-meta"><span>Rendimiento: <b>{formula.rendimiento_base} {formula.producto?.unidad_medida}</b></span><span>Componentes: <b>{formula.componentes.length}</b></span><span>Preparó: <b>{formula.creador?.nombre_completo}</b></span></div><details><summary>Ver componentes</summary>{formula.componentes.map((componente) => <div className="pendiente-control" key={componente.id}><span><strong>{componente.producto?.sku}</strong><small>{componente.producto?.nombre}</small></span><b>{componente.cantidad_base} {componente.producto?.unidad_medida}{componente.merma_porcentaje ? ` + ${componente.merma_porcentaje}%` : ""}</b></div>)}</details>{formula.nota && <p className="conteo">{formula.nota}</p>}<div className="acciones-documento">{puedeEditar && formula.estado === "borrador" && <><button className="secondary" onClick={() => editarFormula(formula)}>Editar</button><button onClick={() => resolverFormula(formula, true)}>Revisar y activar</button></>}{puedeEditar && formula.estado === "activa" && <><button className="secondary" onClick={() => editarFormula(formula, true)}>Nueva versión</button><button className="peligro" onClick={() => resolverFormula(formula, false)}>Inactivar</button></>}</div></article>)}{!formulas.length && <div className="card"><div className="vacio">Aún no existen fórmulas de producción.</div></div>}</div>
     </>}
+
+    {tab === "maestro" && puedeEditar && <div className="card" style={{ marginBottom: 14 }}>
+      <div className="header-row"><div><h3 style={{ margin: 0 }}>Clasificación masiva</h3><p className="conteo">Busca o filtra una categoría y aplica el tipo o unidad a los productos visibles.</p></div><span className="badge estado-pendiente_revision">Máximo 300 visibles</span></div>
+      <div className="grid-form">
+        <div className="field"><label>Aplicar tipo productivo</label><select value={tipoMasivo} onChange={(e) => setTipoMasivo(e.target.value as TipoInventario | "")}><option value="">No cambiar tipo</option>{TIPOS.map((tipo) => <option key={tipo.valor} value={tipo.valor}>{tipo.etiqueta}</option>)}</select></div>
+        <div className="field"><label>Aplicar unidad de control</label><select value={unidadMasiva} onChange={(e) => setUnidadMasiva(e.target.value)}><option value="">No cambiar unidad</option>{unidades.map((unidad) => <option key={unidad.codigo} value={unidad.codigo}>{unidad.nombre} ({unidad.simbolo})</option>)}</select></div>
+        <div className="acciones-documento"><button type="button" onClick={aplicarClasificacionMasiva}>Aplicar a resultados filtrados</button></div>
+      </div>
+      <p className="conteo">Ejemplo: busca “tela” o una categoría, selecciona “Materia prima” y usa centímetros como unidad base.</p>
+    </div>}
 
     {tab === "maestro" && <div className="card"><div className="header-row"><div><h3 style={{ margin: 0 }}>Clasificación del catálogo</h3><p className="conteo">Define qué se fabrica, qué se consume y en qué unidad se controla.</p></div><span className="badge estado-pendiente_revision">{Object.keys(ediciones).length} cambios</span></div><div className="grid-2"><div className="field"><label>Buscar producto</label><input value={busquedaMaestro} onChange={(e) => setBusquedaMaestro(e.target.value)} placeholder="SKU, nombre, talla, color o categoría" /></div><div className="field"><label>Filtrar tipo</label><select value={tipoMaestro} onChange={(e) => setTipoMaestro(e.target.value)}><option value="">Todos</option>{TIPOS.map((tipo) => <option key={tipo.valor} value={tipo.valor}>{tipo.etiqueta}</option>)}</select></div></div><div className="tabla-scroll"><table><thead><tr><th>SKU / producto</th><th>Categoría</th><th>Tipo productivo</th><th>Unidad de control</th><th className="num">Costo estándar</th></tr></thead><tbody>{productosMaestro.map((producto) => { const valor = valorEdicion(producto); return <tr key={producto.id} className={ediciones[producto.id] ? "fila-alerta" : ""}><td><strong>{producto.sku}</strong><div>{producto.nombre} {producto.talla ?? ""}</div></td><td>{producto.categoria ?? "-"}</td><td><select disabled={!puedeEditar} value={valor.tipo_inventario} onChange={(e) => editarProducto(producto, { tipo_inventario: e.target.value as TipoInventario })}>{TIPOS.map((tipo) => <option key={tipo.valor} value={tipo.valor}>{tipo.etiqueta}</option>)}</select></td><td><select disabled={!puedeEditar} value={valor.unidad_medida} onChange={(e) => editarProducto(producto, { unidad_medida: e.target.value })}>{unidades.map((unidad) => <option key={unidad.codigo} value={unidad.codigo}>{unidad.nombre} ({unidad.simbolo})</option>)}</select></td><td className="num"><input disabled={!puedeEditar} type="number" min={0} step="0.000001" value={valor.costo_estandar} onChange={(e) => editarProducto(producto, { costo_estandar: e.target.value })} placeholder="Opcional" style={{ width: 110 }} /></td></tr>; })}</tbody></table></div>{puedeEditar && <div className="grid-2" style={{ marginTop: 12 }}><div className="field"><label>Motivo de los cambios *</label><input value={motivoMaestro} onChange={(e) => setMotivoMaestro(e.target.value)} placeholder="Ej.: clasificación inicial de materia prima" /></div><div className="acciones-documento"><button disabled={procesando || !Object.keys(ediciones).length} onClick={guardarMaestro}>Guardar cambios auditados</button><button className="secondary" onClick={() => setEdiciones({})}>Descartar</button></div></div>}</div>}
 

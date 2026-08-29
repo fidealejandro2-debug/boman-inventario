@@ -98,7 +98,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       etiqueta: "Producción",
       icono: "OP",
       opciones: [
-        { href: "/produccion", etiqueta: "Fórmulas y costos", descripcion: "Maestro productivo, BOM versionadas y costos por RUC", visible: puedeVerProduccion },
+        { href: "/produccion", etiqueta: "Órdenes, fórmulas y costos", descripcion: "Materiales en proceso, mermas, resultado y costo real por RUC", visible: puedeVerProduccion },
       ],
     },
     {
