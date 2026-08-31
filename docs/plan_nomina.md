@@ -562,7 +562,7 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | v27 | Codex | SQL y verificación listos localmente — falta ejecutar en Supabase |
 | v28 | Claude | SQL y verificación listos localmente — falta ejecutar en Supabase |
 | v29 | Codex | instalada y verificada en Supabase 2026-08-30 |
-| v30 | Codex | en corrección desde 2026-08-30; reemplaza borrador incompatible |
+| v30 | Codex | instalada y verificada en Supabase 2026-08-30; V31 alineada |
 | v31 | Claude | vistas + módulo `app/nomina/` listos localmente — falta ejecutar en Supabase |
 | v32 | Claude | SQL, verificación y pestaña de Auditoría listos — falta ejecutar en Supabase |
 | v33 | — | pendiente (reingreso de personal) |

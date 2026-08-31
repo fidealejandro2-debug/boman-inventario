@@ -91,6 +91,7 @@ select
   l.fecha_afiliacion,
 
   l.dias_laborados,
+  l.dias_afiliados,
   l.sueldo_declarado,
   l.sueldo_proporcional_declarado,
   l.total_ingresos_declarado,
@@ -98,10 +99,10 @@ select
   l.neto_declarado,
 
   l.aporte_patronal,
-  l.provision_decimo_tercero,
-  l.provision_decimo_cuarto,
-  l.provision_vacaciones,
-  l.provision_fondos_reserva,
+  l.provision_decimo_tercero_declarada as provision_decimo_tercero,
+  l.provision_decimo_cuarto_declarada as provision_decimo_cuarto,
+  l.provision_vacaciones_declarada as provision_vacaciones,
+  l.provision_fondos_reserva_declarada as provision_fondos_reserva,
   l.costo_empleador_declarado
 from public.nomina_rol_lineas l
 join public.nomina_periodos p on p.id = l.periodo_id
@@ -243,11 +244,12 @@ select
   e.apellidos || ' ' || e.nombres as nombre_completo,
   l.cargo,
   l.fecha_afiliacion,
-  l.dias_laborados,
-  l.sueldo_proporcional_declarado as remuneracion,
+  l.dias_afiliados as dias_laborados,
+  l.base_aportacion_declarada as remuneracion,
   l.aporte_personal,
   l.aporte_patronal,
-  l.provision_fondos_reserva as fondos_reserva,
+  l.fondos_reserva_declarados + l.provision_fondos_reserva_declarada
+    as fondos_reserva,
   l.aporte_personal + l.aporte_patronal as total_aportes
 from public.nomina_rol_lineas l
 join public.nomina_periodos p on p.id = l.periodo_id
@@ -349,8 +351,8 @@ select
   r.nombre,
   r.tipo,
   rr.cantidad,
-  rr.valor,
-  rr.descripcion_extra
+  rr.valor_real as valor,
+  rr.descripcion as descripcion_extra
 from public.nomina_rol_rubros rr
 join public.nomina_rubros r on r.id = rr.rubro_id;
 
