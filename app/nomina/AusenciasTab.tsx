@@ -46,6 +46,15 @@ type Saldo = {
   alerta_mas_tres_periodos: boolean;
 };
 
+function minutosAtraso(a: Ausencia): number | null {
+  const coincidencia = a.observacion?.match(/^\[ATRASO (\d+) MIN\]/);
+  return coincidencia ? Number(coincidencia[1]) : null;
+}
+
+function observacionVisible(a: Ausencia): string {
+  return a.observacion?.replace(/^\[ATRASO \d+ MIN\]\s*/, "") || "—";
+}
+
 export default function AusenciasTab({
   puedeEscribir,
   empleados,
@@ -64,6 +73,7 @@ export default function AusenciasTab({
   const [guardando, setGuardando] = useState(false);
 
   const [vista, setVista] = useState<"ausencias" | "saldos">("ausencias");
+  const [modoRegistro, setModoRegistro] = useState<"ausencia" | "atraso">("ausencia");
   const [filtroEstado, setFiltroEstado] = useState("solicitada");
   const [busqueda, setBusqueda] = useState("");
 
@@ -73,6 +83,7 @@ export default function AusenciasTab({
     fecha_desde: hoyISO(),
     fecha_hasta: hoyISO(),
     horas: "",
+    minutos_atraso: "",
     observacion: "",
     documento_respaldo_id: null as string | null,
   });
@@ -99,23 +110,44 @@ export default function AusenciasTab({
 
   async function solicitar() {
     if (!form.empleado_id) return setError("Elige a la persona.");
+    const esAtraso = modoRegistro === "atraso";
+    const minutos = Number(form.minutos_atraso);
+    if (esAtraso && (!Number.isInteger(minutos) || minutos <= 0 || minutos > 720)) {
+      return setError("Los minutos de atraso deben ser un entero entre 1 y 720.");
+    }
     setGuardando(true);
     setError(null);
     const { error } = await supabase.rpc("solicitar_ausencia_v27", {
       p_empleado_id: form.empleado_id,
-      p_tipo: form.tipo,
+      p_tipo: esAtraso ? "falta_injustificada" : form.tipo,
       p_fecha_desde: form.fecha_desde,
-      p_fecha_hasta: form.horas ? form.fecha_desde : form.fecha_hasta,
-      p_horas: form.horas ? Number(form.horas) : null,
+      p_fecha_hasta: esAtraso || form.horas ? form.fecha_desde : form.fecha_hasta,
+      p_horas: esAtraso
+        ? Number((minutos / 60).toFixed(2))
+        : form.horas
+          ? Number(form.horas)
+          : null,
       p_almacen_id: null,
       p_documento_respaldo_id: form.documento_respaldo_id,
-      p_observacion: form.observacion || null,
+      p_observacion: esAtraso
+        ? `[ATRASO ${minutos} MIN] ${form.observacion}`.trim()
+        : form.observacion || null,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Ausencia registrada.");
-    setForm({ ...form, observacion: "", horas: "", documento_respaldo_id: null });
+    setAviso(
+      esAtraso
+        ? "Atraso registrado para aprobación; al aprobarlo se reflejará en el rol del mes."
+        : "Ausencia registrada."
+    );
+    setForm({
+      ...form,
+      observacion: "",
+      horas: "",
+      minutos_atraso: "",
+      documento_respaldo_id: null,
+    });
     cargar();
   }
 
@@ -215,34 +247,62 @@ export default function AusenciasTab({
                 </option>
               ))}
           </select>
-          <select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
-            {Object.entries(ETIQUETA_AUSENCIA).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
+          <select
+            value={modoRegistro}
+            onChange={(e) =>
+              setModoRegistro(e.target.value as "ausencia" | "atraso")
+            }
+          >
+            <option value="ausencia">Ausencia o permiso</option>
+            <option value="atraso">Atraso injustificado</option>
           </select>
+          {modoRegistro === "ausencia" && (
+            <select
+              value={form.tipo}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+            >
+              {Object.entries(ETIQUETA_AUSENCIA).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             type="date"
             value={form.fecha_desde}
             onChange={(e) => setForm({ ...form, fecha_desde: e.target.value })}
           />
-          <input
-            type="date"
-            value={form.fecha_hasta}
-            disabled={!!form.horas}
-            onChange={(e) => setForm({ ...form, fecha_hasta: e.target.value })}
-          />
-          <input
-            type="number"
-            step="0.5"
-            min="0"
-            placeholder="Horas (permiso parcial)"
-            value={form.horas}
-            // Un permiso por horas es de un solo día: v27 lo exige.
-            disabled={form.tipo === "vacaciones"}
-            onChange={(e) => setForm({ ...form, horas: e.target.value })}
-          />
+          {modoRegistro === "ausencia" ? (
+            <>
+              <input
+                type="date"
+                value={form.fecha_hasta}
+                disabled={!!form.horas}
+                onChange={(e) => setForm({ ...form, fecha_hasta: e.target.value })}
+              />
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                placeholder="Horas (permiso parcial)"
+                value={form.horas}
+                // Un permiso por horas es de un solo día: v27 lo exige.
+                disabled={form.tipo === "vacaciones"}
+                onChange={(e) => setForm({ ...form, horas: e.target.value })}
+              />
+            </>
+          ) : (
+            <input
+              type="number"
+              step="1"
+              min="1"
+              max="720"
+              placeholder="Minutos de atraso"
+              value={form.minutos_atraso}
+              onChange={(e) => setForm({ ...form, minutos_atraso: e.target.value })}
+            />
+          )}
           <input
             type="text"
             placeholder="Observación"
@@ -258,12 +318,17 @@ export default function AusenciasTab({
               empleadoId={form.empleado_id}
               valor={form.documento_respaldo_id}
               onCambio={(id) => setForm({ ...form, documento_respaldo_id: id })}
-              tipoSugerido="certificado_medico"
-              etiqueta="Justificante"
+              tipoSugerido={modoRegistro === "atraso" ? "otro" : "certificado_medico"}
+              etiqueta={modoRegistro === "atraso" ? "Respaldo del atraso (opcional)" : "Justificante"}
             />
           )}
         </div>
       )}
+
+      <p className="ayuda">
+        Las ausencias sin sueldo y los atrasos aprobados se asignan al mes de su fecha y
+        reducen únicamente el tiempo no trabajado. No generan una multa adicional automática.
+      </p>
 
       <div className="filtros">
         <select value={vista} onChange={(e) => setVista(e.target.value as any)}>
@@ -319,7 +384,9 @@ export default function AusenciasTab({
                     {a.apellidos} {a.nombres}
                   </td>
                   <td>
-                    {ETIQUETA_AUSENCIA[a.tipo] ?? a.tipo}
+                    {minutosAtraso(a) !== null
+                      ? "Atraso injustificado"
+                      : ETIQUETA_AUSENCIA[a.tipo] ?? a.tipo}
                     {a.periodos_fifo_usados > 1 && (
                       <span className="badge ajuste" title="Consumió más de un período de vacaciones">
                         {a.periodos_fifo_usados} períodos
@@ -327,13 +394,19 @@ export default function AusenciasTab({
                     )}
                   </td>
                   <td>{soloFecha(a.fecha_desde)}</td>
-                  <td>{a.horas ? `${a.horas} h` : soloFecha(a.fecha_hasta)}</td>
+                  <td>
+                    {minutosAtraso(a) !== null
+                      ? `${minutosAtraso(a)} min`
+                      : a.horas
+                        ? `${a.horas} h`
+                        : soloFecha(a.fecha_hasta)}
+                  </td>
                   <td className="num">{a.dias_calendario}</td>
                   <td className="num">{a.dias_habiles}</td>
                   <td>
                     <span className={`badge estado-${a.estado}`}>{a.estado}</span>
                   </td>
-                  <td>{a.observacion ?? "—"}</td>
+                  <td>{observacionVisible(a)}</td>
                   {puedeEscribir && (
                     <td>
                       {a.estado === "solicitada" && (

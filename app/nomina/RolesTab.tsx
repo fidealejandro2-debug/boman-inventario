@@ -31,7 +31,9 @@ type LineaRol = {
   empresa_pagadora: string | null;
   dias_laborados: number;
   dias_vacaciones: number;
+  dias_ausencia_con_sueldo: number;
   dias_ausencia_sin_sueldo: number;
+  sueldo_real: number;
   sueldo_proporcional_real: number;
   valor_horas_extra: number;
   comisiones: number;
@@ -40,7 +42,10 @@ type LineaRol = {
   aporte_personal: number;
   anticipos_cuota: number;
   multas: number;
+  prestamos_iess: number;
+  prestamos_empresa: number;
   retencion_judicial: number;
+  otros_descuentos: number;
   total_egresos: number;
   neto_real: number;
 };
@@ -189,6 +194,13 @@ export default function RolesTab() {
         </p>
       )}
 
+      <p className="ayuda">
+        El rol toma automáticamente las ausencias aprobadas cuya fecha cae en el período.
+        Los atrasos con valor solo llegan al rol después de revisar, emitir y notificar su
+        novedad disciplinaria. También aplica las cuotas de anticipos y descuentos programadas
+        para ese mes, respetando los topes y el neto disponible.
+      </p>
+
       {cargandoLineas ? (
         <p className="ayuda">Cargando rol…</p>
       ) : (
@@ -199,14 +211,19 @@ export default function RolesTab() {
                 <th>Cédula</th>
                 <th>Nombre</th>
                 <th>Paga</th>
-                <th className="num">Días</th>
+                <th className="num">Trabajados</th>
+                <th className="num">Vacaciones</th>
+                <th className="num">Aus. pagada</th>
+                <th className="num">Aus. sin pago</th>
+                <th className="num">Aus. descontada</th>
                 <th className="num">Sueldo</th>
                 <th className="num">Extras</th>
                 <th className="num">Comis. y bonos</th>
                 <th className="num">Ingresos</th>
                 <th className="num">IESS</th>
                 <th className="num">Anticipos</th>
-                <th className="num">Multas</th>
+                <th className="num">Préstamos y otros</th>
+                <th className="num">Multas/judicial</th>
                 <th className="num">Egresos</th>
                 <th className="num">Neto</th>
               </tr>
@@ -225,12 +242,21 @@ export default function RolesTab() {
                   </td>
                   <td>{l.empresa_pagadora ?? "—"}</td>
                   <td className="num">{l.dias_laborados}</td>
+                  <td className="num">{l.dias_vacaciones}</td>
+                  <td className="num">{l.dias_ausencia_con_sueldo}</td>
+                  <td className="num">{l.dias_ausencia_sin_sueldo}</td>
+                  <td className="num">
+                    {dinero((l.sueldo_real * l.dias_ausencia_sin_sueldo) / 30)}
+                  </td>
                   <td className="num">{dinero(l.sueldo_proporcional_real)}</td>
                   <td className="num">{dinero(l.valor_horas_extra)}</td>
                   <td className="num">{dinero(l.comisiones + l.bonos)}</td>
                   <td className="num">{dinero(l.total_ingresos_real)}</td>
                   <td className="num">{dinero(l.aporte_personal)}</td>
                   <td className="num">{dinero(l.anticipos_cuota)}</td>
+                  <td className="num">
+                    {dinero(l.prestamos_iess + l.prestamos_empresa + l.otros_descuentos)}
+                  </td>
                   <td className="num">{dinero(l.multas + l.retencion_judicial)}</td>
                   <td className="num">{dinero(l.total_egresos)}</td>
                   <td className="num">
@@ -240,7 +266,7 @@ export default function RolesTab() {
               ))}
               {!visibles.length && (
                 <tr>
-                  <td colSpan={13} className="vacio">
+                  <td colSpan={18} className="vacio">
                     El período no tiene líneas calculadas todavía.
                   </td>
                 </tr>

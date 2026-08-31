@@ -14,6 +14,7 @@ import VinculosTab from "./VinculosTab";
 import ExpedienteTab from "./ExpedienteTab";
 import DepartamentosTab from "./DepartamentosTab";
 import CargasFamiliaresTab from "./CargasFamiliaresTab";
+import ImportacionNominaTab from "./ImportacionNominaTab";
 import type { PermisoCodigo } from "@/lib/permisos";
 import type { Departamento, Empleado, Empresa } from "./lib";
 
@@ -26,6 +27,7 @@ type Pestana =
   | "ausencias"
   | "novedades"
   | "descuentos"
+  | "importacion"
   | "roles"
   | "reportes"
   | "auditoria"
@@ -40,6 +42,7 @@ const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "ausencias", etiqueta: "Ausencias y vacaciones" },
   { id: "novedades", etiqueta: "Novedades" },
   { id: "descuentos", etiqueta: "Anticipos y descuentos" },
+  { id: "importacion", etiqueta: "Carga masiva" },
   { id: "roles", etiqueta: "Roles de pago" },
   { id: "reportes", etiqueta: "Reportes" },
   { id: "auditoria", etiqueta: "Auditoría" },
@@ -169,6 +172,13 @@ export default function NominaCliente({
           )}
           {tab === "descuentos" && (
             <DescuentosTab
+              puedeEscribir={puedeEscribir}
+              empleados={empleados}
+              empresas={empresas}
+            />
+          )}
+          {tab === "importacion" && (
+            <ImportacionNominaTab
               puedeEscribir={puedeEscribir}
               empleados={empleados}
               empresas={empresas}

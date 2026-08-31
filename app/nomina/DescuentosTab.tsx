@@ -13,6 +13,7 @@ import {
   type Empleado,
   type Empresa,
 } from "./lib";
+import SelectorDocumento from "./SelectorDocumento";
 
 type Anticipo = {
   id: string;
@@ -25,6 +26,7 @@ type Anticipo = {
   monto: number;
   motivo: string;
   cuotas: number;
+  fecha_primera_cuota: string;
   estado: string;
   saldo: number | null;
 };
@@ -78,6 +80,19 @@ export default function DescuentosTab({
     monto: "",
     motivo: "",
     cuotas: "1",
+    fecha_primera_cuota: hoyISO().slice(0, 7),
+    documento_respaldo_id: null as string | null,
+  });
+
+  const [formDescuento, setFormDescuento] = useState({
+    empleado_id: "",
+    empresa_acreedora_id: "",
+    origen: "prestamo_empresa",
+    descripcion: "",
+    monto_total: "",
+    cuotas: "1",
+    mes_inicio: hoyISO().slice(0, 7),
+    documento_respaldo_id: null as string | null,
   });
 
   async function cargar() {
@@ -109,10 +124,36 @@ export default function DescuentosTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.empleado_id]);
 
+  useEffect(() => {
+    const mesAnticipo = form.fecha.slice(0, 7);
+    if (form.fecha_primera_cuota < mesAnticipo) {
+      setForm((f) => ({ ...f, fecha_primera_cuota: mesAnticipo }));
+    }
+  }, [form.fecha, form.fecha_primera_cuota]);
+
+  useEffect(() => {
+    if (!formDescuento.empleado_id || formDescuento.empresa_acreedora_id) return;
+    const emp = empleados.find((e) => e.empleado_id === formDescuento.empleado_id);
+    if (emp?.empresa_pagadora_id) {
+      setFormDescuento((f) => ({
+        ...f,
+        empresa_acreedora_id: emp.empresa_pagadora_id!,
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formDescuento.empleado_id]);
+
   async function solicitar() {
     if (!form.empleado_id || !form.empresa_pagadora_id)
       return setError("Falta la persona o la empresa que desembolsa.");
     if (!form.motivo.trim()) return setError("El motivo es obligatorio.");
+    if (Number(form.monto) <= 0) return setError("El monto debe ser mayor a cero.");
+    if (!Number.isInteger(Number(form.cuotas)) || Number(form.cuotas) < 1)
+      return setError("El número de cuotas no es válido.");
+    if (!form.fecha_primera_cuota)
+      return setError("Elige el mes de la primera cuota.");
+    if (!form.documento_respaldo_id)
+      return setError("Adjunta la solicitud o autorización firmada.");
     setGuardando(true);
     setError(null);
     const { error } = await supabase.rpc("solicitar_anticipo_v29", {
@@ -122,15 +163,69 @@ export default function DescuentosTab({
       p_monto: Number(form.monto),
       p_motivo: form.motivo,
       p_cuotas: Number(form.cuotas),
-      p_fecha_primera_cuota: null,
-      p_documento_respaldo_id: null,
+      p_fecha_primera_cuota: `${form.fecha_primera_cuota}-01`,
+      p_documento_respaldo_id: form.documento_respaldo_id,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
     setAviso("Anticipo solicitado.");
     setMostrarForm(false);
-    setForm({ ...form, monto: "", motivo: "", cuotas: "1" });
+    setForm({
+      ...form,
+      monto: "",
+      motivo: "",
+      cuotas: "1",
+      documento_respaldo_id: null,
+    });
+    cargar();
+  }
+
+  async function registrarDescuento() {
+    if (!formDescuento.empleado_id)
+      return setError("Elige a la persona del descuento.");
+    if (!formDescuento.descripcion.trim())
+      return setError("Describe claramente el descuento.");
+    if (Number(formDescuento.monto_total) <= 0)
+      return setError("El monto debe ser mayor a cero.");
+    if (
+      !Number.isInteger(Number(formDescuento.cuotas)) ||
+      Number(formDescuento.cuotas) < 1 ||
+      Number(formDescuento.cuotas) > 120
+    ) {
+      return setError("Las cuotas deben estar entre 1 y 120.");
+    }
+    if (!formDescuento.mes_inicio)
+      return setError("Elige el mes en que empieza el descuento.");
+    if (!formDescuento.documento_respaldo_id)
+      return setError("Adjunta la autorización u orden que respalda el descuento.");
+
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("registrar_descuento_programado_v29", {
+      p_empleado_id: formDescuento.empleado_id,
+      p_empresa_acreedora_id: formDescuento.empresa_acreedora_id || null,
+      p_origen: formDescuento.origen,
+      p_origen_id: null,
+      p_descripcion: formDescuento.descripcion.trim(),
+      p_monto_total: Number(formDescuento.monto_total),
+      p_cuotas: Number(formDescuento.cuotas),
+      p_fecha_inicio: `${formDescuento.mes_inicio}-01`,
+      p_documento_respaldo_id: formDescuento.documento_respaldo_id,
+      p_prioridad: null,
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso("Descuento programado. Su cuota aparecerá al calcular el rol del mes elegido.");
+    setMostrarForm(false);
+    setFormDescuento({
+      ...formDescuento,
+      descripcion: "",
+      monto_total: "",
+      cuotas: "1",
+      documento_respaldo_id: null,
+    });
     cargar();
   }
 
@@ -251,13 +346,23 @@ export default function DescuentosTab({
       </div>
 
       <div className="filtros">
-        <select value={vista} onChange={(e) => setVista(e.target.value as any)}>
+        <select
+          value={vista}
+          onChange={(e) => {
+            setVista(e.target.value as "anticipos" | "descuentos");
+            setMostrarForm(false);
+          }}
+        >
           <option value="anticipos">Anticipos</option>
           <option value="descuentos">Descuentos programados</option>
         </select>
-        {puedeEscribir && vista === "anticipos" && (
+        {puedeEscribir && (
           <button onClick={() => setMostrarForm(!mostrarForm)}>
-            {mostrarForm ? "Cancelar" : "Nuevo anticipo"}
+            {mostrarForm
+              ? "Cancelar"
+              : vista === "anticipos"
+                ? "Nuevo anticipo"
+                : "Nuevo descuento"}
           </button>
         )}
         <input
@@ -279,6 +384,12 @@ export default function DescuentosTab({
         </button>
       </div>
 
+      <p className="ayuda">
+        El anticipo se solicita y desembolsa primero; recién entonces crea sus cuotas.
+        Los demás descuentos se programan directamente con respaldo. La fecha de inicio
+        determina en qué rol mensual se intenta aplicar la primera cuota.
+      </p>
+
       {mostrarForm && puedeEscribir && vista === "anticipos" && (
         <div className="card-interna">
           <h4>Nuevo anticipo</h4>
@@ -287,7 +398,14 @@ export default function DescuentosTab({
               Persona
               <select
                 value={form.empleado_id}
-                onChange={(e) => setForm({ ...form, empleado_id: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    empleado_id: e.target.value,
+                    empresa_pagadora_id: "",
+                    documento_respaldo_id: null,
+                  })
+                }
               >
                 <option value="">Elegir…</option>
                 {empleados
@@ -340,6 +458,15 @@ export default function DescuentosTab({
                 onChange={(e) => setForm({ ...form, cuotas: e.target.value })}
               />
             </label>
+            <label>
+              Primera cuota
+              <input
+                type="month"
+                min={form.fecha.slice(0, 7)}
+                value={form.fecha_primera_cuota}
+                onChange={(e) => setForm({ ...form, fecha_primera_cuota: e.target.value })}
+              />
+            </label>
             <label className="ancho-total">
               Motivo
               <input
@@ -348,9 +475,156 @@ export default function DescuentosTab({
                 onChange={(e) => setForm({ ...form, motivo: e.target.value })}
               />
             </label>
+            <div className="ancho-total">
+              <SelectorDocumento
+                empleadoId={form.empleado_id || null}
+                valor={form.documento_respaldo_id}
+                onCambio={(id) => setForm({ ...form, documento_respaldo_id: id })}
+                tipoSugerido="otro"
+                etiqueta="Solicitud o autorización firmada"
+                requerido
+              />
+            </div>
           </div>
           <button onClick={solicitar} disabled={guardando}>
             Solicitar anticipo
+          </button>
+        </div>
+      )}
+
+      {mostrarForm && puedeEscribir && vista === "descuentos" && (
+        <div className="card-interna">
+          <h4>Nuevo descuento programado</h4>
+          <p className="ayuda">
+            No uses este formulario para anticipos ni multas disciplinarias: esos tienen
+            su propio flujo y controles.
+          </p>
+          <div className="form-grid">
+            <label>
+              Persona
+              <select
+                value={formDescuento.empleado_id}
+                onChange={(e) =>
+                  setFormDescuento({
+                    ...formDescuento,
+                    empleado_id: e.target.value,
+                    empresa_acreedora_id: "",
+                    documento_respaldo_id: null,
+                  })
+                }
+              >
+                <option value="">Elegir…</option>
+                {empleados
+                  .filter((e) => e.estado === "activo")
+                  .map((e) => (
+                    <option key={e.empleado_id} value={e.empleado_id}>
+                      {e.nombre_completo}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              Tipo
+              <select
+                value={formDescuento.origen}
+                onChange={(e) =>
+                  setFormDescuento({ ...formDescuento, origen: e.target.value })
+                }
+              >
+                {[
+                  "prestamo_empresa",
+                  "prestamo_iess",
+                  "prestamo_quirografario",
+                  "prestamo_hipotecario",
+                  "judicial",
+                  "uniforme",
+                  "consumo_interno",
+                  "otro",
+                ].map((origen) => (
+                  <option key={origen} value={origen}>
+                    {ETIQUETA_ORIGEN_DESCUENTO[origen] ?? origen}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Empresa acreedora (si aplica)
+              <select
+                value={formDescuento.empresa_acreedora_id}
+                onChange={(e) =>
+                  setFormDescuento({
+                    ...formDescuento,
+                    empresa_acreedora_id: e.target.value,
+                  })
+                }
+              >
+                <option value="">Sin empresa acreedora</option>
+                {empresas.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.razon_social}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Monto total
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={formDescuento.monto_total}
+                onChange={(e) =>
+                  setFormDescuento({ ...formDescuento, monto_total: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Cuotas mensuales
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={formDescuento.cuotas}
+                onChange={(e) =>
+                  setFormDescuento({ ...formDescuento, cuotas: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Aplicar desde el rol de
+              <input
+                type="month"
+                value={formDescuento.mes_inicio}
+                onChange={(e) =>
+                  setFormDescuento({ ...formDescuento, mes_inicio: e.target.value })
+                }
+              />
+            </label>
+            <label className="ancho-total">
+              Descripción
+              <input
+                type="text"
+                value={formDescuento.descripcion}
+                onChange={(e) =>
+                  setFormDescuento({ ...formDescuento, descripcion: e.target.value })
+                }
+              />
+            </label>
+            <div className="ancho-total">
+              <SelectorDocumento
+                empleadoId={formDescuento.empleado_id || null}
+                valor={formDescuento.documento_respaldo_id}
+                onCambio={(id) =>
+                  setFormDescuento({ ...formDescuento, documento_respaldo_id: id })
+                }
+                tipoSugerido="otro"
+                etiqueta="Autorización u orden de descuento"
+                requerido
+              />
+            </div>
+          </div>
+          <button onClick={registrarDescuento} disabled={guardando}>
+            Programar descuento
           </button>
         </div>
       )}
@@ -366,6 +640,7 @@ export default function DescuentosTab({
                 <th>Motivo</th>
                 <th className="num">Monto</th>
                 <th className="num">Cuotas</th>
+                <th>Primera cuota</th>
                 <th className="num">Saldo</th>
                 <th>Estado</th>
                 {puedeEscribir && <th>Acciones</th>}
@@ -382,6 +657,7 @@ export default function DescuentosTab({
                   <td>{a.motivo}</td>
                   <td className="num">{dinero(a.monto)}</td>
                   <td className="num">{a.cuotas}</td>
+                  <td>{soloFecha(a.fecha_primera_cuota)}</td>
                   <td className="num">{a.saldo === null ? "—" : dinero(a.saldo)}</td>
                   <td>
                     <span className={`badge estado-${a.estado}`}>{a.estado}</span>
@@ -430,7 +706,7 @@ export default function DescuentosTab({
               ))}
               {!anticiposVisibles.length && (
                 <tr>
-                  <td colSpan={puedeEscribir ? 9 : 8} className="vacio">
+                  <td colSpan={puedeEscribir ? 10 : 9} className="vacio">
                     Sin anticipos registrados.
                   </td>
                 </tr>
@@ -452,6 +728,7 @@ export default function DescuentosTab({
                 <th className="num">Saldo</th>
                 <th className="num">Cuota</th>
                 <th className="num">Cuotas</th>
+                <th>Inicio</th>
                 <th>Estado</th>
                 {puedeEscribir && <th>Acciones</th>}
               </tr>
@@ -481,6 +758,7 @@ export default function DescuentosTab({
                   <td className="num">
                     {d.cuotas_pagadas}/{d.cuotas_total}
                   </td>
+                  <td>{soloFecha(d.fecha_inicio)}</td>
                   <td>
                     <span className={`badge estado-${d.estado}`}>{d.estado}</span>
                   </td>
@@ -519,7 +797,7 @@ export default function DescuentosTab({
               ))}
               {!descuentosVisibles.length && (
                 <tr>
-                  <td colSpan={puedeEscribir ? 11 : 10} className="vacio">
+                  <td colSpan={puedeEscribir ? 12 : 11} className="vacio">
                     Sin descuentos programados.
                   </td>
                 </tr>

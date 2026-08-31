@@ -14,6 +14,7 @@ import {
   type Empresa,
 } from "./lib";
 import NovedadImpresion from "./NovedadImpresion";
+import SelectorDocumento from "./SelectorDocumento";
 
 type Novedad = {
   novedad_id: string;
@@ -73,6 +74,13 @@ export default function NovedadesTab({
     monto_descuento: "",
   });
   const [tope, setTope] = useState<number | null>(null);
+  const [multa, setMulta] = useState({
+    novedad_id: "",
+    empleado_id: "",
+    cuotas: "1",
+    mes_inicio: hoyISO().slice(0, 7),
+    documento_respaldo_id: null as string | null,
+  });
 
   async function cargar() {
     setCargando(true);
@@ -181,6 +189,52 @@ export default function NovedadesTab({
     cargar();
   }
 
+  async function emitirBorrador(id: string) {
+    if (!window.confirm("Se asignará el correlativo y el contenido quedará congelado. ¿Emitir?"))
+      return;
+    setGuardando(true);
+    setError(null);
+    const { data, error } = await supabase.rpc("emitir_novedad_v28", {
+      p_novedad_id: id,
+      p_fecha_emision: hoyISO(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso(`Novedad emitida con el número ${(data as { referencia?: string })?.referencia ?? ""}.`);
+    cargar();
+  }
+
+  async function programarMulta() {
+    if (!multa.novedad_id) return;
+    const cuotas = Number(multa.cuotas);
+    if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120)
+      return setError("Las cuotas deben estar entre 1 y 120.");
+    if (!multa.mes_inicio) return setError("Elige el mes del primer descuento.");
+    if (!multa.documento_respaldo_id)
+      return setError("Elige la sanción firmada o el documento que autoriza el descuento.");
+
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("registrar_descuento_multa_v29", {
+      p_novedad_id: multa.novedad_id,
+      p_cuotas: cuotas,
+      p_fecha_inicio: `${multa.mes_inicio}-01`,
+      p_documento_respaldo_id: multa.documento_respaldo_id,
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setMulta({
+      novedad_id: "",
+      empleado_id: "",
+      cuotas: "1",
+      mes_inicio: hoyISO().slice(0, 7),
+      documento_respaldo_id: null,
+    });
+    setAviso("Multa programada; se intentará aplicar desde el rol del mes elegido.");
+    cargar();
+  }
+
   async function descargo(id: string) {
     const texto = window.prompt("Descargo del trabajador:");
     if (!texto?.trim()) return;
@@ -278,6 +332,54 @@ export default function NovedadesTab({
           {reincidentes.map((r) => `${r.nombre} (${r.n})`).join(", ")}. Es el supuesto del
           Art. 172 del Código del Trabajo; la decisión sigue siendo del empleador.
         </p>
+      )}
+
+      {multa.novedad_id && puedeEscribir && (
+        <div className="card-interna">
+          <h4>Programar multa en el rol</h4>
+          <p className="ayuda">
+            La novedad ya fue notificada. El respaldo debe pertenecer al expediente de la
+            misma persona; el motor de nómina seguirá respetando los topes y el neto disponible.
+          </p>
+          <div className="form-grid">
+            <label>
+              Cuotas
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={multa.cuotas}
+                onChange={(e) => setMulta({ ...multa, cuotas: e.target.value })}
+              />
+            </label>
+            <label>
+              Aplicar desde el rol de
+              <input
+                type="month"
+                value={multa.mes_inicio}
+                onChange={(e) => setMulta({ ...multa, mes_inicio: e.target.value })}
+              />
+            </label>
+            <div className="ancho-total">
+              <SelectorDocumento
+                empleadoId={multa.empleado_id || null}
+                valor={multa.documento_respaldo_id}
+                onCambio={(id) => setMulta({ ...multa, documento_respaldo_id: id })}
+                tipoSugerido="otro"
+                etiqueta="Sanción firmada o autorización"
+                requerido
+              />
+            </div>
+          </div>
+          <button onClick={programarMulta} disabled={guardando}>Programar descuento</button>
+          <button
+            className="secondary"
+            onClick={() => setMulta({ ...multa, novedad_id: "", empleado_id: "", documento_respaldo_id: null })}
+            disabled={guardando}
+          >
+            Cancelar
+          </button>
+        </div>
       )}
 
       <div className="filtros">
@@ -494,6 +596,11 @@ export default function NovedadesTab({
                       Imprimir
                     </button>
                   )}
+                  {puedeEscribir && f.estado === "borrador" && (
+                    <button className="btn-mini" disabled={guardando} onClick={() => emitirBorrador(f.novedad_id)}>
+                      Revisar y emitir
+                    </button>
+                  )}
                   {puedeEscribir && f.estado === "emitida" && (
                     <button className="btn-mini" disabled={guardando} onClick={() => notificar(f.novedad_id)}>
                       Notificar
@@ -512,6 +619,22 @@ export default function NovedadesTab({
                   {puedeEscribir && f.estado === "con_descargo" && (
                     <button className="btn-mini" disabled={guardando} onClick={() => resolver(f.novedad_id)}>
                       Resolver
+                    </button>
+                  )}
+                  {puedeEscribir && f.genera_descuento && !f.descuento_aplicado &&
+                    ["notificada", "con_descargo", "archivada"].includes(f.estado) && (
+                    <button
+                      className="btn-mini"
+                      disabled={guardando}
+                      onClick={() => setMulta({
+                        novedad_id: f.novedad_id,
+                        empleado_id: f.empleado_id,
+                        cuotas: "1",
+                        mes_inicio: hoyISO().slice(0, 7),
+                        documento_respaldo_id: null,
+                      })}
+                    >
+                      Llevar al rol
                     </button>
                   )}
                   {esAdmin && !["anulada", "archivada"].includes(f.estado) && (
