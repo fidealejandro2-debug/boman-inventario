@@ -10,9 +10,12 @@ quien tome cada fase no reinvente el diseño ni choque con la numeración de pro
 
 ## Reserva de numeración
 
-Producción (Codex) ocupa hasta **v25**. Nómina reserva **v26 a v32**.
-Quien necesite una migración fuera de nómina antes de que se cierre v32, la toma desde
-**v33** y lo anota aquí. No se reutiliza ni se renumera nada ya ejecutado.
+Producción (Codex) ocupa hasta **v25**. Nómina reserva **v26 a v34**.
+Quien necesite una migración fuera de nómina antes de que se cierre v34, la toma desde
+**v35** y lo anota aquí. No se reutiliza ni se renumera nada ya ejecutado.
+
+> El rango creció de v32 a v34: v32 pasó a ser la trazabilidad para el SGC, v33 el
+> reingreso de personal, y las extensiones (IR, finiquitos) se corrieron a v34.
 
 ---
 
@@ -69,6 +72,12 @@ Lo único que sale hacia el IESS es el rol declarado.
 
 6. **Período cerrado es inmutable.** Corrección = nota de ajuste en un período nuevo,
    nunca edición del cerrado.
+
+7. **La gente vuelve.** Hay personal que deja de venir un par de meses y luego se
+   reincorpora. Si nunca se liquidó es una ausencia (v27) y la antigüedad sigue corriendo;
+   si hubo finiquito es una relación nueva y la antigüedad se reinicia. La persona sigue
+   siendo **la misma fila** en `empleados` en los dos casos: su expediente, su historial
+   disciplinario y su historial de sueldos no se parten nunca. Lo resuelve v33.
 
 ---
 
@@ -360,11 +369,127 @@ certificado laboral · ficha completa con historial.
 
 ---
 
-## v32 · Extensiones
+## v32 · Trazabilidad de cambios (SGC)
+
+Auditoría de campo por **trigger** sobre `empleados`, `empleado_compensacion`,
+`empleado_afiliaciones` y `nomina_parametros` → tabla `nomina_cambios` con tabla,
+registro, campo, valor anterior, valor nuevo, autor, rol de base y motivo. La escribe el
+trigger y no la aplicación: un evento que hay que acordarse de registrar se olvida, y un
+cambio hecho directo contra la base tampoco quedaría rastreado. La bitácora es de solo
+lectura incluso para la app.
+
+Cierra los huecos que dejaba v26:
+
+| Hueco | Cómo queda |
+|---|---|
+| Cambio de cuenta bancaria y de cédula sin rastro | El trigger guarda el valor anterior; la UI los marca como sensibles y alerta |
+| `nomina_parametros` sobrescribible en años ya liquidados | Congelados al cerrar el primer rol del año |
+| `motivo` en texto libre | `motivo_tipo` tipificado en compensación y afiliación |
+| Sin respaldo documental | `documento_respaldo_id` en ambas series |
+| Reducción de sueldo como cambio ordinario | Exige `reduccion_acordada` o `correccion_error` **y** documento (Art. 39 CT) |
+| Desafiliación como cambio ordinario | Exige motivo `desafiliacion` y respaldo |
+| Retroactividad sobre período cerrado | Solo como `correccion_error` con respaldo |
+| Error de digitación sin salida | `rectificar_compensacion_v32`, mientras ningún rol la haya usado |
+
+**Las funciones v26 sin controles quedan revocadas** (`registrar_compensacion_v26`,
+`registrar_afiliacion_v26`, `guardar_nomina_parametros_v26`). Si siguieran disponibles
+bastaría llamarlas para saltarse todo lo anterior. Usa siempre las `_v32`.
+
+Decisión tomada con Fidel: **sin aprobación en dos pasos**. Los cambios surten efecto de
+inmediato y el control es la trazabilidad, no la fricción.
+
+---
+
+## v33 · Reingreso de personal
+
+**Caso real del grupo:** hay gente que deja de venir un par de meses y luego vuelve.
+Eso puede significar dos cosas muy distintas, y el sistema hoy solo soporta una.
+
+### Los dos caminos
+
+**A · No se liquidó.** La relación laboral nunca terminó; la persona simplemente faltó.
+Ya funciona: se registra como ausencia `permiso_sin_sueldo` o `falta_injustificada` en
+v27, el rol de v30 le descuenta los días y la antigüedad sigue corriendo sin cortes.
+No hace falta nada nuevo.
+
+**B · Se liquidó y volvió.** Hubo finiquito y aviso de salida al IESS. **Hoy está
+bloqueado:** `dar_baja_empleado_v26` deja al empleado en `estado = 'liquidado'`, y tanto
+`registrar_afiliacion_v32` como `registrar_compensacion_v32` rechazan a los liquidados.
+No hay forma de reincorporarlo sin crear una persona duplicada — lo que partiría su
+expediente, su historial disciplinario y su historial de sueldos en dos.
+
+### El problema de fondo: la antigüedad
+
+`empleados.fecha_ingreso_real` es una sola fecha, y de ella cuelga casi todo:
+
+- **v27** calcula los períodos de vacaciones por aniversario directamente contra ella
+  (`sql/v27_ausencias_vacaciones.sql`, generación de períodos).
+- Los décimos y el finiquito se proporcionan sobre el tiempo trabajado.
+- Los fondos de reserva cuentan desde el mes 13, pero sobre `fecha_afiliacion`.
+
+Si un reingreso **sobrescribe** esa fecha, se pierden los períodos de vacaciones
+anteriores y su saldo. Si **no** la toca, el sistema le sigue contando antigüedad por
+los meses en que no existió relación laboral. Las dos opciones están mal.
+
+### Modelo propuesto
+
+```
+empleado_vinculos                          -- un renglón por relación laboral
+  empleado_id, secuencia (1, 2, 3…),
+  fecha_ingreso, fecha_salida,
+  motivo_salida, tipo_salida (renuncia|despido|visto_bueno|fin_contrato|abandono),
+  tipo_vinculo (inicial | reingreso_continuidad | reingreso_nueva_relacion),
+  antiguedad_desde date not null,          -- LA CLAVE
+  liquidado boolean, documento_finiquito_id,
+  activo boolean
+  -- índice único parcial: un solo vínculo activo por persona
+```
+
+**`antiguedad_desde` es la pieza que resuelve todo.** En un vínculo inicial vale lo
+mismo que `fecha_ingreso`. En un reingreso lo decide quien lo registra:
+
+- **`reingreso_nueva_relacion`** → `antiguedad_desde = fecha_ingreso` del vínculo nuevo.
+  Se liquidó, se pagó el finiquito, la antigüedad arranca de cero. Vacaciones desde 15
+  días otra vez.
+- **`reingreso_continuidad`** → `antiguedad_desde` conserva la fecha del primer vínculo.
+  Se usa cuando la salida fue formal pero se acuerda respetar la antigüedad, o cuando la
+  liquidación se revierte.
+
+Todo cálculo de antigüedad pasa a leer `antiguedad_desde` del vínculo activo en vez de
+`empleados.fecha_ingreso_real`. Esa fecha se mantiene sincronizada con el vínculo vigente
+por compatibilidad con lo ya construido.
+
+### Alcance de v33
+
+- Tabla `empleado_vinculos` y **backfill**: un vínculo `inicial` por cada empleado
+  existente, con `antiguedad_desde = fecha_ingreso_real`. Nadie cambia de saldo.
+- `registrar_salida_v33` — sustituye a `dar_baja_empleado_v26`: cierra el vínculo, exige
+  tipo y motivo de salida, y registra si hubo liquidación y con qué documento.
+- `registrar_reingreso_v33` — abre un vínculo nuevo sobre la misma persona, obliga a
+  declarar si la antigüedad continúa o se reinicia, y reactiva al empleado.
+- `antiguedad_desde_v33(empleado_id, fecha)` — función única que v27 y v30 deben usar
+  para vacaciones, décimos y finiquito.
+- Vista `vista_vinculos_empleado_v33` con el historial de entradas y salidas.
+- **Ajuste en v27:** la generación de períodos de vacaciones pasa a `antiguedad_desde`.
+  Los períodos del vínculo anterior se marcan `liquidado` si hubo finiquito, o siguen
+  abiertos si fue continuidad.
+
+### Lo que hay que decidir al registrar cada reingreso
+
+Nadie puede decidirlo por el sistema, y es la única pregunta que la UI debe hacer:
+**¿se le pagó finiquito al salir?** Si sí, es relación nueva y la antigüedad se reinicia.
+Si no, es continuidad. Se registra con el documento de respaldo, y v32 lo audita.
+
+---
+
+## v34 · Extensiones
 
 Impuesto a la renta en relación de dependencia · liquidaciones y actas de finiquito ·
 enlace del costo real de mano de obra con `ruta_produccion_etapas.costo_estimado`, que
 cierra el costeo real abierto en v25.
+
+Las liquidaciones se apoyan en `empleado_vinculos` de v33: el finiquito se calcula sobre
+el vínculo que se cierra, no sobre toda la vida de la persona en el grupo.
 
 ---
 
@@ -439,4 +564,6 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | v29 | Codex | instalada y verificada en Supabase 2026-08-30 |
 | v30 | Codex | en corrección desde 2026-08-30; reemplaza borrador incompatible |
 | v31 | Claude | vistas + módulo `app/nomina/` listos localmente — falta ejecutar en Supabase |
-| v32 | — | pendiente |
+| v32 | Claude | SQL, verificación y pestaña de Auditoría listos — falta ejecutar en Supabase |
+| v33 | — | pendiente (reingreso de personal) |
+| v34 | — | pendiente (IR, finiquitos, costo de mano de obra) |
