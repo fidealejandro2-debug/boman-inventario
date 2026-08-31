@@ -199,7 +199,7 @@ export default function ReportesNominaTab() {
           <option value="planilla">Planilla IESS</option>
         </select>
         <button
-          className="btn-secundario"
+          className="secondary"
           onClick={() => exportarCSV(`nomina_${reporte}`, datosActuales as any[])}
           disabled={!datosActuales.length}
         >

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
+import EmpleadoForm from "./EmpleadoForm";
+import { dinero, soloFecha, type Empresa } from "./lib";
 
 type Personal = {
   empleado_id: string;
@@ -37,16 +39,19 @@ type DocPorVencer = {
   dias_restantes: number;
 };
 
-const dinero = (v: number | null | undefined) =>
-  v === null || v === undefined
-    ? "—"
-    : v.toLocaleString("es-EC", { style: "currency", currency: "USD" });
-
-const soloFecha = (v: string | null) =>
-  v ? new Date(v + "T00:00:00").toLocaleDateString("es-EC") : "—";
-
-export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean }) {
+export default function PersonalTab({
+  puedeEscribir,
+  empresas,
+  grupoId,
+  onCambio,
+}: {
+  puedeEscribir: boolean;
+  empresas: Empresa[];
+  grupoId: string;
+  onCambio: () => void;
+}) {
   const supabase = createClient();
+  const [mostrarForm, setMostrarForm] = useState(false);
   const [filas, setFilas] = useState<Personal[]>([]);
   const [vencen, setVencen] = useState<DocPorVencer[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -57,29 +62,26 @@ export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean 
   const [afiliacion, setAfiliacion] = useState("");
   const [estado, setEstado] = useState("activo");
 
+  async function cargar() {
+    setCargando(true);
+    const [personal, documentos] = await Promise.all([
+      supabase.from("vista_personal_vigente").select("*").order("nombre_completo"),
+      supabase.from("vista_documentos_por_vencer").select("*").order("dias_restantes"),
+    ]);
+
+    if (personal.error) setError(personal.error.message);
+    else setFilas((personal.data as Personal[]) ?? []);
+    // La alerta de caducidades es secundaria: si falla no bloquea la lista.
+    if (!documentos.error) setVencen((documentos.data as DocPorVencer[]) ?? []);
+    setCargando(false);
+  }
+
   useEffect(() => {
-    (async () => {
-      setCargando(true);
-      const [personal, documentos] = await Promise.all([
-        supabase
-          .from("vista_personal_vigente")
-          .select("*")
-          .order("nombre_completo"),
-        supabase
-          .from("vista_documentos_por_vencer")
-          .select("*")
-          .order("dias_restantes"),
-      ]);
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      if (personal.error) setError(personal.error.message);
-      else setFilas((personal.data as Personal[]) ?? []);
-      // La alerta de caducidades es secundaria: si falla no bloquea la lista.
-      if (!documentos.error) setVencen((documentos.data as DocPorVencer[]) ?? []);
-      setCargando(false);
-    })();
-  }, [supabase]);
-
-  const empresas = useMemo(() => {
+  const empresasAfiliadoras = useMemo(() => {
     const set = new Set<string>();
     filas.forEach((f) => {
       if (f.empresa_afiliacion) set.add(f.empresa_afiliacion);
@@ -135,28 +137,28 @@ export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean 
     <>
       <div className="kpis">
         <div className="kpi">
-          <span className="kpi-valor">{visibles.length}</span>
-          <span className="kpi-label">Personas</span>
+          <span className="valor">{visibles.length}</span>
+          <span className="label">Personas</span>
         </div>
         <div className="kpi">
-          <span className="kpi-valor">{dinero(totales.real)}</span>
-          <span className="kpi-label">Masa salarial real</span>
+          <span className="valor">{dinero(totales.real)}</span>
+          <span className="label">Masa salarial real</span>
         </div>
         <div className="kpi">
-          <span className="kpi-valor">{dinero(totales.declarado)}</span>
-          <span className="kpi-label">Masa declarada</span>
+          <span className="valor">{dinero(totales.declarado)}</span>
+          <span className="label">Masa declarada</span>
         </div>
         <div className="kpi">
-          <span className="kpi-valor">{dinero(totales.brecha)}</span>
-          <span className="kpi-label">Brecha mensual</span>
+          <span className="valor">{dinero(totales.brecha)}</span>
+          <span className="label">Brecha mensual</span>
         </div>
         <div className="kpi">
-          <span className="kpi-valor">{totales.sinAfiliar}</span>
-          <span className="kpi-label">No afiliados</span>
+          <span className="valor">{totales.sinAfiliar}</span>
+          <span className="label">No afiliados</span>
         </div>
         <div className="kpi">
-          <span className="kpi-valor">{totales.otroRuc}</span>
-          <span className="kpi-label">Paga otro RUC</span>
+          <span className="valor">{totales.otroRuc}</span>
+          <span className="label">Paga otro RUC</span>
         </div>
       </div>
 
@@ -180,7 +182,25 @@ export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean 
         </p>
       )}
 
+      {mostrarForm && puedeEscribir && (
+        <EmpleadoForm
+          empresas={empresas}
+          grupoId={grupoId}
+          onCancelar={() => setMostrarForm(false)}
+          onListo={() => {
+            setMostrarForm(false);
+            cargar();
+            onCambio();
+          }}
+        />
+      )}
+
       <div className="filtros">
+        {puedeEscribir && (
+          <button onClick={() => setMostrarForm(!mostrarForm)}>
+            {mostrarForm ? "Cancelar" : "Nueva persona"}
+          </button>
+        )}
         <input
           type="search"
           placeholder="Buscar por nombre, cédula o cargo"
@@ -195,7 +215,7 @@ export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean 
         </select>
         <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>
           <option value="">Toda empresa afiliadora</option>
-          {empresas.map((e) => (
+          {empresasAfiliadoras.map((e) => (
             <option key={e} value={e}>
               {e}
             </option>
@@ -208,7 +228,7 @@ export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean 
           <option value="otro_ruc">Paga un RUC distinto al que afilia</option>
         </select>
         <button
-          className="btn-secundario"
+          className="secondary"
           onClick={() => {
             setBusqueda("");
             setEmpresa("");
@@ -219,7 +239,7 @@ export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean 
           Limpiar
         </button>
         <button
-          className="btn-secundario"
+          className="secondary"
           onClick={() => exportarCSV("personal_nomina", visibles)}
           disabled={!visibles.length}
         >
@@ -298,14 +318,6 @@ export default function PersonalTab({ puedeEscribir }: { puedeEscribir: boolean 
         </table>
       </div>
 
-      {puedeEscribir && (
-        <p className="ayuda">
-          El alta de personal, los cambios de afiliación y de sueldo se registran con los
-          RPC de v26 (<code>guardar_empleado_v26</code>,{" "}
-          <code>registrar_afiliacion_v26</code>, <code>registrar_compensacion_v26</code>).
-          El formulario de alta entra en la siguiente tanda de la interfaz.
-        </p>
-      )}
     </>
   );
 }

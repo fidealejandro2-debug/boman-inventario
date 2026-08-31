@@ -143,7 +143,7 @@ export default function RolesTab() {
           onChange={(e) => setBusqueda(e.target.value)}
         />
         <button
-          className="btn-secundario"
+          className="secondary"
           onClick={() => exportarCSV("rol_real", visibles)}
           disabled={!visibles.length}
         >
@@ -154,30 +154,30 @@ export default function RolesTab() {
       {periodo && (
         <div className="kpis">
           <div className="kpi">
-            <span className="kpi-valor">{periodo.personas}</span>
-            <span className="kpi-label">
+            <span className="valor">{periodo.personas}</span>
+            <span className="label">
               Personas ({periodo.no_afiliados} sin afiliar)
             </span>
           </div>
           <div className="kpi">
-            <span className="kpi-valor">{dinero(periodo.neto_a_pagar)}</span>
-            <span className="kpi-label">Neto a pagar</span>
+            <span className="valor">{dinero(periodo.neto_a_pagar)}</span>
+            <span className="label">Neto a pagar</span>
           </div>
           <div className="kpi">
-            <span className="kpi-valor">{dinero(periodo.neto_declarado)}</span>
-            <span className="kpi-label">Neto declarado</span>
+            <span className="valor">{dinero(periodo.neto_declarado)}</span>
+            <span className="label">Neto declarado</span>
           </div>
           <div className="kpi">
-            <span className="kpi-valor">{dinero(periodo.brecha_total)}</span>
-            <span className="kpi-label">Brecha del período</span>
+            <span className="valor">{dinero(periodo.brecha_total)}</span>
+            <span className="label">Brecha del período</span>
           </div>
           <div className="kpi">
-            <span className="kpi-valor">{dinero(periodo.aportes_iess)}</span>
-            <span className="kpi-label">Aportes IESS</span>
+            <span className="valor">{dinero(periodo.aportes_iess)}</span>
+            <span className="label">Aportes IESS</span>
           </div>
           <div className="kpi">
-            <span className="kpi-valor">{dinero(periodo.costo_empleador_real)}</span>
-            <span className="kpi-label">Costo empleador real</span>
+            <span className="valor">{dinero(periodo.costo_empleador_real)}</span>
+            <span className="label">Costo empleador real</span>
           </div>
         </div>
       )}

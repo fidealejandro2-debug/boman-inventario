@@ -618,3 +618,144 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
   .container { max-width: none; padding: 0; }
   .card { box-shadow: none; break-inside: avoid; }
 }
+
+/* ---------- Nómina (v31) ---------- */
+
+.card-interna {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.card-interna h4 { margin: 0 0 4px; color: #1f3864; }
+.card-interna h5 {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: #6b7280;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px 14px;
+  margin-bottom: 14px;
+}
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+.form-grid label small { color: #6b7280; font-size: 11px; }
+.form-grid .ancho-total { grid-column: 1 / -1; }
+.form-grid textarea {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.form-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+button.btn-mini {
+  padding: 4px 9px;
+  font-size: 12px;
+  margin-right: 4px;
+  margin-bottom: 2px;
+}
+
+/* ---------- Documento imprimible (llamados de atención) ---------- */
+
+.documento-imprimible {
+  background: white;
+  padding: 32px 36px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  max-width: 820px;
+  margin: 0 auto;
+  line-height: 1.6;
+  color: #111827;
+}
+.documento-imprimible h1 {
+  font-size: 20px;
+  letter-spacing: 1px;
+  text-align: center;
+  margin: 0 0 6px;
+}
+.documento-imprimible h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: #1f3864;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 4px;
+  margin: 22px 0 8px;
+}
+.documento-imprimible header { text-align: center; margin-bottom: 8px; }
+.documento-imprimible .doc-ref { font-size: 12px; color: #6b7280; margin: 2px 0; }
+.documento-imprimible .doc-parrafo { white-space: pre-wrap; text-align: justify; }
+.documento-imprimible .ayuda-doc { font-size: 12px; color: #6b7280; }
+
+.doc-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 6px 18px;
+  margin: 0;
+}
+.doc-datos div { display: flex; gap: 6px; }
+.doc-datos dt { font-weight: 600; color: #374151; }
+.doc-datos dt::after { content: ":"; }
+.doc-datos dd { margin: 0; }
+
+.doc-lineas-descargo { display: flex; flex-direction: column; gap: 22px; margin-top: 14px; }
+.doc-lineas-descargo span { border-bottom: 1px solid #9ca3af; display: block; }
+
+.doc-firmas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 54px;
+  text-align: center;
+}
+.doc-firmas p { margin: 2px 0; font-size: 13px; }
+.linea-firma {
+  display: block;
+  border-top: 1px solid #374151;
+  margin-bottom: 6px;
+}
+
+.doc-pie {
+  margin-top: 32px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+@media print {
+  .no-imprimir, .navbar { display: none !important; }
+  .container { padding: 0; max-width: none; }
+  .documento-imprimible {
+    border: 0;
+    padding: 0;
+    max-width: none;
+    box-shadow: none;
+  }
+  .documento-imprimible section { break-inside: avoid; }
+}
