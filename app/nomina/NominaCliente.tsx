@@ -74,7 +74,7 @@ export default function NominaCliente({
       supabase
         .from("vista_personal_vigente")
         .select(
-          "empleado_id, identificacion, nombre_completo, cargo, departamento_id, departamento_nombre, estado, afiliado, empresa_afiliacion_id, empresa_pagadora_id"
+          "empleado_id, grupo_id, identificacion, nombre_completo, cargo, departamento_id, departamento_nombre, estado, afiliado, empresa_afiliacion_id, empresa_pagadora_id"
         )
         .order("nombre_completo"),
       supabase
@@ -87,13 +87,24 @@ export default function NominaCliente({
         .select("*")
         .order("nombre"),
     ]);
-    if (!e.error) setEmpleados((e.data as Empleado[]) ?? []);
-    if (!dep.error) setDepartamentos((dep.data as Departamento[]) ?? []);
+    const empleadosCargados = !e.error ? ((e.data as Empleado[]) ?? []) : [];
+    if (!e.error) setEmpleados(empleadosCargados);
+    const departamentosCargados = !dep.error
+      ? ((dep.data as Departamento[]) ?? [])
+      : [];
+    if (!dep.error) setDepartamentos(departamentosCargados);
+    let empresasCargadas: (Empresa & { grupo_id: string })[] = [];
     if (!emp.error) {
-      const filas = (emp.data as (Empresa & { grupo_id: string })[]) ?? [];
-      setEmpresas(filas);
-      if (filas.length) setGrupoId(filas[0].grupo_id);
+      empresasCargadas = (emp.data as (Empresa & { grupo_id: string })[]) ?? [];
+      setEmpresas(empresasCargadas);
     }
+    // El grupo también está presente en la vista de departamentos. Es un
+    // respaldo válido cuando RLS no devuelve empresas activas al usuario.
+    const grupoDetectado =
+      empresasCargadas[0]?.grupo_id ??
+      departamentosCargados[0]?.grupo_id ??
+      empleadosCargados[0]?.grupo_id;
+    if (grupoDetectado) setGrupoId(grupoDetectado);
     setListo(true);
   }
 

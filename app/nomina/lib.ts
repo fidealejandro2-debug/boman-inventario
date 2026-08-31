@@ -41,6 +41,7 @@ export type EmpleadoEdicion = {
 
 export type Empleado = {
   empleado_id: string;
+  grupo_id: string;
   identificacion: string;
   nombre_completo: string;
   cargo: string | null;

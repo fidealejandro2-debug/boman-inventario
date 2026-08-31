@@ -78,16 +78,26 @@ export default function DepartamentosTab({
   async function guardar() {
     setError(null);
     setMensaje(null);
-    if (!grupoId) return setError("No se encontro el grupo economico.");
+    // En una edición, el grupo fiable es el que ya pertenece al departamento.
+    // La lista de empresas puede estar vacía por RLS o por no tener RUC activos;
+    // eso no debe impedir renombrar un departamento existente.
+    const grupoDepartamento = form.departamento_id
+      ? departamentos.find((d) => d.departamento_id === form.departamento_id)?.grupo_id
+      : null;
+    const grupoEfectivo = grupoDepartamento || grupoId;
+    if (!grupoEfectivo)
+      return setError(
+        "No se encontró el grupo económico. Recarga la página antes de crear el departamento."
+      );
     if (!form.codigo.trim() || !form.nombre.trim())
       return setError("Codigo y nombre son obligatorios.");
 
     setGuardando(true);
     const { data, error: err } = await supabase.rpc(
-      "guardar_departamento_nomina_v34",
+      "guardar_departamento_nomina_v38",
       {
         p_departamento_id: form.departamento_id || null,
-        p_grupo_id: grupoId,
+        p_grupo_id: grupoEfectivo,
         p_codigo: form.codigo,
         p_nombre: form.nombre,
         p_descripcion: form.descripcion || null,
