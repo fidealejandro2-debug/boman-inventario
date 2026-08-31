@@ -207,7 +207,13 @@ export default function NominaCliente({
               empresas={empresas}
             />
           )}
-          {tab === "roles" && <RolesTab />}
+          {tab === "roles" && (
+            <RolesTab
+              puedeEscribir={puedeEscribir}
+              grupoId={grupoId}
+              empresas={empresas}
+            />
+          )}
           {tab === "reportes" && <ReportesNominaTab />}
           {tab === "auditoria" && <AuditoriaTab />}
           {tab === "parametros" && <ParametrosTab esAdmin={esAdmin} />}
