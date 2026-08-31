@@ -1,4 +1,4 @@
-# Plan · Control de nómina multi-RUC (v26 → v36)
+# Plan · Control de nómina multi-RUC (v26 → v37)
 
 Documento de trabajo compartido entre Fidel, Codex y Claude.
 **Ningún SQL de nómina está escrito todavía.** Esto define el modelo acordado para que
@@ -10,13 +10,13 @@ quien tome cada fase no reinvente el diseño ni choque con la numeración de pro
 
 ## Reserva de numeración
 
-Producción (Codex) ocupa hasta **v25**. Nómina y administración reservan **v26 a v36**.
-Quien necesite una migración fuera de este bloque antes de que se cierre v36, la toma
-desde **v37** y lo anota aquí. No se reutiliza ni se renumera nada ya ejecutado.
+Producción (Codex) ocupa hasta **v25**. Nómina y administración reservan **v26 a v37**.
+Quien necesite una migración fuera de este bloque antes de que se cierre v37, la toma
+desde **v38** y lo anota aquí. No se reutiliza ni se renumera nada ya ejecutado.
 
-> El rango creció hasta v36: v32 pasó a ser la trazabilidad para el SGC, v33 el
+> El rango creció hasta v37: v32 pasó a ser la trazabilidad para el SGC, v33 el
 > reingreso de personal, v34 el catálogo de departamentos, v35 la matriz de permisos
-> por rol y las extensiones (IR, finiquitos) se corrieron a v36.
+> por rol, v36 las cargas familiares y las extensiones (IR, finiquitos) se corrieron a v37.
 
 ---
 
@@ -511,7 +511,14 @@ protección frente a respuestas desordenadas al cambiar de expediente.
 
 ---
 
-## v36 · Extensiones
+## v36 · Cargas familiares
+
+- Expediente por empleado de cónyuge, conviviente e hijos.
+- Vigencias históricas sin borrado, respaldo documental y discapacidad acreditada.
+- Control de mayoría de edad y elegibilidad reutilizable para el 5% de utilidades.
+- Interfaz operativa dentro de Nómina con búsqueda, filtros y alertas.
+
+## v37 · Extensiones
 
 Impuesto a la renta en relación de dependencia · liquidaciones y actas de finiquito ·
 enlace del costo real de mano de obra con `ruta_produccion_etapas.costo_estimado`, que
@@ -595,6 +602,7 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | v31 | Claude | vistas + módulo `app/nomina/` listos localmente — falta ejecutar en Supabase |
 | v32 | Claude | SQL, verificación y pestaña de Auditoría listos — falta ejecutar en Supabase |
 | v33 | Claude | SQL, verificación y pestaña "Ingresos y salidas" listos — falta ejecutar en Supabase |
-| v34 | Codex | SQL, verificación e interfaz de departamentos listos localmente — falta ejecutar en Supabase |
-| v35 | Codex | SQL, verificación e interfaz de permisos listos localmente — falta ejecutar en Supabase |
-| v36 | — | pendiente (IR, finiquitos, costo de mano de obra) |
+| v34 | Codex | instalada y subida (departamentos) |
+| v35 | Codex | instalada y subida (permisos por rol) |
+| v36 | Codex | SQL, verificación e interfaz de cargas familiares listos — falta ejecutar en Supabase |
+| v37 | — | pendiente (IR, finiquitos, costo de mano de obra) |

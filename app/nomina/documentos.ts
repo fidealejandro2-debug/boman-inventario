@@ -22,6 +22,7 @@ export const TIPOS_DOCUMENTO: { valor: string; etiqueta: string }[] = [
   { valor: "foto", etiqueta: "Foto" },
   { valor: "aviso_entrada_iess", etiqueta: "Aviso de entrada IESS" },
   { valor: "acta_finiquito", etiqueta: "Acta de finiquito" },
+  { valor: "carga_familiar", etiqueta: "Carga familiar" },
   { valor: "otro", etiqueta: "Otro" },
 ];
 

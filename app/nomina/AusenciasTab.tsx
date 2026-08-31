@@ -13,6 +13,7 @@ import {
   type Empleado,
 } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
+import CalendarioFeriados from "./CalendarioFeriados";
 
 type Ausencia = {
   id: string;
@@ -48,9 +49,11 @@ type Saldo = {
 export default function AusenciasTab({
   puedeEscribir,
   empleados,
+  grupoId,
 }: {
   puedeEscribir: boolean;
   empleados: Empleado[];
+  grupoId: string;
 }) {
   const supabase = createClient();
   const [ausencias, setAusencias] = useState<Ausencia[]>([]);
@@ -185,6 +188,8 @@ export default function AusenciasTab({
     <>
       {error && <p className="error">{error}</p>}
       {aviso && <p className="aviso">{aviso}</p>}
+
+      <CalendarioFeriados grupoId={grupoId} puedeEscribir={puedeEscribir} />
 
       {conAlerta.length > 0 && (
         <p className="aviso">
