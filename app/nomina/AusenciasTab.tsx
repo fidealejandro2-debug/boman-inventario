@@ -9,6 +9,7 @@ import {
   soloFecha,
   hoyISO,
   mensajeError,
+  pedirMotivo,
   ETIQUETA_AUSENCIA,
   type Empleado,
 } from "./lib";
@@ -170,8 +171,9 @@ export default function AusenciasTab({
   }
 
   async function anular(id: string) {
-    const motivo = window.prompt("Motivo de la anulación:");
-    if (!motivo?.trim()) return;
+    const { motivo, error: errMotivo } = pedirMotivo("Motivo de la anulación:");
+    if (errMotivo) return setError(errMotivo);
+    if (!motivo) return;
     setGuardando(true);
     const { error } = await supabase.rpc("anular_ausencia_v27", {
       p_ausencia_id: id,

@@ -9,6 +9,7 @@ import {
   soloFecha,
   hoyISO,
   mensajeError,
+  pedirMotivo,
   ETIQUETA_NOVEDAD,
   type Empleado,
   type Empresa,
@@ -269,8 +270,9 @@ export default function NovedadesTab({
   // obligatorio para anular: anular_novedad_v28 se niega mientras la novedad
   // tenga un descuento colgado.
   async function revertirMulta(id: string) {
-    const motivo = window.prompt("Motivo para revertir la multa:");
-    if (!motivo?.trim()) return;
+    const { motivo, error: errMotivo } = pedirMotivo("Motivo para revertir la multa:");
+    if (errMotivo) return setError(errMotivo);
+    if (!motivo) return;
     setGuardando(true);
     setError(null);
     const { error } = await supabase.rpc("revertir_descuento_multa_v29", {

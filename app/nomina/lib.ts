@@ -165,3 +165,28 @@ export function mensajeError(e: { message?: string } | null): string {
   const raw = e?.message ?? "Error desconocido";
   return raw.replace(/^.*?violates row-level security.*$/i, "No tienes permiso para esta acción.");
 }
+
+/**
+ * Pide un motivo por pantalla exigiendo el mínimo que impone la base.
+ *
+ * Las acciones que dejan rastro —cerrar o reabrir un período, anular un
+ * anticipo, suspender o condonar un descuento, revertir una multa, anular una
+ * ausencia— rechazan motivos de menos de 10 caracteres. Sin esta comprobación
+ * el usuario escribe "error", pierde el viaje y recibe un mensaje de Postgres.
+ *
+ * Devuelve `{}` si canceló, `{ error }` si el texto es demasiado corto,
+ * o `{ motivo }` cuando sirve.
+ */
+export function pedirMotivo(
+  texto: string,
+  minimo = 10
+): { motivo?: string; error?: string } {
+  const respuesta = window.prompt(`${texto}\n\n(mínimo ${minimo} caracteres)`);
+  if (respuesta === null) return {};
+  if (respuesta.trim().length < minimo) {
+    return {
+      error: `El motivo debe tener al menos ${minimo} caracteres. No se hizo ningún cambio.`,
+    };
+  }
+  return { motivo: respuesta };
+}

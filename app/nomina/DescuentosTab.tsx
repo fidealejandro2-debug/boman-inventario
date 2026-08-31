@@ -9,6 +9,7 @@ import {
   soloFecha,
   hoyISO,
   mensajeError,
+  pedirMotivo,
   ETIQUETA_ORIGEN_DESCUENTO,
   type Empleado,
   type Empresa,
@@ -265,8 +266,9 @@ export default function DescuentosTab({
   }
 
   async function anularAnticipo(id: string) {
-    const motivo = window.prompt("Motivo de la anulación:");
-    if (!motivo?.trim()) return;
+    const { motivo, error: errMotivo } = pedirMotivo("Motivo de la anulación:");
+    if (errMotivo) return setError(errMotivo);
+    if (!motivo) return;
     setGuardando(true);
     const { error } = await supabase.rpc("anular_anticipo_v29", {
       p_anticipo_id: id,
@@ -280,8 +282,9 @@ export default function DescuentosTab({
   }
 
   async function accionDescuento(id: string, accion: string) {
-    const motivo = window.prompt(`Motivo para ${accion} este descuento:`);
-    if (!motivo?.trim()) return;
+    const { motivo, error: errMotivo } = pedirMotivo(`Motivo para ${accion} este descuento:`);
+    if (errMotivo) return setError(errMotivo);
+    if (!motivo) return;
     setGuardando(true);
     const { error } = await supabase.rpc("resolver_descuento_programado_v29", {
       p_descuento_id: id,
