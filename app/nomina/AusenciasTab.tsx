@@ -149,7 +149,9 @@ export default function AusenciasTab({
 
   async function generarPeriodos(empleadoId: string) {
     setGuardando(true);
-    const { error } = await supabase.rpc("generar_periodos_vacaciones_v27", {
+    // v33: cuenta sobre la antigüedad reconocida del vínculo, no sobre la
+    // fecha de ingreso, que cambia en cada reingreso.
+    const { error } = await supabase.rpc("generar_periodos_vacaciones_v33", {
       p_empleado_id: empleadoId,
       p_hasta: hoyISO(),
       p_idempotency_key: nuevaClaveIdempotencia(),

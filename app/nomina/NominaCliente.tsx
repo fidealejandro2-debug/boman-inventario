@@ -10,10 +10,12 @@ import RolesTab from "./RolesTab";
 import ReportesNominaTab from "./ReportesNominaTab";
 import ParametrosTab from "./ParametrosTab";
 import AuditoriaTab from "./AuditoriaTab";
+import VinculosTab from "./VinculosTab";
 import type { Empleado, Empresa } from "./lib";
 
 type Pestana =
   | "personal"
+  | "vinculos"
   | "ausencias"
   | "novedades"
   | "descuentos"
@@ -24,6 +26,7 @@ type Pestana =
 
 const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "personal", etiqueta: "Personal" },
+  { id: "vinculos", etiqueta: "Ingresos y salidas" },
   { id: "ausencias", etiqueta: "Ausencias y vacaciones" },
   { id: "novedades", etiqueta: "Novedades" },
   { id: "descuentos", etiqueta: "Anticipos y descuentos" },
@@ -107,6 +110,7 @@ export default function NominaCliente({ rol }: { rol: string }) {
               onCambio={cargarBase}
             />
           )}
+          {tab === "vinculos" && <VinculosTab puedeEscribir={puedeEscribir} />}
           {tab === "ausencias" && (
             <AusenciasTab puedeEscribir={puedeEscribir} empleados={empleados} />
           )}

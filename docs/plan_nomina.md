@@ -565,5 +565,5 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | v30 | Codex | instalada y verificada en Supabase 2026-08-30; V31 alineada |
 | v31 | Claude | vistas + módulo `app/nomina/` listos localmente — falta ejecutar en Supabase |
 | v32 | Claude | SQL, verificación y pestaña de Auditoría listos — falta ejecutar en Supabase |
-| v33 | — | pendiente (reingreso de personal) |
+| v33 | Claude | SQL, verificación y pestaña "Ingresos y salidas" listos — falta ejecutar en Supabase |
 | v34 | — | pendiente (IR, finiquitos, costo de mano de obra) |
