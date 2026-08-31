@@ -12,6 +12,7 @@ type Usuario = {
   rol: Rol;
   entidad_id: string | null;
   almacen_ids: string[];
+  configuracion_incompleta: boolean;
   activo: boolean;
   confirmado: boolean;
   ultimo_acceso: string | null;
@@ -131,6 +132,12 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
 
   async function guardar(usuario: Usuario) {
     setMsg(null);
+    const rol = (edicion.rol ?? usuario.rol) as Rol;
+    const almacenIds = edicion.almacen_ids ?? [];
+    if (!ROLES_SIN_ALMACEN.includes(rol) && Boolean(edicion.activo) && !almacenIds.length) {
+      setMsg({ tipo: "error", texto: "Selecciona al menos un almacén antes de guardar." });
+      return;
+    }
     setGuardando(true);
     try {
       const data = await peticion("/api/admin/usuarios", {
@@ -140,7 +147,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
           id: usuario.id,
           nombre_completo: edicion.nombre_completo,
           rol: edicion.rol,
-          almacen_ids: ROLES_SIN_ALMACEN.includes(edicion.rol ?? usuario.rol) ? [] : edicion.almacen_ids ?? [],
+          almacen_ids: ROLES_SIN_ALMACEN.includes(rol) ? [] : almacenIds,
           activo: edicion.activo,
         }),
       });
@@ -380,7 +387,9 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                             Activo
                           </label>
                         ) : (
-                          <span className={`badge ${usuario.activo ? "ok" : "cero"}`}>{usuario.activo ? "Activo" : "Inactivo"}</span>
+                          <span className={`badge ${usuario.configuracion_incompleta ? "bajo" : usuario.activo ? "ok" : "cero"}`}>
+                            {usuario.configuracion_incompleta ? "Falta almacén" : usuario.activo ? "Activo" : "Inactivo"}
+                          </span>
                         )}
                       </td>
                       <td className="conteo">
