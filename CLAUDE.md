@@ -102,7 +102,9 @@ sql/
   v25_rutas_etapas_lotes_produccion.sql rutas versionadas, etapas, responsables y lotes
   v26_nomina_personal_expediente.sql personal multi-RUC, afiliaciones, compensacion y expediente privado
   v27_ausencias_vacaciones.sql calendarios confirmados, periodos por aniversario y vacaciones FIFO
-  verificacion_v18.sql ... verificacion_v27.sql comprobaciones de cada migración
+  v28_novedades_disciplinarias.sql expediente sancionatorio, correlativos por RUC y evidencias
+  v29_anticipos_descuentos.sql anticipos, cuotas, multas y motor de descuentos con topes
+  verificacion_v18.sql ... verificacion_v29.sql comprobaciones de cada migración
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 

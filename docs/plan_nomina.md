@@ -410,7 +410,7 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | v26 | Claude | SQL escrito 2026-08-30 — falta ejecutar en Supabase y la UI |
 | v27 | Codex | SQL y verificación listos localmente — falta ejecutar en Supabase |
 | v28 | Claude | SQL y verificación listos localmente — falta ejecutar en Supabase |
-| v29 | Codex | en curso desde 2026-08-30 |
-| v30 | — | pendiente |
+| v29 | Codex | instalada y verificada en Supabase 2026-08-30 |
+| v30 | Codex | en corrección desde 2026-08-30; reemplaza borrador incompatible |
 | v31 | — | pendiente |
 | v32 | — | pendiente |
