@@ -66,7 +66,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerControl = ["admin", "control", "gerencia"].includes(perfil.rol);
   const puedeVerVentas = ["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol);
   const puedeVerCompras = ["admin", "control", "bodega", "gerencia"].includes(perfil.rol);
-  const puedeVerProduccion = ["admin", "control", "bodega", "gerencia"].includes(perfil.rol);
+  const puedeVerProduccion = ["admin", "control", "bodega", "logistica", "gerencia"].includes(perfil.rol);
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -98,7 +98,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       etiqueta: "Producción",
       icono: "OP",
       opciones: [
-        { href: "/produccion", etiqueta: "Órdenes, fórmulas y costos", descripcion: "Materiales en proceso, mermas, resultado y costo real por RUC", visible: puedeVerProduccion },
+        { href: "/produccion", etiqueta: "Órdenes, rutas, lotes y costos", descripcion: "Etapas, responsables, maquila, materiales, calidad y costo real por RUC", visible: puedeVerProduccion },
       ],
     },
     {

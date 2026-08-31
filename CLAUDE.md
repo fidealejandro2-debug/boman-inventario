@@ -92,6 +92,15 @@ sql/
   verificacion_v16.sql       comprueba trazabilidad, seguridad y saldos de incidencias
   v17_rectificacion_recepciones.sql reversión compensatoria y auditada exclusiva de admin
   verificacion_v17.sql       comprueba seguridad e integridad de las rectificaciones
+  v18_grupo_economico_multiempresa.sql grupo económico, empresas/RUC y almacenes operados
+  v19_establecimientos_por_ruc.sql establecimientos SRI, puntos de emisión y equivalencias
+  v20_integridad_stock_reversiones.sql motor de stock, devoluciones y reversiones controladas
+  v21_compras_multiempresa.sql proveedores, órdenes y recepciones de compra por RUC
+  v22_bloqueo_conteos.sql    responsable exclusivo, versión y concurrencia de conteos
+  v23_maestro_produccion_costos.sql clasificación productiva, unidades y fórmulas/BOM
+  v24_ordenes_produccion.sql órdenes, WIP, consumo, merma y producto terminado
+  v25_rutas_etapas_lotes_produccion.sql rutas versionadas, etapas, responsables y lotes
+  verificacion_v18.sql ... verificacion_v25.sql comprobaciones de cada migración
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 
@@ -175,6 +184,8 @@ Expone stock físico, reservado, disponible, tránsito de entrada/salida y repos
 **No inventar titularidad histórica de inventario.** Los movimientos anteriores a v18 que no puedan relacionarse inequívocamente con un RUC permanecen visibles como pendientes de clasificación en `vista_pendientes_multiempresa`. La titularidad, cesiones intercompañía y eliminaciones para estados consolidados deben implementarse en un libro separado, sin partir ni sobrescribir `inventario`.
 
 **Los movimientos NO se borran.** `DELETE` está revocado a nivel de base de datos. Solo anulación lógica: el registro queda visible tachado, con etiqueta ANULADO, motivo, quién y cuándo. Boman está construyendo su SGC ISO 9001:2015 y la trazabilidad es requisito, no adorno.
+
+**Las rutas de producción son versionadas y las órdenes conservan una instantánea.** Desde v25 una ruta activa se asigna a una fórmula y sus etapas se copian al crear la orden. Una nueva versión solo afecta órdenes futuras. El cierre productivo se bloquea mientras existan etapas pendientes o en proceso. `lotes_produccion` identifica el resultado de la orden, pero todavía no representa saldo disponible por lote; el saldo físico continúa en `inventario`.
 
 **La importación de stock genera ajustes, no sobrescribe en silencio.** Por eso cada línea de una toma física es individualmente anulable y aparece en el kardex del producto.
 

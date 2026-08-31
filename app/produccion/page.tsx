@@ -7,7 +7,7 @@ import ProduccionCliente from "./ProduccionCliente";
 
 export default async function ProduccionPage() {
   const perfil = await getPerfilActual();
-  if (!["admin", "control", "bodega", "gerencia"].includes(perfil.rol)) {
+  if (!["admin", "control", "bodega", "logistica", "gerencia"].includes(perfil.rol)) {
     redirect("/dashboard");
   }
   return (
