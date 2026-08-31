@@ -340,6 +340,22 @@ columnas de asistencia de la línea.
 
 ---
 
+### Notas de v26 para quien siga con v27
+
+- Se agrega `nomina` a `rol_usuario` en un **paso 1 separado** al inicio del archivo
+  (Postgres no deja usar el valor en la misma transacción en que se crea).
+- Helper de acceso: `usuario_puede_nomina(p_escritura boolean)`. `admin` y `nomina`
+  escriben, `gerencia` solo lee. Úsalo en las policies de v27.
+- Toda escritura pasa por RPC; las policies son **solo de lectura**.
+- Las vistas llevan `with (security_invoker = true)` — sin eso se saltan el RLS de las
+  tablas base y cualquier autenticado leería sueldos.
+- Auditoría: `registrar_evento_nomina_v26(entidad, entidad_id, empleado_id, tipo, detalle)`.
+  Está revocada para `authenticated`, solo se llama desde otros RPC del módulo.
+- `public.es_cedula_ecuatoriana(text)` valida el dígito verificador (módulo 10) y queda
+  disponible para reutilizar.
+- La antigüedad para vacaciones se cuenta sobre `empleados.fecha_ingreso_real`, nunca
+  sobre `empleado_afiliaciones.fecha_afiliacion`.
+
 ## Pendiente antes de escribir v26
 
 - [ ] Corte inicial: qué persona está en qué RUC hoy, con qué sueldo declarado, con qué
@@ -355,8 +371,8 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 
 | Fase | Responsable | Estado |
 |---|---|---|
-| v26 | — | pendiente |
-| v27 | — | pendiente |
+| v26 | Claude | SQL escrito 2026-08-30 — falta ejecutar en Supabase y la UI |
+| v27 | Codex | asignada |
 | v28 | — | pendiente |
 | v29 | — | pendiente |
 | v30 | — | pendiente |
