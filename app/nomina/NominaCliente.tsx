@@ -134,6 +134,18 @@ export default function NominaCliente({
         ))}
       </div>
 
+      {/* Sin empresas visibles, los desplegables de empresa salen vacíos y no
+          se puede dar de alta a nadie ni elegir quién paga. Antes fallaba en
+          silencio: el selector simplemente no ofrecía opciones. */}
+      {listo && !empresas.length && (
+        <p className="aviso">
+          Tu usuario no puede ver ninguna empresa activa, así que los selectores de
+          empresa aparecerán vacíos. Si tu rol es <strong>nómina</strong>, hace falta
+          ejecutar <code>sql/v39_nomina_lee_empresas.sql</code>; si no, pedí que te
+          asignen empresas en Administración.
+        </p>
+      )}
+
       {!listo ? (
         <p className="ayuda">Cargando…</p>
       ) : (
