@@ -246,6 +246,36 @@ Al calcular el rol se leen las cuotas vigentes del período. Si la suma supera
 alimenticias primero, siempre — y el resto se difiere al período siguiente.
 **Nunca se fuerza un neto negativo.**
 
+**Coordinación v28/v29.** V28 conserva la sanción económica aprobada y su evidencia,
+pero no crea anticipadamente tablas de V29. V29 agrega la relación con
+`descuentos_programados` y el RPC auditado para convertir una sanción emitida en un
+descuento. Así las migraciones siguen siendo ejecutables estrictamente en orden.
+
+Lo que v28 dejó listo y v29 tiene que enganchar:
+
+- `novedades_empleado.descuento_id uuid` existe **sin clave foránea**. v29 la agrega:
+  ```sql
+  alter table public.novedades_empleado
+    add constraint novedades_empleado_descuento_id_fkey
+    foreign key (descuento_id) references public.descuentos_programados(id)
+    on delete restrict;
+  ```
+- `vista_multas_pendientes_v28` ya lista las multas notificadas o archivadas que
+  todavía no tienen descuento. Es la cola de entrada del RPC de v29.
+- La multa ya viene validada contra el tope: `tope_multa_empleado_v28(empleado, fecha)`
+  aplica `nomina_parametros.tope_multa_pct` sobre la **remuneración mensual**, usando el
+  sueldo real y cayendo al declarado si no hay compensación vigente. v29 no necesita
+  revalidarlo, pero sí debe respetar `tope_descuento_total_pct` al sumar todas las cuotas.
+- `anular_novedad_v28` **se niega a anular** una novedad que ya tenga `descuento_id`.
+  v29 debe ofrecer la reversión del descuento primero, y dejarlo en `null` al revertir.
+- Ampliar el check de `nomina_eventos.entidad` con los valores nuevos, como hicieron v27
+  y v28 (v28 lo dejó en: empleado, afiliacion, compensacion, documento, parametros,
+  calendario_feriados, periodos_vacaciones, ausencia, novedad).
+- `tope_multa_empleado_v28` y `contar_novedades_v28` **no son** `security definer`, a
+  propósito: si lo fueran, un usuario sin acceso a nómina deduciría el sueldo real
+  dividiendo el tope por el porcentaje. Mantén ese criterio en las funciones de consulta
+  de v29.
+
 ---
 
 ## v30 · Períodos y cálculo
@@ -379,8 +409,8 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 |---|---|---|
 | v26 | Claude | SQL escrito 2026-08-30 — falta ejecutar en Supabase y la UI |
 | v27 | Codex | SQL y verificación listos localmente — falta ejecutar en Supabase |
-| v28 | — | pendiente |
-| v29 | — | pendiente |
+| v28 | Claude | SQL y verificación listos localmente — falta ejecutar en Supabase |
+| v29 | Codex | en curso desde 2026-08-30 |
 | v30 | — | pendiente |
 | v31 | — | pendiente |
 | v32 | — | pendiente |
