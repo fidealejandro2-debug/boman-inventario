@@ -100,7 +100,9 @@ sql/
   v23_maestro_produccion_costos.sql clasificación productiva, unidades y fórmulas/BOM
   v24_ordenes_produccion.sql órdenes, WIP, consumo, merma y producto terminado
   v25_rutas_etapas_lotes_produccion.sql rutas versionadas, etapas, responsables y lotes
-  verificacion_v18.sql ... verificacion_v25.sql comprobaciones de cada migración
+  v26_nomina_personal_expediente.sql personal multi-RUC, afiliaciones, compensacion y expediente privado
+  v27_ausencias_vacaciones.sql calendarios confirmados, periodos por aniversario y vacaciones FIFO
+  verificacion_v18.sql ... verificacion_v27.sql comprobaciones de cada migración
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 

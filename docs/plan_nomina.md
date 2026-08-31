@@ -182,6 +182,12 @@ ausencias
 - `falta_injustificada` y `permiso_sin_sueldo` descuentan días en el rol.
 - `dias_habiles` se calcula contra `feriados`; sin la tabla cargada el cálculo miente.
 
+**Implementación v27.** `feriados_anios` confirma que el calendario de cada año está
+completo antes de calcular días hábiles. Una ausencia de vacaciones puede consumir más
+de un período; `ausencia_vacaciones_aplicaciones` conserva ese reparto FIFO y su reversa
+sin borrar historia. Los días de vacaciones se descuentan como días calendario
+ininterrumpidos; `dias_habiles` queda como dato separado de asistencia.
+
 ---
 
 ## v28 · Novedades disciplinarias
@@ -372,7 +378,7 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | Fase | Responsable | Estado |
 |---|---|---|
 | v26 | Claude | SQL escrito 2026-08-30 — falta ejecutar en Supabase y la UI |
-| v27 | Codex | asignada |
+| v27 | Codex | SQL y verificación listos localmente — falta ejecutar en Supabase |
 | v28 | — | pendiente |
 | v29 | — | pendiente |
 | v30 | — | pendiente |
