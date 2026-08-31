@@ -12,10 +12,13 @@ import ParametrosTab from "./ParametrosTab";
 import AuditoriaTab from "./AuditoriaTab";
 import VinculosTab from "./VinculosTab";
 import ExpedienteTab from "./ExpedienteTab";
-import type { Empleado, Empresa } from "./lib";
+import DepartamentosTab from "./DepartamentosTab";
+import type { PermisoCodigo } from "@/lib/permisos";
+import type { Departamento, Empleado, Empresa } from "./lib";
 
 type Pestana =
   | "personal"
+  | "departamentos"
   | "expediente"
   | "vinculos"
   | "ausencias"
@@ -28,6 +31,7 @@ type Pestana =
 
 const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "personal", etiqueta: "Personal" },
+  { id: "departamentos", etiqueta: "Departamentos" },
   { id: "expediente", etiqueta: "Expediente" },
   { id: "vinculos", etiqueta: "Ingresos y salidas" },
   { id: "ausencias", etiqueta: "Ausencias y vacaciones" },
@@ -39,25 +43,32 @@ const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "parametros", etiqueta: "Parámetros" },
 ];
 
-export default function NominaCliente({ rol }: { rol: string }) {
+export default function NominaCliente({
+  rol,
+  permisos,
+}: {
+  rol: string;
+  permisos: PermisoCodigo[];
+}) {
   const supabase = createClient();
   const [tab, setTab] = useState<Pestana>("personal");
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [grupoId, setGrupoId] = useState("");
   const [listo, setListo] = useState(false);
 
   // Gerencia consulta pero no escribe: mismo criterio que usuario_puede_nomina.
-  const puedeEscribir = rol === "admin" || rol === "nomina";
+  const puedeEscribir = rol === "admin" || permisos.includes("nomina.editar");
   const esAdmin = rol === "admin";
 
   // Personas y empresas las usan casi todas las pestañas: se cargan una vez.
   async function cargarBase() {
-    const [e, emp] = await Promise.all([
+    const [e, emp, dep] = await Promise.all([
       supabase
         .from("vista_personal_vigente")
         .select(
-          "empleado_id, identificacion, nombre_completo, cargo, estado, afiliado, empresa_afiliacion_id, empresa_pagadora_id"
+          "empleado_id, identificacion, nombre_completo, cargo, departamento_id, departamento_nombre, estado, afiliado, empresa_afiliacion_id, empresa_pagadora_id"
         )
         .order("nombre_completo"),
       supabase
@@ -65,8 +76,13 @@ export default function NominaCliente({ rol }: { rol: string }) {
         .select("id, razon_social, ruc, activo, grupo_id")
         .eq("activo", true)
         .order("razon_social"),
+      supabase
+        .from("vista_departamentos_nomina_v34")
+        .select("*")
+        .order("nombre"),
     ]);
     if (!e.error) setEmpleados((e.data as Empleado[]) ?? []);
+    if (!dep.error) setDepartamentos((dep.data as Departamento[]) ?? []);
     if (!emp.error) {
       const filas = (emp.data as (Empresa & { grupo_id: string })[]) ?? [];
       setEmpresas(filas);
@@ -109,7 +125,17 @@ export default function NominaCliente({ rol }: { rol: string }) {
             <PersonalTab
               puedeEscribir={puedeEscribir}
               empresas={empresas}
+              departamentos={departamentos}
               grupoId={grupoId}
+              onCambio={cargarBase}
+            />
+          )}
+          {tab === "departamentos" && (
+            <DepartamentosTab
+              puedeEscribir={puedeEscribir}
+              grupoId={grupoId}
+              departamentos={departamentos}
+              empleados={empleados}
               onCambio={cargarBase}
             />
           )}

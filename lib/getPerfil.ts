@@ -1,12 +1,47 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import {
+  TODOS_LOS_PERMISOS,
+  type Perfil,
+  type PermisoCodigo,
+  type RolUsuario,
+} from "@/lib/permisos";
 
-export type Perfil = {
-  id: string;
-  nombre_completo: string;
-  rol: "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "nomina";
-  entidad_id: string | null;
-  activo: boolean;
+export { tienePermiso } from "@/lib/permisos";
+export type { Perfil, PermisoCodigo, RolUsuario } from "@/lib/permisos";
+
+// Permite desplegar la interfaz antes de instalar v35 sin cambiar el acceso
+// que ya tenia cada rol. Cuando existe v35, la base reemplaza estos valores.
+const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
+  admin: TODOS_LOS_PERMISOS,
+  bodega: [
+    "inventario.acceder", "operaciones.acceder", "conteos.acceder",
+    "movimientos.acceder", "ventas.acceder", "compras.acceder",
+    "produccion.acceder",
+  ],
+  logistica: [
+    "inventario.acceder", "operaciones.acceder",
+    "movimientos.acceder", "produccion.acceder",
+  ],
+  gerencia: [
+    "inventario.acceder", "operaciones.acceder", "conteos.acceder",
+    "movimientos.acceder", "ventas.acceder", "compras.acceder",
+    "produccion.acceder", "control.acceder", "reportes.acceder",
+    "nomina.acceder",
+  ],
+  tienda: [
+    "inventario.acceder", "operaciones.acceder", "conteos.acceder",
+    "movimientos.acceder", "ventas.acceder",
+  ],
+  control: [
+    "inventario.acceder", "operaciones.acceder", "conteos.acceder",
+    "movimientos.acceder", "ventas.acceder", "compras.acceder",
+    "produccion.acceder", "control.acceder", "reportes.acceder",
+  ],
+  nomina: [
+    "inventario.acceder", "operaciones.acceder", "conteos.acceder",
+    "movimientos.acceder", "nomina.acceder", "nomina.editar",
+  ],
 };
 
 export async function getPerfilActual(): Promise<Perfil> {
@@ -33,5 +68,16 @@ export async function getPerfilActual(): Promise<Perfil> {
     redirect("/login?motivo=inactivo");
   }
 
-  return perfil as Perfil;
+  const perfilBase = perfil as Omit<Perfil, "permisos">;
+  const { data: permisos, error: permisosError } = await supabase.rpc(
+    "permisos_usuario_actual_v35"
+  );
+
+  return {
+    ...perfilBase,
+    permisos:
+      !permisosError && Array.isArray(permisos)
+        ? (permisos as PermisoCodigo[])
+        : PERMISOS_ANTERIORES[perfilBase.rol],
+  };
 }

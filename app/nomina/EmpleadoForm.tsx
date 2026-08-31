@@ -3,39 +3,61 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
-import { dinero, hoyISO, mensajeError, type Empresa } from "./lib";
+import {
+  dinero,
+  hoyISO,
+  mensajeError,
+  type Departamento,
+  type EmpleadoEdicion,
+  type Empresa,
+} from "./lib";
 
 type Props = {
   empresas: Empresa[];
+  departamentos: Departamento[];
   grupoId: string;
+  empleado?: EmpleadoEdicion | null;
   onListo: () => void;
   onCancelar: () => void;
 };
 
-// Alta en tres pasos porque así lo exige el modelo: la persona existe una vez,
-// su afiliación y su sueldo son series historizadas aparte.
-export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }: Props) {
+// v34 guarda persona, departamento, afiliación y sueldo en una sola
+// transacción. Afiliación y sueldo siguen siendo series historizadas.
+export default function EmpleadoForm({
+  empresas,
+  departamentos,
+  grupoId,
+  empleado = null,
+  onListo,
+  onCancelar,
+}: Props) {
   const supabase = createClient();
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState("");
+  const editando = empleado !== null;
 
   const [datos, setDatos] = useState({
-    tipo_identificacion: "cedula",
-    identificacion: "",
-    nombres: "",
-    apellidos: "",
-    fecha_nacimiento: "",
-    fecha_ingreso_real: hoyISO(),
-    cargo: "",
-    area: "",
-    tipo_contrato: "indefinido",
-    telefono: "",
-    email: "",
-    direccion: "",
-    forma_pago: "transferencia",
-    banco: "",
-    tipo_cuenta: "ahorros",
-    numero_cuenta: "",
+    tipo_identificacion: empleado?.tipo_identificacion ?? "cedula",
+    identificacion: empleado?.identificacion ?? "",
+    nombres: empleado?.nombres ?? "",
+    apellidos: empleado?.apellidos ?? "",
+    fecha_nacimiento: empleado?.fecha_nacimiento ?? "",
+    estado_civil: empleado?.estado_civil ?? "",
+    fecha_ingreso_real: empleado?.fecha_ingreso_real ?? hoyISO(),
+    cargo: empleado?.cargo ?? "",
+    departamento_id: empleado?.departamento_id ?? "",
+    tipo_contrato: empleado?.tipo_contrato ?? "indefinido",
+    telefono: empleado?.telefono ?? "",
+    email: empleado?.email ?? "",
+    direccion: empleado?.direccion ?? "",
+    contacto_emergencia_nombre: empleado?.contacto_emergencia_nombre ?? "",
+    contacto_emergencia_telefono: empleado?.contacto_emergencia_telefono ?? "",
+    forma_pago: empleado?.forma_pago ?? "transferencia",
+    banco: empleado?.banco ?? "",
+    tipo_cuenta: empleado?.tipo_cuenta ?? "ahorros",
+    numero_cuenta: empleado?.numero_cuenta ?? "",
+    observacion: empleado?.observacion ?? "",
   });
 
   const [afiliacion, setAfiliacion] = useState({
@@ -57,88 +79,147 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
     setError(null);
     if (!datos.identificacion.trim() || !datos.nombres.trim() || !datos.apellidos.trim())
       return setError("Identificación, nombres y apellidos son obligatorios.");
+    if (!datos.fecha_ingreso_real) return setError("La fecha de ingreso real es obligatoria.");
     if (!datos.cargo.trim()) return setError("El cargo es obligatorio.");
-    if (!compensacion.empresa_pagadora_id || !compensacion.sueldo_real)
+    if (!datos.departamento_id)
+      return setError("Selecciona el departamento de la persona.");
+    if (
+      datos.forma_pago === "transferencia" &&
+      (!datos.banco.trim() || !datos.numero_cuenta.trim())
+    )
+      return setError(
+        "Para pagar por transferencia debes indicar el banco y el número de cuenta."
+      );
+    if (
+      !editando &&
+      (!compensacion.empresa_pagadora_id ||
+        !compensacion.sueldo_real ||
+        Number(compensacion.sueldo_real) <= 0)
+    )
       return setError("Falta la empresa que paga y el sueldo real.");
-    if (afiliacion.afiliado && (!afiliacion.empresa_id || !afiliacion.sueldo_declarado))
+    if (
+      !editando &&
+      afiliacion.afiliado &&
+      (!afiliacion.empresa_id ||
+        !afiliacion.fecha_afiliacion ||
+        !afiliacion.sueldo_declarado ||
+        Number(afiliacion.sueldo_declarado) <= 0)
+    )
       return setError("Un afiliado necesita RUC afiliador y sueldo declarado.");
+    if (
+      !editando &&
+      afiliacion.afiliado &&
+      afiliacion.fecha_afiliacion < datos.fecha_ingreso_real
+    )
+      return setError("La fecha de afiliación no puede ser anterior al ingreso real.");
+
+    const departamento = departamentos.find(
+      (d) => d.departamento_id === datos.departamento_id
+    );
+    if (
+      !departamento ||
+      (!departamento.activo && departamento.departamento_id !== empleado?.departamento_id)
+    )
+      return setError("El departamento seleccionado ya no está disponible.");
+
+    if (editando && !motivo.trim())
+      return setError("Explica el motivo de la modificación para dejar trazabilidad.");
 
     setGuardando(true);
 
-    const { data: empleadoId, error: errEmpleado } = await supabase.rpc(
-      "guardar_empleado_v26",
+    if (editando) {
+      const { error: errEdicion } = await supabase.rpc("guardar_empleado_v35", {
+        p_empleado_id: empleado.id,
+        p_datos: {
+          tipo_identificacion: datos.tipo_identificacion,
+          identificacion: datos.identificacion,
+          nombres: datos.nombres,
+          apellidos: datos.apellidos,
+          fecha_nacimiento: datos.fecha_nacimiento || null,
+          estado_civil: datos.estado_civil || null,
+          direccion: datos.direccion || null,
+          telefono: datos.telefono || null,
+          email: datos.email || null,
+          contacto_emergencia_nombre: datos.contacto_emergencia_nombre || null,
+          contacto_emergencia_telefono: datos.contacto_emergencia_telefono || null,
+          fecha_ingreso_real: datos.fecha_ingreso_real,
+          cargo: datos.cargo,
+          tipo_contrato: datos.tipo_contrato,
+          forma_pago: datos.forma_pago,
+          banco: datos.forma_pago === "transferencia" ? datos.banco || null : null,
+          tipo_cuenta:
+            datos.forma_pago === "transferencia" ? datos.tipo_cuenta : null,
+          numero_cuenta:
+            datos.forma_pago === "transferencia" ? datos.numero_cuenta || null : null,
+          observacion: datos.observacion || null,
+        },
+        p_departamento_id: departamento.departamento_id,
+        p_motivo: motivo,
+        p_idempotency_key: nuevaClaveIdempotencia(),
+      });
+      setGuardando(false);
+      if (errEdicion) return setError(mensajeError(errEdicion));
+      onListo();
+      return;
+    }
+
+    const { error: errEmpleado } = await supabase.rpc(
+      "crear_empleado_completo_v34",
       {
-        p_empleado_id: null,
-        p_grupo_id: grupoId,
-        p_tipo_identificacion: datos.tipo_identificacion,
-        p_identificacion: datos.identificacion,
-        p_nombres: datos.nombres,
-        p_apellidos: datos.apellidos,
-        p_fecha_ingreso_real: datos.fecha_ingreso_real,
-        p_cargo: datos.cargo,
-        p_fecha_nacimiento: datos.fecha_nacimiento || null,
-        p_estado_civil: null,
-        p_direccion: datos.direccion || null,
-        p_telefono: datos.telefono || null,
-        p_email: datos.email || null,
-        p_contacto_emergencia_nombre: null,
-        p_contacto_emergencia_telefono: null,
-        p_area: datos.area || null,
-        p_tipo_contrato: datos.tipo_contrato,
-        p_forma_pago: datos.forma_pago,
-        p_banco: datos.banco || null,
-        p_tipo_cuenta: datos.forma_pago === "transferencia" ? datos.tipo_cuenta : null,
-        p_numero_cuenta: datos.numero_cuenta || null,
-        p_observacion: null,
+        p_datos: {
+          grupo_id: grupoId,
+          tipo_identificacion: datos.tipo_identificacion,
+          identificacion: datos.identificacion,
+          nombres: datos.nombres,
+          apellidos: datos.apellidos,
+          fecha_ingreso_real: datos.fecha_ingreso_real,
+          cargo: datos.cargo,
+          fecha_nacimiento: datos.fecha_nacimiento || null,
+          estado_civil: datos.estado_civil || null,
+          direccion: datos.direccion || null,
+          telefono: datos.telefono || null,
+          email: datos.email || null,
+          contacto_emergencia_nombre: datos.contacto_emergencia_nombre || null,
+          contacto_emergencia_telefono: datos.contacto_emergencia_telefono || null,
+          tipo_contrato: datos.tipo_contrato,
+          forma_pago: datos.forma_pago,
+          banco:
+            datos.forma_pago === "transferencia" ? datos.banco.trim() || null : null,
+          tipo_cuenta:
+            datos.forma_pago === "transferencia" ? datos.tipo_cuenta : null,
+          numero_cuenta:
+            datos.forma_pago === "transferencia"
+              ? datos.numero_cuenta.trim() || null
+              : null,
+          observacion: datos.observacion || null,
+        },
+        p_departamento_id: departamento.departamento_id,
+        p_afiliacion: {
+          afiliado: afiliacion.afiliado,
+          empresa_id: afiliacion.afiliado ? afiliacion.empresa_id : null,
+          fecha_afiliacion: afiliacion.afiliado ? afiliacion.fecha_afiliacion : null,
+          sueldo_declarado: afiliacion.afiliado
+            ? Number(afiliacion.sueldo_declarado)
+            : 0,
+        },
+        p_compensacion: {
+          empresa_pagadora_id: compensacion.empresa_pagadora_id,
+          sueldo_real: Number(compensacion.sueldo_real),
+        },
+        p_idempotency_key: nuevaClaveIdempotencia(),
       }
     );
+    setGuardando(false);
     if (errEmpleado) {
-      setGuardando(false);
       return setError(mensajeError(errEmpleado));
     }
-
-    const { error: errAfiliacion } = await supabase.rpc("registrar_afiliacion_v32", {
-      p_empleado_id: empleadoId,
-      p_afiliado: afiliacion.afiliado,
-      p_empresa_id: afiliacion.afiliado ? afiliacion.empresa_id : null,
-      p_fecha_afiliacion: afiliacion.afiliado ? afiliacion.fecha_afiliacion : null,
-      p_sueldo_declarado: afiliacion.afiliado ? Number(afiliacion.sueldo_declarado) : 0,
-      p_fecha_desde: datos.fecha_ingreso_real,
-      p_motivo_tipo: "afiliacion_inicial",
-      p_motivo: "Registro inicial del personal",
-      p_documento_respaldo_id: null,
-      p_idempotency_key: nuevaClaveIdempotencia(),
-    });
-    if (errAfiliacion) {
-      setGuardando(false);
-      // El empleado ya quedó creado: se completa desde su ficha.
-      return setError(
-        `Se creó la persona pero falló la afiliación: ${mensajeError(errAfiliacion)}`
-      );
-    }
-
-    const { error: errComp } = await supabase.rpc("registrar_compensacion_v32", {
-      p_empleado_id: empleadoId,
-      p_empresa_pagadora_id: compensacion.empresa_pagadora_id,
-      p_sueldo_real: Number(compensacion.sueldo_real),
-      p_fecha_desde: datos.fecha_ingreso_real,
-      p_motivo_tipo: "contratacion",
-      p_motivo: "Sueldo acordado al ingreso",
-      p_documento_respaldo_id: null,
-      p_idempotency_key: nuevaClaveIdempotencia(),
-    });
-    setGuardando(false);
-    if (errComp)
-      return setError(
-        `Se creó la persona y su afiliación pero falló el sueldo: ${mensajeError(errComp)}`
-      );
 
     onListo();
   }
 
   return (
     <div className="card-interna">
-      <h4>Nueva persona</h4>
+      <h4>{editando ? "Editar datos personales" : "Nueva persona"}</h4>
       {error && <p className="error">{error}</p>}
 
       <h5>Datos personales</h5>
@@ -196,6 +277,56 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
             onChange={(e) => setDatos({ ...datos, telefono: e.target.value })}
           />
         </label>
+        <label>
+          Correo
+          <input
+            type="email"
+            value={datos.email}
+            onChange={(e) => setDatos({ ...datos, email: e.target.value })}
+          />
+        </label>
+        <label>
+          Estado civil
+          <select
+            value={datos.estado_civil}
+            onChange={(e) => setDatos({ ...datos, estado_civil: e.target.value })}
+          >
+            <option value="">Sin registrar</option>
+            <option value="soltero">Soltero/a</option>
+            <option value="casado">Casado/a</option>
+            <option value="divorciado">Divorciado/a</option>
+            <option value="viudo">Viudo/a</option>
+            <option value="union_hecho">Unión de hecho</option>
+          </select>
+        </label>
+        <label>
+          Dirección
+          <input
+            type="text"
+            value={datos.direccion}
+            onChange={(e) => setDatos({ ...datos, direccion: e.target.value })}
+          />
+        </label>
+        <label>
+          Contacto de emergencia
+          <input
+            type="text"
+            value={datos.contacto_emergencia_nombre}
+            onChange={(e) =>
+              setDatos({ ...datos, contacto_emergencia_nombre: e.target.value })
+            }
+          />
+        </label>
+        <label>
+          Teléfono de emergencia
+          <input
+            type="text"
+            value={datos.contacto_emergencia_telefono}
+            onChange={(e) =>
+              setDatos({ ...datos, contacto_emergencia_telefono: e.target.value })
+            }
+          />
+        </label>
       </div>
 
       <h5>Relación laboral</h5>
@@ -206,9 +337,11 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
             type="date"
             value={datos.fecha_ingreso_real}
             max={hoyISO()}
+            disabled={editando}
             onChange={(e) => setDatos({ ...datos, fecha_ingreso_real: e.target.value })}
           />
           <small>Manda para vacaciones, décimos y antigüedad.</small>
+          {editando && <small>Se corrige mediante el flujo laboral controlado.</small>}
         </label>
         <label>
           Cargo
@@ -219,12 +352,25 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
           />
         </label>
         <label>
-          Área
-          <input
-            type="text"
-            value={datos.area}
-            onChange={(e) => setDatos({ ...datos, area: e.target.value })}
-          />
+          Departamento
+          <select
+            value={datos.departamento_id}
+            onChange={(e) => setDatos({ ...datos, departamento_id: e.target.value })}
+          >
+            <option value="">Elegir…</option>
+            {departamentos
+              .filter(
+                (d) => d.activo || d.departamento_id === empleado?.departamento_id
+              )
+              .map((d) => (
+                <option key={d.departamento_id} value={d.departamento_id}>
+                  {d.codigo} · {d.nombre}{d.activo ? "" : " (inactivo)"}
+                </option>
+              ))}
+          </select>
+          {!departamentos.some((d) => d.activo) && (
+            <small>Crea primero un departamento en la pestaña Departamentos.</small>
+          )}
         </label>
         <label>
           Tipo de contrato
@@ -241,8 +387,69 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
         </label>
       </div>
 
-      <h5>Afiliación al IESS</h5>
+      <h5>Forma de pago</h5>
       <div className="form-grid">
+        <label>
+          Forma de pago
+          <select
+            value={datos.forma_pago}
+            onChange={(e) => setDatos({ ...datos, forma_pago: e.target.value })}
+          >
+            <option value="transferencia">Transferencia bancaria</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </label>
+        {datos.forma_pago === "transferencia" && (
+          <>
+            <label>
+              Banco
+              <input
+                type="text"
+                value={datos.banco}
+                onChange={(e) => setDatos({ ...datos, banco: e.target.value })}
+                placeholder="Nombre del banco"
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              Tipo de cuenta
+              <select
+                value={datos.tipo_cuenta}
+                onChange={(e) => setDatos({ ...datos, tipo_cuenta: e.target.value })}
+              >
+                <option value="ahorros">Ahorros</option>
+                <option value="corriente">Corriente</option>
+              </select>
+            </label>
+            <label>
+              Número de cuenta
+              <input
+                type="text"
+                value={datos.numero_cuenta}
+                onChange={(e) => setDatos({ ...datos, numero_cuenta: e.target.value })}
+                placeholder="Número de cuenta bancaria"
+                autoComplete="off"
+              />
+              <small>Banco y número son obligatorios para transferencias.</small>
+            </label>
+          </>
+        )}
+      </div>
+
+      <label>
+        Observación
+        <textarea
+          value={datos.observacion}
+          onChange={(e) => setDatos({ ...datos, observacion: e.target.value })}
+          rows={2}
+        />
+      </label>
+
+      {!editando && (
+        <>
+          <h5>Afiliación al IESS</h5>
+          <div className="form-grid">
         <label>
           <input
             type="checkbox"
@@ -297,10 +504,10 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
             del IESS.
           </p>
         )}
-      </div>
+          </div>
 
-      <h5>Sueldo real y quién paga</h5>
-      <div className="form-grid">
+          <h5>Sueldo real y quién paga</h5>
+          <div className="form-grid">
         <label>
           Empresa que desembolsa
           <select
@@ -335,11 +542,26 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
             Brecha mensual: <strong>{dinero(brecha)}</strong>
           </p>
         )}
-      </div>
+          </div>
+        </>
+      )}
+
+      {editando && (
+        <label>
+          Motivo de la modificación
+          <textarea
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            rows={2}
+            placeholder="Ej.: actualización solicitada por la persona"
+          />
+          <small>Se guarda junto a cada campo modificado en la auditoría.</small>
+        </label>
+      )}
 
       <div className="filtros">
         <button onClick={guardar} disabled={guardando}>
-          {guardando ? "Guardando…" : "Crear persona"}
+          {guardando ? "Guardando…" : editando ? "Guardar cambios" : "Crear persona"}
         </button>
         <button className="secondary" onClick={onCancelar} disabled={guardando}>
           Cancelar

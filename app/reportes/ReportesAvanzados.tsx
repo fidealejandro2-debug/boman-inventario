@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { exportarCSV, fecha } from "@/lib/utils";
+import { exportarCSV, fecha, fechaISOEcuador } from "@/lib/utils";
 
 // ---------------- Tipos ----------------
 
@@ -84,8 +84,8 @@ export default function ReportesAvanzados() {
   // Conciliación ventas XML
   const [documentosXML, setDocumentosXML] = useState<DocumentoVentaXML[]>([]);
   const [almacenesLista, setAlmacenesLista] = useState<{ id: string; nombre: string }[]>([]);
-  const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const hoyISO = new Date().toISOString().slice(0, 10);
+  const hace30 = fechaISOEcuador(new Date(Date.now() - 30 * 86400000));
+  const hoyISO = fechaISOEcuador();
   const [desde, setDesde] = useState(hace30);
   const [hasta, setHasta] = useState(hoyISO);
   const [filtroAlmacenXML, setFiltroAlmacenXML] = useState("");
@@ -210,7 +210,7 @@ export default function ReportesAvanzados() {
   }, [productos, movsSalida]);
 
   // ---- Incidencias SGC ----
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaISOEcuador();
   const incidenciasFiltradas = useMemo(
     () => incidencias.filter((i) => !filtroEstado || i.estado === filtroEstado),
     [incidencias, filtroEstado]

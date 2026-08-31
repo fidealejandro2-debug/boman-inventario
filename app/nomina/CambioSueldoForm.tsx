@@ -3,27 +3,15 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
-import { dinero, hoyISO, mensajeError, type Empresa } from "./lib";
+import {
+  dinero,
+  hoyISO,
+  mensajeError,
+  MOTIVOS_AFILIACION,
+  MOTIVOS_SUELDO,
+  type Empresa,
+} from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
-
-const MOTIVOS_SUELDO = [
-  { valor: "aumento_desempeno", etiqueta: "Aumento por desempeño" },
-  { valor: "ajuste_sbu", etiqueta: "Ajuste por SBU" },
-  { valor: "promocion", etiqueta: "Promoción" },
-  { valor: "reestructuracion", etiqueta: "Reestructuración" },
-  { valor: "acuerdo_partes", etiqueta: "Acuerdo de partes" },
-  { valor: "cambio_pagadora", etiqueta: "Cambio de empresa pagadora" },
-  { valor: "reduccion_acordada", etiqueta: "Reducción acordada" },
-  { valor: "correccion_error", etiqueta: "Corrección de error" },
-];
-
-const MOTIVOS_AFILIACION = [
-  { valor: "cambio_ruc", etiqueta: "Cambio de RUC afiliador" },
-  { valor: "ajuste_sueldo_declarado", etiqueta: "Ajuste del sueldo declarado" },
-  { valor: "desafiliacion", etiqueta: "Desafiliación" },
-  { valor: "reafiliacion", etiqueta: "Reafiliación" },
-  { valor: "correccion_error", etiqueta: "Corrección de error" },
-];
 
 /** Cambio de sueldo real o de afiliación sobre una persona ya registrada. */
 export default function CambioSueldoForm({

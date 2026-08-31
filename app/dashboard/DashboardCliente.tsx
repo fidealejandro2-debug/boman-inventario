@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { fecha, ETIQUETA_TIPO } from "@/lib/utils";
-import type { Perfil } from "@/lib/getPerfil";
+import { tienePermiso, type Perfil } from "@/lib/permisos";
 
 export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
@@ -63,7 +63,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const totalDisponible = filas.reduce((a, f) => a + f.stock_disponible, 0);
   const totalTransito = filas.reduce((a, f) => a + f.transito_entrada, 0);
   const alertas = useMemo(() => filas.filter((f) => f.bajo_minimo).sort((a, b) => a.stock_disponible - b.stock_disponible), [filas]);
-  const puedeVerReportes = ["admin", "control", "gerencia"].includes(perfil.rol);
+  const puedeVerReportes = tienePermiso(perfil, "reportes.acceder");
 
   return (
     <>
@@ -80,17 +80,17 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
           </div>
 
           <div className="acciones-rapidas" aria-label="Acciones rápidas">
-            {['admin', 'bodega'].includes(perfil.rol) && (
+            {tienePermiso(perfil, "movimientos.acceder") && ['admin', 'bodega'].includes(perfil.rol) && (
               <Link href="/movimientos" className="accion-rapida">
                 <span>↕</span><div><strong>Entrada o salida manual</strong><small>Con referencia obligatoria y trazabilidad</small></div>
               </Link>
             )}
-            {perfil.rol !== 'gerencia' && (
+            {tienePermiso(perfil, "operaciones.acceder") && (
               <Link href="/operaciones" className="accion-rapida">
                 <span>⇄</span><div><strong>Solicitudes y transferencias</strong><small>Solicitar, preparar, despachar o recibir</small></div>
               </Link>
             )}
-            {!['logistica', 'gerencia'].includes(perfil.rol) && (
+            {tienePermiso(perfil, "conteos.acceder") && (
               <Link href="/conteos" className="accion-rapida">
                 <span>✓</span><div><strong>Conteos físicos</strong><small>Conteo ciego y aprobación de diferencias</small></div>
               </Link>
@@ -105,7 +105,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
                 <span>▥</span><div><strong>Ver reportes</strong><small>Stock, valor, alertas y kardex</small></div>
               </Link>
             )}
-            {(perfil.rol === 'admin' || perfil.rol === 'control') && (
+            {tienePermiso(perfil, "control.acceder") && (
               <Link href="/control" className="accion-rapida">
                 <span>⚑</span><div><strong>Centro de Control</strong><small>Aprobaciones, diferencias e incidencias</small></div>
               </Link>

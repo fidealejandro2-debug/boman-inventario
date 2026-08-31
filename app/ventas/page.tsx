@@ -2,12 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import { getPerfilActual } from "@/lib/getPerfil";
+import { getPerfilActual, tienePermiso } from "@/lib/getPerfil";
 import VentasXmlCliente from "./VentasXmlCliente";
 
 export default async function VentasPage() {
   const perfil = await getPerfilActual();
-  if (!["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol)) redirect("/dashboard");
+  if (!tienePermiso(perfil, "ventas.acceder")) redirect("/dashboard");
 
   return (
     <>

@@ -4,8 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control"] as const;
+const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "nomina"] as const;
 type Rol = (typeof ROLES)[number];
+const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "nomina"];
 
 type DatosPerfil = {
   id: string;
@@ -214,7 +215,7 @@ export async function POST(request: NextRequest) {
     if (!esRol(rol)) {
       return NextResponse.json({ error: "El rol indicado no es válido." }, { status: 400 });
     }
-    if (!["admin", "control", "gerencia"].includes(rol) && !entidadId) {
+    if (!ROLES_SIN_ALMACEN.includes(rol) && !entidadId) {
       return NextResponse.json({ error: "Los usuarios operativos deben tener al menos un almacén asignado." }, { status: 400 });
     }
 
@@ -253,7 +254,7 @@ export async function POST(request: NextRequest) {
 
     const { error: asignacionError } = await contexto.supabase.rpc("admin_asignar_almacenes", {
       p_perfil_id: invitacion.user.id,
-      p_almacen_ids: ["admin", "control", "gerencia"].includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
+      p_almacen_ids: ROLES_SIN_ALMACEN.includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
     });
     if (asignacionError) {
       return NextResponse.json({ error: `El perfil fue creado, pero falló la asignación de almacenes: ${asignacionError.message}` }, { status: 500 });
@@ -284,7 +285,7 @@ export async function PATCH(request: NextRequest) {
     if (!id || !nombre || !esRol(rol) || typeof activo !== "boolean") {
       return NextResponse.json({ error: "Los datos del usuario están incompletos." }, { status: 400 });
     }
-    if (!["admin", "control", "gerencia"].includes(rol) && !entidadId) {
+    if (!ROLES_SIN_ALMACEN.includes(rol) && !entidadId) {
       return NextResponse.json({ error: "Los usuarios operativos deben tener al menos un almacén asignado." }, { status: 400 });
     }
 
@@ -303,7 +304,7 @@ export async function PATCH(request: NextRequest) {
     if (activo) {
       const { error: asignacionError } = await contexto.supabase.rpc("admin_asignar_almacenes", {
         p_perfil_id: id,
-        p_almacen_ids: ["admin", "control", "gerencia"].includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
+        p_almacen_ids: ROLES_SIN_ALMACEN.includes(rol) ? [] : almacenIds.length ? almacenIds : [entidadId],
       });
       if (asignacionError) {
         return NextResponse.json({ error: asignacionError.message }, { status: 400 });

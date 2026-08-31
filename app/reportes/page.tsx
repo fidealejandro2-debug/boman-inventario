@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getPerfilActual } from "@/lib/getPerfil";
+import { getPerfilActual, tienePermiso } from "@/lib/getPerfil";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import ReportesCliente from "./ReportesCliente";
@@ -9,7 +9,7 @@ import ReportesAvanzados from "./ReportesAvanzados";
 
 export default async function ReportesPage() {
   const perfil = await getPerfilActual();
-  if (!["admin", "control", "gerencia"].includes(perfil.rol)) redirect("/dashboard");
+  if (!tienePermiso(perfil, "reportes.acceder")) redirect("/dashboard");
 
   return (
     <>

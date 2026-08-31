@@ -1,4 +1,4 @@
-# Plan · Control de nómina multi-RUC (v26 → v32)
+# Plan · Control de nómina multi-RUC (v26 → v36)
 
 Documento de trabajo compartido entre Fidel, Codex y Claude.
 **Ningún SQL de nómina está escrito todavía.** Esto define el modelo acordado para que
@@ -10,12 +10,13 @@ quien tome cada fase no reinvente el diseño ni choque con la numeración de pro
 
 ## Reserva de numeración
 
-Producción (Codex) ocupa hasta **v25**. Nómina reserva **v26 a v34**.
-Quien necesite una migración fuera de nómina antes de que se cierre v34, la toma desde
-**v35** y lo anota aquí. No se reutiliza ni se renumera nada ya ejecutado.
+Producción (Codex) ocupa hasta **v25**. Nómina y administración reservan **v26 a v36**.
+Quien necesite una migración fuera de este bloque antes de que se cierre v36, la toma
+desde **v37** y lo anota aquí. No se reutiliza ni se renumera nada ya ejecutado.
 
-> El rango creció de v32 a v34: v32 pasó a ser la trazabilidad para el SGC, v33 el
-> reingreso de personal, y las extensiones (IR, finiquitos) se corrieron a v34.
+> El rango creció hasta v36: v32 pasó a ser la trazabilidad para el SGC, v33 el
+> reingreso de personal, v34 el catálogo de departamentos, v35 la matriz de permisos
+> por rol y las extensiones (IR, finiquitos) se corrieron a v36.
 
 ---
 
@@ -482,7 +483,35 @@ Si no, es continuidad. Se registra con el documento de respaldo, y v32 lo audita
 
 ---
 
-## v34 · Extensiones
+## v34 · Departamentos del grupo económico
+
+Catálogo controlado de departamentos, transversal a todos los RUC del grupo. Reemplaza
+el texto libre `empleados.area` con `departamento_id`, migra los nombres ya registrados
+y mantiene `area` como espejo compatible con los roles históricos de v30. Incluye alta
+atómica de personal, creación automática del vínculo inicial, edición, desactivación
+protegida, reasignación de personal y auditoría con idempotencia.
+
+---
+
+## v35 · Permisos configurables por rol
+
+Catálogo central de permisos funcionales y matriz editable desde Administración. El
+administrador define qué módulos puede abrir cada rol y separa consulta de edición en
+Nómina. El rol administrador conserva acceso total como mecanismo de recuperación y
+las reglas críticas de segregación (aprobaciones propias, motores internos y alcance
+por empresa/almacén) continúan protegidas en los RPC; no se convierten en casillas.
+
+La interfaz incluye `Administración → Permisos por rol`, auditoría e idempotencia. La
+gestión de usuarios también permite asignar correctamente el rol `nomina`.
+
+V35 también cierra hallazgos de calidad detectados al revisar la interfaz de personal:
+fechas calculadas en `America/Guayaquil`, edición justificada de datos personales,
+altas resumidas en una sola fila de auditoría, paginación explícita de la bitácora y
+protección frente a respuestas desordenadas al cambiar de expediente.
+
+---
+
+## v36 · Extensiones
 
 Impuesto a la renta en relación de dependencia · liquidaciones y actas de finiquito ·
 enlace del costo real de mano de obra con `ruta_produccion_etapas.costo_estimado`, que
@@ -566,4 +595,6 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | v31 | Claude | vistas + módulo `app/nomina/` listos localmente — falta ejecutar en Supabase |
 | v32 | Claude | SQL, verificación y pestaña de Auditoría listos — falta ejecutar en Supabase |
 | v33 | Claude | SQL, verificación y pestaña "Ingresos y salidas" listos — falta ejecutar en Supabase |
-| v34 | — | pendiente (IR, finiquitos, costo de mano de obra) |
+| v34 | Codex | SQL, verificación e interfaz de departamentos listos localmente — falta ejecutar en Supabase |
+| v35 | Codex | SQL, verificación e interfaz de permisos listos localmente — falta ejecutar en Supabase |
+| v36 | — | pendiente (IR, finiquitos, costo de mano de obra) |

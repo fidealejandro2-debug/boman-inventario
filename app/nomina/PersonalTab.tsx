@@ -5,7 +5,14 @@ import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import EmpleadoForm from "./EmpleadoForm";
 import CambioSueldoForm from "./CambioSueldoForm";
-import { dinero, soloFecha, type Empresa } from "./lib";
+import {
+  dinero,
+  mensajeError,
+  soloFecha,
+  type Departamento,
+  type EmpleadoEdicion,
+  type Empresa,
+} from "./lib";
 
 type Personal = {
   empleado_id: string;
@@ -13,6 +20,9 @@ type Personal = {
   nombre_completo: string;
   cargo: string | null;
   area: string | null;
+  departamento_id: string | null;
+  departamento_codigo: string | null;
+  departamento_nombre: string | null;
   tipo_contrato: string;
   estado: string;
   fecha_ingreso_real: string;
@@ -43,17 +53,21 @@ type DocPorVencer = {
 export default function PersonalTab({
   puedeEscribir,
   empresas,
+  departamentos,
   grupoId,
   onCambio,
 }: {
   puedeEscribir: boolean;
   empresas: Empresa[];
+  departamentos: Departamento[];
   grupoId: string;
   onCambio: () => void;
 }) {
   const supabase = createClient();
   const [mostrarForm, setMostrarForm] = useState(false);
   const [cambiando, setCambiando] = useState<Personal | null>(null);
+  const [editando, setEditando] = useState<EmpleadoEdicion | null>(null);
+  const [cargandoEdicion, setCargandoEdicion] = useState(false);
   const [filas, setFilas] = useState<Personal[]>([]);
   const [vencen, setVencen] = useState<DocPorVencer[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -62,6 +76,7 @@ export default function PersonalTab({
   const [busqueda, setBusqueda] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [afiliacion, setAfiliacion] = useState("");
+  const [departamento, setDepartamento] = useState("");
   const [estado, setEstado] = useState("activo");
 
   async function cargar() {
@@ -83,6 +98,24 @@ export default function PersonalTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function abrirEdicion(empleadoId: string) {
+    setCargandoEdicion(true);
+    setError(null);
+    const { data, error: consultaError } = await supabase
+      .from("empleados")
+      .select(
+        "id, grupo_id, tipo_identificacion, identificacion, nombres, apellidos, fecha_nacimiento, estado_civil, direccion, telefono, email, contacto_emergencia_nombre, contacto_emergencia_telefono, fecha_ingreso_real, cargo, departamento_id, tipo_contrato, forma_pago, banco, tipo_cuenta, numero_cuenta, observacion"
+      )
+      .eq("id", empleadoId)
+      .single();
+    setCargandoEdicion(false);
+    if (consultaError || !data)
+      return setError(mensajeError(consultaError).replace("Error desconocido", "No se pudo cargar la persona."));
+    setCambiando(null);
+    setMostrarForm(false);
+    setEditando(data as EmpleadoEdicion);
+  }
+
   const empresasAfiliadoras = useMemo(() => {
     const set = new Set<string>();
     filas.forEach((f) => {
@@ -99,22 +132,30 @@ export default function PersonalTab({
       if (afiliacion === "afiliado" && !f.afiliado) return false;
       if (afiliacion === "no_afiliado" && f.afiliado) return false;
       if (afiliacion === "otro_ruc" && !f.paga_otro_ruc) return false;
+      if (departamento === "sin_asignar" && f.departamento_id !== null) return false;
+      if (
+        departamento &&
+        departamento !== "sin_asignar" &&
+        f.departamento_id !== departamento
+      )
+        return false;
       if (!q) return true;
       return (
         f.nombre_completo.toLowerCase().includes(q) ||
         f.identificacion.includes(q) ||
-        (f.cargo ?? "").toLowerCase().includes(q)
+        (f.cargo ?? "").toLowerCase().includes(q) ||
+        (f.departamento_nombre ?? "").toLowerCase().includes(q)
       );
     });
-  }, [filas, busqueda, empresa, afiliacion, estado]);
+  }, [filas, busqueda, empresa, afiliacion, departamento, estado]);
 
   const totales = useMemo(
     () =>
       visibles.reduce(
         (acc, f) => ({
-          declarado: acc.declarado + (f.sueldo_declarado ?? 0),
-          real: acc.real + (f.sueldo_real ?? 0),
-          brecha: acc.brecha + (f.brecha_sueldo ?? 0),
+          declarado: acc.declarado + Number(f.sueldo_declarado ?? 0),
+          real: acc.real + Number(f.sueldo_real ?? 0),
+          brecha: acc.brecha + Number(f.brecha_sueldo ?? 0),
           sinAfiliar: acc.sinAfiliar + (f.afiliado ? 0 : 1),
           otroRuc: acc.otroRuc + (f.paga_otro_ruc ? 1 : 0),
         }),
@@ -203,9 +244,25 @@ export default function PersonalTab({
         />
       )}
 
+      {editando && puedeEscribir && (
+        <EmpleadoForm
+          empleado={editando}
+          empresas={empresas}
+          departamentos={departamentos}
+          grupoId={editando.grupo_id}
+          onCancelar={() => setEditando(null)}
+          onListo={() => {
+            setEditando(null);
+            cargar();
+            onCambio();
+          }}
+        />
+      )}
+
       {mostrarForm && puedeEscribir && (
         <EmpleadoForm
           empresas={empresas}
+          departamentos={departamentos}
           grupoId={grupoId}
           onCancelar={() => setMostrarForm(false)}
           onListo={() => {
@@ -218,13 +275,17 @@ export default function PersonalTab({
 
       <div className="filtros">
         {puedeEscribir && (
-          <button onClick={() => setMostrarForm(!mostrarForm)}>
+          <button onClick={() => {
+            setEditando(null);
+            setCambiando(null);
+            setMostrarForm(!mostrarForm);
+          }}>
             {mostrarForm ? "Cancelar" : "Nueva persona"}
           </button>
         )}
         <input
           type="search"
-          placeholder="Buscar por nombre, cédula o cargo"
+          placeholder="Buscar por nombre, cédula, cargo o departamento"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
         />
@@ -248,12 +309,25 @@ export default function PersonalTab({
           <option value="no_afiliado">Solo no afiliados</option>
           <option value="otro_ruc">Paga un RUC distinto al que afilia</option>
         </select>
+        <select
+          value={departamento}
+          onChange={(e) => setDepartamento(e.target.value)}
+        >
+          <option value="">Todos los departamentos</option>
+          <option value="sin_asignar">Sin departamento asignado</option>
+          {departamentos.map((d) => (
+            <option key={d.departamento_id} value={d.departamento_id}>
+              {d.nombre}{d.activo ? "" : " (inactivo)"}
+            </option>
+          ))}
+        </select>
         <button
           className="secondary"
           onClick={() => {
             setBusqueda("");
             setEmpresa("");
             setAfiliacion("");
+            setDepartamento("");
             setEstado("activo");
           }}
         >
@@ -275,6 +349,7 @@ export default function PersonalTab({
               <th>Cédula</th>
               <th>Nombre</th>
               <th>Cargo</th>
+              <th>Departamento</th>
               <th>Ingreso real</th>
               <th>Afiliación</th>
               <th>Afiliado desde</th>
@@ -291,6 +366,11 @@ export default function PersonalTab({
                 <td>{f.identificacion}</td>
                 <td>{f.nombre_completo}</td>
                 <td>{f.cargo ?? "—"}</td>
+                <td>
+                  {f.departamento_nombre ?? (
+                    <span className="badge bajo">Sin asignar</span>
+                  )}
+                </td>
                 <td>{soloFecha(f.fecha_ingreso_real)}</td>
                 <td>
                   {f.afiliado === null ? (
@@ -329,10 +409,24 @@ export default function PersonalTab({
                 </td>
                 {puedeEscribir && (
                   <td>
+                    <button
+                      className="btn-mini secondary"
+                      disabled={cargandoEdicion}
+                      onClick={() => abrirEdicion(f.empleado_id)}
+                    >
+                      Datos
+                    </button>
                     {f.estado === "activo" && (
-                      <button className="btn-mini secondary" onClick={() => setCambiando(f)}>
-                        Cambiar
-                      </button>
+                        <button
+                          className="btn-mini secondary"
+                          onClick={() => {
+                            setEditando(null);
+                            setMostrarForm(false);
+                            setCambiando(f);
+                          }}
+                        >
+                          Sueldo / IESS
+                        </button>
                     )}
                   </td>
                 )}
@@ -340,7 +434,7 @@ export default function PersonalTab({
             ))}
             {!visibles.length && (
               <tr>
-                <td colSpan={puedeEscribir ? 11 : 10} className="vacio">
+                <td colSpan={puedeEscribir ? 12 : 11} className="vacio">
                   Ningún empleado coincide con los filtros.
                 </td>
               </tr>

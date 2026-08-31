@@ -1,3 +1,15 @@
+export function fechaISOEcuador(valor: Date = new Date()): string {
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Guayaquil",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(valor);
+  const parte = (tipo: Intl.DateTimeFormatPartTypes) =>
+    partes.find((p) => p.type === tipo)?.value ?? "";
+  return `${parte("year")}-${parte("month")}-${parte("day")}`;
+}
+
 export function exportarCSV(nombreArchivo: string, filas: Record<string, any>[]) {
   if (!filas.length) return;
 
@@ -18,7 +30,7 @@ export function exportarCSV(nombreArchivo: string, filas: Record<string, any>[])
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${nombreArchivo}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${nombreArchivo}_${fechaISOEcuador()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

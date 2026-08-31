@@ -44,7 +44,19 @@ export default function SelectorDocumento({
   }
 
   useEffect(() => {
-    cargar();
+    let vigente = true;
+    setDocumentos([]);
+    setError(null);
+    if (!empleadoId) return () => { vigente = false; };
+
+    void (async () => {
+      const resultado = await documentosDe(empleadoId);
+      if (!vigente) return;
+      if (resultado.error) setError(resultado.error);
+      else setDocumentos(resultado.documentos);
+    })();
+
+    return () => { vigente = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empleadoId]);
 

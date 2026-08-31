@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fecha } from "@/lib/utils";
 
-type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control";
+type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "nomina";
 type Almacen = { id: string; nombre: string; tipo: string; activo: boolean };
 type Usuario = {
   id: string;
@@ -30,7 +30,10 @@ const ROLES: { valor: Rol; etiqueta: string }[] = [
   { valor: "tienda", etiqueta: "Tienda" },
   { valor: "control", etiqueta: "Control" },
   { valor: "gerencia", etiqueta: "Gerencia" },
+  { valor: "nomina", etiqueta: "Nómina" },
 ];
+
+const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "nomina"];
 
 const NUEVO = {
   email: "",
@@ -88,7 +91,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
   async function invitar(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
-    if (!["admin", "control", "gerencia"].includes(nuevo.rol) && !nuevo.almacen_ids.length) {
+    if (!ROLES_SIN_ALMACEN.includes(nuevo.rol) && !nuevo.almacen_ids.length) {
       setMsg({ tipo: "error", texto: "Los usuarios operativos deben tener al menos un almacén asignado." });
       return;
     }
@@ -100,7 +103,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...nuevo,
-          almacen_ids: ["admin", "control", "gerencia"].includes(nuevo.rol) ? [] : nuevo.almacen_ids,
+          almacen_ids: ROLES_SIN_ALMACEN.includes(nuevo.rol) ? [] : nuevo.almacen_ids,
         }),
       });
       setMsg({ tipo: "ok", texto: data.mensaje ?? "Invitación enviada." });
@@ -137,7 +140,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
           id: usuario.id,
           nombre_completo: edicion.nombre_completo,
           rol: edicion.rol,
-          almacen_ids: ["admin", "control", "gerencia"].includes(String(edicion.rol)) ? [] : edicion.almacen_ids ?? [],
+          almacen_ids: ROLES_SIN_ALMACEN.includes(edicion.rol ?? usuario.rol) ? [] : edicion.almacen_ids ?? [],
           activo: edicion.activo,
         }),
       });
@@ -312,7 +315,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                   {ROLES.map((rol) => <option key={rol.valor} value={rol.valor}>{rol.etiqueta}</option>)}
                 </select>
               </div>
-              {!['admin', 'control', 'gerencia'].includes(nuevo.rol) && (
+              {!ROLES_SIN_ALMACEN.includes(nuevo.rol) && (
                 <div className="field">
                   <label>Almacenes asignados</label>
                   <div className="selector-almacenes">
@@ -362,9 +365,9 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                         ) : ROLES.find((r) => r.valor === usuario.rol)?.etiqueta}
                       </td>
                       <td>
-                        {estaEditando && !['admin', 'control', 'gerencia'].includes(rolEdicion) ? (
+                        {estaEditando && !ROLES_SIN_ALMACEN.includes(rolEdicion) ? (
                           <div className="selector-almacenes compacto">{almacenes.map((a) => { const ids = edicion.almacen_ids ?? []; return <label key={a.id}><input type="checkbox" checked={ids.includes(a.id)} onChange={(e) => setEdicion({ ...edicion, almacen_ids: e.target.checked ? [...ids, a.id] : ids.filter((id) => id !== a.id) })} /> {a.nombre}</label>; })}</div>
-                        ) : ['admin', 'control', 'gerencia'].includes(estaEditando ? rolEdicion : usuario.rol)
+                        ) : ROLES_SIN_ALMACEN.includes(estaEditando ? rolEdicion : usuario.rol)
                           ? "Todos"
                           : usuario.almacen_ids.map((id) => almacenes.find((a) => a.id === id)?.nombre).filter(Boolean).join(", ") || "Sin asignación"}
                       </td>

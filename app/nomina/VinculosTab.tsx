@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
-import { soloFecha, hoyISO, mensajeError } from "./lib";
+import { ETIQUETA_SALIDA, soloFecha, hoyISO, mensajeError } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
 
 type Reingresable = {
@@ -45,15 +45,6 @@ const ETIQUETA_VINCULO: Record<string, string> = {
   inicial: "Vínculo inicial",
   reingreso_continuidad: "Reingreso con antigüedad",
   reingreso_nueva_relacion: "Reingreso desde cero",
-};
-
-const ETIQUETA_SALIDA: Record<string, string> = {
-  renuncia: "Renuncia",
-  despido: "Despido",
-  visto_bueno: "Visto bueno",
-  fin_contrato: "Fin de contrato",
-  abandono: "Abandono",
-  mutuo_acuerdo: "Mutuo acuerdo",
 };
 
 export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean }) {

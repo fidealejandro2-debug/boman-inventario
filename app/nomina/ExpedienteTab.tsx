@@ -50,11 +50,36 @@ export default function ExpedienteTab({
   }
 
   useEffect(() => {
-    cargar();
-    // Deja constancia de quién abrió el expediente: es dato sensible.
-    if (empleadoId) {
-      supabase.rpc("registrar_consulta_expediente_v26", { p_empleado_id: empleadoId });
+    let vigente = true;
+    if (!empleadoId) {
+      setDocumentos([]);
+      setCargando(false);
+      return () => { vigente = false; };
     }
+
+    setDocumentos([]);
+    setCargando(true);
+    setError(null);
+    void (async () => {
+      const [consulta, registro] = await Promise.all([
+        documentosDe(empleadoId, !verArchivados),
+        // Deja constancia de quién abrió el expediente: es dato sensible.
+        supabase.rpc("registrar_consulta_expediente_v26", {
+          p_empleado_id: empleadoId,
+        }),
+      ]);
+      if (!vigente) return;
+      setCargando(false);
+      if (consulta.error) return setError(consulta.error);
+      setDocumentos(consulta.documentos);
+      if (registro.error) {
+        setError(
+          `Los documentos se cargaron, pero no se pudo auditar la consulta: ${registro.error.message}`
+        );
+      }
+    })();
+
+    return () => { vigente = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empleadoId, verArchivados]);
 
@@ -77,7 +102,7 @@ export default function ExpedienteTab({
     setNombre("");
     setFechaEmision("");
     setFechaCaducidad("");
-    cargar();
+    await cargar();
   }
 
   async function abrir(path: string) {
@@ -95,7 +120,7 @@ export default function ExpedienteTab({
     });
     if (error) return setError(mensajeError(error));
     setAviso("Documento archivado. No se borra: queda en el expediente.");
-    cargar();
+    await cargar();
   }
 
   const hoy = new Date();

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Perfil } from "@/lib/getPerfil";
+import { tienePermiso, type Perfil } from "@/lib/permisos";
 import BomanLogo from "@/components/BomanLogo";
 
 type OpcionMenu = {
@@ -60,14 +60,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   }, []);
 
   const puedeEditarProductos = perfil.rol === "admin";
-  const puedeVerReportes = ["admin", "control", "gerencia"].includes(perfil.rol);
+  const puedeVerReportes = tienePermiso(perfil, "reportes.acceder");
   const puedeAdministrar = perfil.rol === "admin";
   const puedeConfigurarStock = perfil.rol === "admin" || perfil.rol === "control";
-  const puedeVerControl = ["admin", "control", "gerencia"].includes(perfil.rol);
-  const puedeVerVentas = ["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol);
-  const puedeVerCompras = ["admin", "control", "bodega", "gerencia"].includes(perfil.rol);
-  const puedeVerProduccion = ["admin", "control", "bodega", "logistica", "gerencia"].includes(perfil.rol);
-  const puedeVerNomina = ["admin", "gerencia", "nomina"].includes(perfil.rol);
+  const puedeVerControl = tienePermiso(perfil, "control.acceder");
+  const puedeVerVentas = tienePermiso(perfil, "ventas.acceder");
+  const puedeVerCompras = tienePermiso(perfil, "compras.acceder");
+  const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
+  const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -108,10 +108,10 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       etiqueta: "Inventario",
       icono: "▦",
       opciones: [
-        { href: "/inventario", etiqueta: "Stock por almacén", descripcion: "Físico, reservado, disponible y en tránsito", visible: true },
-        { href: "/operaciones", etiqueta: "Solicitudes y transferencias", descripcion: "Reposición, preparación, despacho y recepción", visible: true },
-        { href: "/conteos", etiqueta: "Conteos físicos", descripcion: "Conteo, reconteo y diferencias", visible: perfil.rol !== "logistica" },
-        { href: "/movimientos", etiqueta: "Movimientos", descripcion: "Entradas, salidas y trazabilidad", visible: true },
+        { href: "/inventario", etiqueta: "Stock por almacén", descripcion: "Físico, reservado, disponible y en tránsito", visible: tienePermiso(perfil, "inventario.acceder") },
+        { href: "/operaciones", etiqueta: "Solicitudes y transferencias", descripcion: "Reposición, preparación, despacho y recepción", visible: tienePermiso(perfil, "operaciones.acceder") },
+        { href: "/conteos", etiqueta: "Conteos físicos", descripcion: "Conteo, reconteo y diferencias", visible: tienePermiso(perfil, "conteos.acceder") },
+        { href: "/movimientos", etiqueta: "Movimientos", descripcion: "Entradas, salidas y trazabilidad", visible: tienePermiso(perfil, "movimientos.acceder") },
         { href: "/control", etiqueta: "Centro de Control", descripcion: "Aprobaciones, incidencias y auditoría", visible: puedeVerControl },
         { href: "/productos", etiqueta: "Catálogo de productos", descripcion: "Productos, categorías, precios e importación", visible: puedeEditarProductos },
         { href: "/configuracion/inventario", etiqueta: "Políticas de stock", descripcion: "Mínimos, máximos y puntos de reposición", visible: puedeConfigurarStock },
@@ -139,7 +139,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       icono: "⚙",
       opciones: [
         { href: "/administracion/empresas", etiqueta: "Grupo y empresas", descripcion: "RUC, tiendas, bodegas y operadoras del grupo económico", visible: puedeAdministrar },
-        { href: "/administracion/usuarios", etiqueta: "Usuarios y permisos", descripcion: "Roles, almacenes, contraseñas y eliminación de accesos", visible: puedeAdministrar },
+        { href: "/administracion/usuarios", etiqueta: "Usuarios", descripcion: "Roles, almacenes, contraseñas y eliminación de accesos", visible: puedeAdministrar },
+        { href: "/administracion/permisos", etiqueta: "Permisos por rol", descripcion: "Matriz de acceso de cada rol a los módulos del ERP", visible: puedeAdministrar },
       ],
     },
   ];

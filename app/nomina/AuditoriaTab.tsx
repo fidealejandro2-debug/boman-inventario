@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV, fecha } from "@/lib/utils";
-import { dinero, soloFecha } from "./lib";
+import {
+  dinero,
+  ETIQUETA_CAMPO_AUDITORIA,
+  ETIQUETA_TABLA_AUDITORIA,
+  soloFecha,
+} from "./lib";
 
 type Cambio = {
   id: string;
@@ -39,32 +44,6 @@ type HistorialSueldo = {
   registrado_at: string;
 };
 
-const ETIQUETA_TABLA: Record<string, string> = {
-  empleados: "Personal",
-  empleado_compensacion: "Sueldo real",
-  empleado_afiliaciones: "Afiliación",
-  nomina_parametros: "Parámetros",
-};
-
-const ETIQUETA_CAMPO: Record<string, string> = {
-  numero_cuenta: "Número de cuenta",
-  banco: "Banco",
-  tipo_cuenta: "Tipo de cuenta",
-  forma_pago: "Forma de pago",
-  identificacion: "Identificación",
-  sueldo_real: "Sueldo real",
-  sueldo_declarado: "Sueldo declarado",
-  afiliado: "Afiliado",
-  empresa_id: "RUC afiliador",
-  empresa_pagadora_id: "Empresa pagadora",
-  fecha_afiliacion: "Fecha de afiliación",
-  fecha_ingreso_real: "Fecha de ingreso",
-  fecha_salida: "Fecha de salida",
-  estado: "Estado",
-  cargo: "Cargo",
-  salario_basico_unificado: "SBU",
-};
-
 const ETIQUETA_MOTIVO: Record<string, string> = {
   contratacion: "Contratación",
   aumento_desempeno: "Aumento por desempeño",
@@ -78,6 +57,7 @@ const ETIQUETA_MOTIVO: Record<string, string> = {
 };
 
 export default function AuditoriaTab() {
+  const TAMANO_PAGINA = 200;
   const supabase = createClient();
   const [vista, setVista] = useState<"bitacora" | "sueldos">("sueldos");
   const [cambios, setCambios] = useState<Cambio[]>([]);
@@ -86,6 +66,8 @@ export default function AuditoriaTab() {
   const [error, setError] = useState<string | null>(null);
   const [soloSensibles, setSoloSensibles] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  const [pagina, setPagina] = useState(0);
+  const [totalCambios, setTotalCambios] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -93,9 +75,12 @@ export default function AuditoriaTab() {
       const [c, h] = await Promise.all([
         supabase
           .from("vista_auditoria_nomina_v32")
-          .select("*")
+          .select("*", { count: "exact" })
           .order("created_at", { ascending: false })
-          .limit(500),
+          .range(
+            pagina * TAMANO_PAGINA,
+            pagina * TAMANO_PAGINA + TAMANO_PAGINA - 1
+          ),
         supabase
           .from("vista_historial_sueldo_v32")
           .select("*")
@@ -103,11 +88,17 @@ export default function AuditoriaTab() {
           .order("fecha_desde", { ascending: false }),
       ]);
       if (c.error) setError(c.error.message);
-      else setCambios((c.data as Cambio[]) ?? []);
+      else {
+        setCambios((c.data as Cambio[]) ?? []);
+        setTotalCambios(c.count ?? 0);
+      }
       if (!h.error) setHistorial((h.data as HistorialSueldo[]) ?? []);
       setCargando(false);
     })();
-  }, [supabase]);
+    // `createClient` conserva la sesión, pero su referencia no debe reiniciar
+    // la consulta en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagina]);
 
   const cambiosVisibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -148,17 +139,46 @@ export default function AuditoriaTab() {
       <div className="kpis">
         <div className="kpi">
           <span className="valor">{cambios.filter((c) => c.sensible).length}</span>
-          <span className="label">Cambios sensibles</span>
+          <span className="label">Cambios sensibles en esta página</span>
         </div>
         <div className={`kpi ${sinJustificar.length ? "alerta" : ""}`}>
           <span className="valor">{sinJustificar.length}</span>
-          <span className="label">Sin justificar</span>
+          <span className="label">Sin justificar en esta página</span>
         </div>
         <div className={`kpi ${cambiosDeCuenta.length ? "alerta" : ""}`}>
           <span className="valor">{cambiosDeCuenta.length}</span>
-          <span className="label">Cambios de cuenta bancaria</span>
+          <span className="label">Cuentas cambiadas en esta página</span>
         </div>
       </div>
+
+      {vista === "bitacora" && (
+        <div className="filtros">
+          <button
+            className="secondary"
+            disabled={pagina === 0 || cargando}
+            onClick={() => setPagina((p) => Math.max(0, p - 1))}
+          >
+            Anterior
+          </button>
+          <span className="ayuda">
+            Página {pagina + 1} de {Math.max(1, Math.ceil(totalCambios / TAMANO_PAGINA))}
+            {" · "}{totalCambios.toLocaleString("es-EC")} cambios en total
+          </span>
+          <button
+            className="secondary"
+            disabled={
+              cargando || (pagina + 1) * TAMANO_PAGINA >= totalCambios
+            }
+            onClick={() => setPagina((p) => p + 1)}
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
+
+      {vista === "bitacora" && busqueda.trim() && (
+        <p className="ayuda">La búsqueda se aplica a la página visible.</p>
+      )}
 
       {cambiosDeCuenta.length > 0 && (
         <p className="aviso">
@@ -294,9 +314,9 @@ export default function AuditoriaTab() {
                 <tr key={c.id}>
                   <td>{fecha(c.created_at)}</td>
                   <td>{c.nombre_completo ?? "—"}</td>
-                  <td>{ETIQUETA_TABLA[c.tabla] ?? c.tabla}</td>
+                  <td>{ETIQUETA_TABLA_AUDITORIA[c.tabla] ?? c.tabla}</td>
                   <td>
-                    {ETIQUETA_CAMPO[c.campo] ?? c.campo}
+                    {ETIQUETA_CAMPO_AUDITORIA[c.campo] ?? c.campo}
                     {c.sensible && <span className="badge bajo">sensible</span>}
                   </td>
                   <td>{c.valor_anterior ?? "—"}</td>
