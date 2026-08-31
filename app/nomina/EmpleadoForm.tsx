@@ -97,14 +97,16 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
       return setError(mensajeError(errEmpleado));
     }
 
-    const { error: errAfiliacion } = await supabase.rpc("registrar_afiliacion_v26", {
+    const { error: errAfiliacion } = await supabase.rpc("registrar_afiliacion_v32", {
       p_empleado_id: empleadoId,
       p_afiliado: afiliacion.afiliado,
       p_empresa_id: afiliacion.afiliado ? afiliacion.empresa_id : null,
       p_fecha_afiliacion: afiliacion.afiliado ? afiliacion.fecha_afiliacion : null,
       p_sueldo_declarado: afiliacion.afiliado ? Number(afiliacion.sueldo_declarado) : 0,
       p_fecha_desde: datos.fecha_ingreso_real,
-      p_motivo: "Registro inicial",
+      p_motivo_tipo: "afiliacion_inicial",
+      p_motivo: "Registro inicial del personal",
+      p_documento_respaldo_id: null,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
     if (errAfiliacion) {
@@ -115,12 +117,14 @@ export default function EmpleadoForm({ empresas, grupoId, onListo, onCancelar }:
       );
     }
 
-    const { error: errComp } = await supabase.rpc("registrar_compensacion_v26", {
+    const { error: errComp } = await supabase.rpc("registrar_compensacion_v32", {
       p_empleado_id: empleadoId,
       p_empresa_pagadora_id: compensacion.empresa_pagadora_id,
       p_sueldo_real: Number(compensacion.sueldo_real),
       p_fecha_desde: datos.fecha_ingreso_real,
-      p_motivo: "Registro inicial",
+      p_motivo_tipo: "contratacion",
+      p_motivo: "Sueldo acordado al ingreso",
+      p_documento_respaldo_id: null,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
     setGuardando(false);

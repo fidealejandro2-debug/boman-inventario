@@ -9,6 +9,7 @@ import DescuentosTab from "./DescuentosTab";
 import RolesTab from "./RolesTab";
 import ReportesNominaTab from "./ReportesNominaTab";
 import ParametrosTab from "./ParametrosTab";
+import AuditoriaTab from "./AuditoriaTab";
 import type { Empleado, Empresa } from "./lib";
 
 type Pestana =
@@ -18,6 +19,7 @@ type Pestana =
   | "descuentos"
   | "roles"
   | "reportes"
+  | "auditoria"
   | "parametros";
 
 const PESTANAS: { id: Pestana; etiqueta: string }[] = [
@@ -27,6 +29,7 @@ const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "descuentos", etiqueta: "Anticipos y descuentos" },
   { id: "roles", etiqueta: "Roles de pago" },
   { id: "reportes", etiqueta: "Reportes" },
+  { id: "auditoria", etiqueta: "Auditoría" },
   { id: "parametros", etiqueta: "Parámetros" },
 ];
 
@@ -124,6 +127,7 @@ export default function NominaCliente({ rol }: { rol: string }) {
           )}
           {tab === "roles" && <RolesTab />}
           {tab === "reportes" && <ReportesNominaTab />}
+          {tab === "auditoria" && <AuditoriaTab />}
           {tab === "parametros" && <ParametrosTab esAdmin={esAdmin} />}
         </>
       )}

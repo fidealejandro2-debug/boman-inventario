@@ -38,6 +38,7 @@ export default function ParametrosTab({ esAdmin }: { esAdmin: boolean }) {
   const [aviso, setAviso] = useState<string | null>(null);
 
   const anioActual = new Date().getFullYear();
+  const [motivo, setMotivo] = useState("");
   const [form, setForm] = useState<Record<string, string>>({
     anio: String(anioActual),
     salario_basico_unificado: "",
@@ -72,7 +73,7 @@ export default function ParametrosTab({ esAdmin }: { esAdmin: boolean }) {
       return setError("El salario básico unificado es obligatorio.");
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("guardar_nomina_parametros_v26", {
+    const { error } = await supabase.rpc("guardar_nomina_parametros_v32", {
       p_anio: Number(form.anio),
       p_salario_basico_unificado: Number(form.salario_basico_unificado),
       p_pct_aporte_personal: Number(form.pct_aporte_personal),
@@ -83,6 +84,8 @@ export default function ParametrosTab({ esAdmin }: { esAdmin: boolean }) {
       p_horas_jornada_semanal: Number(form.horas_jornada_semanal),
       p_tope_multa_pct: Number(form.tope_multa_pct),
       p_tope_descuento_total_pct: Number(form.tope_descuento_total_pct),
+      // Obligatorio si el año ya estaba cargado; se ignora en la carga inicial.
+      p_motivo: motivo || null,
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
@@ -139,6 +142,19 @@ export default function ParametrosTab({ esAdmin }: { esAdmin: boolean }) {
                 {c.ayuda && <small>{c.ayuda}</small>}
               </label>
             ))}
+            <label className="ancho-total">
+              Motivo del cambio
+              <input
+                type="text"
+                placeholder="Obligatorio si el año ya estaba cargado"
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+              />
+              <small>
+                Un año con roles cerrados queda congelado: sus parámetros ya no se
+                pueden tocar.
+              </small>
+            </label>
           </div>
           <button onClick={guardar} disabled={guardando}>
             {guardando ? "Guardando…" : "Guardar parámetros"}

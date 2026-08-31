@@ -759,3 +759,6 @@ button.btn-mini {
   }
   .documento-imprimible section { break-inside: avoid; }
 }
+
+.check-inline { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: #374151; }
+.negativo { color: #b91c1c; }
