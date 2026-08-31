@@ -57,7 +57,13 @@ export default function CalendarioFeriados({
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   async function cargar() {
-    if (!grupoId) return;
+    // Sin grupo no hay nada que consultar, pero hay que apagar el indicador:
+    // arranca en true y salir con un return dejaba el "Cargando calendario…"
+    // girando para siempre.
+    if (!grupoId) {
+      setCargando(false);
+      return;
+    }
     setCargando(true);
     setError(null);
     const [cal, dias, alm] = await Promise.all([
@@ -192,6 +198,13 @@ export default function CalendarioFeriados({
 
       {cargando ? (
         <p className="ayuda">Cargando calendario…</p>
+      ) : !grupoId ? (
+        <p className="aviso">
+          No se pudo determinar el grupo económico, así que el calendario de feriados
+          no está disponible. Suele pasar cuando el usuario no tiene ninguna empresa
+          activa asignada. Sin feriados cargados, los días hábiles de las ausencias se
+          calculan como si no hubiera ninguno.
+        </p>
       ) : (
         <>
           {puedeEscribir && (
