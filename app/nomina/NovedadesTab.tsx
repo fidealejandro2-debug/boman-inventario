@@ -265,6 +265,25 @@ export default function NovedadesTab({
     cargar();
   }
 
+  // Deshace el descuento que la multa dejó programado. Es el paso previo
+  // obligatorio para anular: anular_novedad_v28 se niega mientras la novedad
+  // tenga un descuento colgado.
+  async function revertirMulta(id: string) {
+    const motivo = window.prompt("Motivo para revertir la multa:");
+    if (!motivo?.trim()) return;
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("revertir_descuento_multa_v29", {
+      p_novedad_id: id,
+      p_motivo: motivo,
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso("Multa revertida: el descuento deja de aplicarse y la novedad ya se puede anular.");
+    cargar();
+  }
+
   async function anular(id: string) {
     const motivo = window.prompt("Motivo de la anulación:");
     if (!motivo?.trim()) return;
@@ -635,6 +654,17 @@ export default function NovedadesTab({
                       })}
                     >
                       Llevar al rol
+                    </button>
+                  )}
+                  {/* Sin este botón una novedad con multa no se podía anular:
+                      anular_novedad_v28 se niega mientras exista el descuento. */}
+                  {puedeEscribir && f.descuento_aplicado && f.estado !== "anulada" && (
+                    <button
+                      className="btn-mini secondary"
+                      disabled={guardando}
+                      onClick={() => revertirMulta(f.novedad_id)}
+                    >
+                      Revertir multa
                     </button>
                   )}
                   {esAdmin && !["anulada", "archivada"].includes(f.estado) && (

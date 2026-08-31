@@ -41,6 +41,10 @@ export default function CambioSueldoForm({
   const [que, setQue] = useState<"sueldo" | "afiliacion">("sueldo");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "nuevo" abre una vigencia; "rectificar" corrige el registro actual, que es
+  // lo que hace falta cuando el sueldo se digitó mal el mismo día y todavía no
+  // entró en ningún rol.
+  const [modo, setModo] = useState<"nuevo" | "rectificar">("nuevo");
 
   const [sueldo, setSueldo] = useState({
     sueldo_real: String(sueldoActual ?? ""),
@@ -80,7 +84,41 @@ export default function CambioSueldoForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esDesafiliacion]);
 
+  // Corrige la compensación vigente en lugar de encadenar otra vigencia.
+  // La base solo lo permite mientras ningún rol la haya usado; si ya alimentó
+  // un pago, exige registrar una vigencia nueva y aquí se dice tal cual.
+  async function rectificar() {
+    if (!sueldo.motivo.trim()) return setError("El motivo de la rectificación es obligatorio.");
+    setGuardando(true);
+    setError(null);
+
+    const { data, error: errBuscar } = await supabase
+      .from("empleado_compensacion")
+      .select("id")
+      .eq("empleado_id", empleadoId)
+      .is("fecha_hasta", null)
+      .maybeSingle();
+    if (errBuscar || !data) {
+      setGuardando(false);
+      return setError(
+        errBuscar ? mensajeError(errBuscar) : "No hay una compensación vigente que corregir."
+      );
+    }
+
+    const { error } = await supabase.rpc("rectificar_compensacion_v32", {
+      p_compensacion_id: data.id,
+      p_sueldo_real: Number(sueldo.sueldo_real),
+      p_empresa_pagadora_id: sueldo.empresa_pagadora_id,
+      p_motivo: sueldo.motivo,
+      p_documento_respaldo_id: sueldo.documento_respaldo_id,
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    onListo();
+  }
+
   async function guardarSueldo() {
+    if (modo === "rectificar") return rectificar();
     if (!sueldo.motivo.trim()) return setError("El motivo es obligatorio.");
     if (esReduccion && !sueldo.documento_respaldo_id)
       return setError("Una reducción de sueldo exige el documento que la respalda.");
@@ -148,6 +186,32 @@ export default function CambioSueldoForm({
 
       {que === "sueldo" ? (
         <>
+          <div className="form-inline">
+            <label className="check-inline">
+              <input
+                type="radio"
+                checked={modo === "nuevo"}
+                onChange={() => setModo("nuevo")}
+              />{" "}
+              Nuevo sueldo desde una fecha
+            </label>
+            <label className="check-inline">
+              <input
+                type="radio"
+                checked={modo === "rectificar"}
+                onChange={() => setModo("rectificar")}
+              />{" "}
+              Corregir un error de digitación
+            </label>
+          </div>
+          {modo === "rectificar" && (
+            <p className="ayuda">
+              Corrige el registro vigente en vez de encadenar otra vigencia. Solo se
+              puede mientras ningún rol lo haya usado; si ya alimentó un pago, la base
+              lo rechaza y hay que registrar un sueldo nuevo.
+            </p>
+          )}
+
           <div className="form-grid">
             <label>
               Sueldo real
@@ -176,15 +240,19 @@ export default function CambioSueldoForm({
                 ))}
               </select>
             </label>
-            <label>
-              Vigente desde
-              <input
-                type="date"
-                value={sueldo.fecha_desde}
-                onChange={(e) => setSueldo({ ...sueldo, fecha_desde: e.target.value })}
-              />
-            </label>
-            <label>
+            {/* Al rectificar no hay fecha ni tipo que elegir: se corrige la
+                vigencia que ya existe y la base la marca como correccion_error. */}
+            {modo === "nuevo" && (
+              <label>
+                Vigente desde
+                <input
+                  type="date"
+                  value={sueldo.fecha_desde}
+                  onChange={(e) => setSueldo({ ...sueldo, fecha_desde: e.target.value })}
+                />
+              </label>
+            )}
+            <label style={{ display: modo === "rectificar" ? "none" : undefined }}>
               Tipo de motivo
               <select
                 value={sueldo.motivo_tipo}
@@ -235,7 +303,11 @@ export default function CambioSueldoForm({
 
           <div className="filtros">
             <button onClick={guardarSueldo} disabled={guardando}>
-              {guardando ? "Guardando…" : "Registrar cambio de sueldo"}
+              {guardando
+                ? "Guardando…"
+                : modo === "rectificar"
+                ? "Corregir el sueldo vigente"
+                : "Registrar cambio de sueldo"}
             </button>
             <button className="secondary" onClick={onCancelar}>
               Cancelar
