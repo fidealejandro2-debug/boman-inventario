@@ -1,0 +1,364 @@
+# Plan · Control de nómina multi-RUC (v26 → v32)
+
+Documento de trabajo compartido entre Fidel, Codex y Claude.
+**Ningún SQL de nómina está escrito todavía.** Esto define el modelo acordado para que
+quien tome cada fase no reinvente el diseño ni choque con la numeración de producción.
+
+Última actualización: 2026-08-30.
+
+---
+
+## Reserva de numeración
+
+Producción (Codex) ocupa hasta **v25**. Nómina reserva **v26 a v32**.
+Quien necesite una migración fuera de nómina antes de que se cierre v32, la toma desde
+**v33** y lo anota aquí. No se reutiliza ni se renumera nada ya ejecutado.
+
+---
+
+## Qué resuelve
+
+El grupo tiene personal repartido en tres RUC, personal **no afiliado**, y sueldos
+afiliados menores al que realmente se paga. Hoy nada de eso vive en un solo lugar, así
+que no se conoce el costo real de personal por empresa.
+
+El sistema emite **dos roles sobre los mismos datos**:
+
+| | Rol real | Rol declarado |
+|---|---|---|
+| Qué muestra | Lo que la persona efectivamente cobra | Lo que consta ante el IESS |
+| Base de cálculo | `sueldo_real` | `sueldo_declarado` |
+| Cubre a | Todo el personal, afiliado o no | Solo afiliados |
+| Uso | Costo real, gestión interna | Planilla y reportes IESS |
+
+**Alcance.** Es control interno de gestión. No corrige ni sustituye el reporte legal.
+La brecha entre real y declarado el sistema la **hace visible**, no la administra.
+Lo único que sale hacia el IESS es el rol declarado.
+
+---
+
+## Reglas de negocio acordadas
+
+1. **El empleado no tiene empresa fija.** Existe una sola vez en el grupo. Su vínculo con
+   un RUC vive en tablas historizadas aparte.
+
+2. **Al no afiliado también se le emite rol.** Entra en `nomina_rol_lineas` con
+   `afiliado = false`, `sueldo_declarado = 0` y todas las columnas del bloque declarado en
+   cero. Su rol real se calcula igual que el de cualquiera. No aparece en la planilla IESS.
+
+3. **La empresa pagadora se elige.** Hoy en la práctica casi todo sale de una persona
+   natural, pero eso puede cambiar por persona y por mes. Se define un default en
+   `empleado_compensacion.empresa_pagadora_id` y se permite **override por línea de rol**.
+   La pagadora puede ser cualquier empresa registrada en `empresas` (v18), y **puede
+   diferir del RUC que afilia**.
+
+4. **Hay dos fechas de inicio y no significan lo mismo.**
+   - `empleados.fecha_ingreso_real` — inicio efectivo de la relación laboral.
+   - `empleado_afiliaciones.fecha_afiliacion` — fecha del aviso de entrada al IESS.
+
+   | Cálculo | Fecha que manda |
+   |---|---|
+   | Vacaciones, décimos, antigüedad, finiquito | `fecha_ingreso_real` |
+   | Fondos de reserva (desde el mes 13), historia IESS | `fecha_afiliacion` |
+
+   La diferencia en días entre ambas se reporta por empleado: es parte de la brecha.
+
+5. **El rol congela un snapshot.** Al abrir el período se copian empresa afiliadora,
+   sueldo declarado, empresa pagadora y sueldo real dentro de la línea. Cambiar un sueldo
+   hoy no puede alterar un rol de marzo. Con más de 100 personas esto no es opcional.
+
+6. **Período cerrado es inmutable.** Corrección = nota de ajuste en un período nuevo,
+   nunca edición del cerrado.
+
+---
+
+## Convenciones (las mismas del resto del proyecto)
+
+- Un archivo `sql/vN_descripcion.sql` + su `sql/verificacion_vN.sql`.
+  Cabecera indicando *"Ejecutar una sola vez DESPUÉS de vN-1"*.
+- RPCs `security definer set search_path = public`, nombre terminado en `_vN`.
+- Toda RPC que muta recibe `p_idempotency_key` (patrón de Compras v21).
+- RLS en cada tabla. Tabla de eventos por módulo para auditoría (patrón v18 / v25).
+- Todo en español: tablas, columnas, mensajes de error de Postgres, UI.
+- Nunca editar un SQL ya ejecutado.
+
+### Acceso — más estricto que el resto del ERP
+
+Se agrega el valor `nomina` a `rol_usuario`:
+
+```sql
+alter type public.rol_usuario add value if not exists 'nomina';
+-- ejecutar en transacción separada antes de usarlo (mismo caso que v21)
+```
+
+Solo `admin`, `gerencia` y `nomina` leen o escriben estas tablas. Ninguna vista general
+del ERP debe tocarlas. Cédulas, sueldos reales y la brecha por persona son el dato más
+sensible del sistema — el acceso queda registrado en `nomina_eventos`.
+
+---
+
+## v26 · Personal y expediente
+
+```
+empleados
+  id, grupo_id, cedula (unique), nombres, apellidos, fecha_nacimiento,
+  estado_civil, direccion, telefono, email,
+  contacto_emergencia_nombre, contacto_emergencia_telefono,
+  fecha_ingreso_real, fecha_salida, cargo, area,
+  tipo_contrato (indefinido|eventual|ocasional|servicios_profesionales|aprendizaje),
+  estado (activo|inactivo|liquidado),
+  forma_pago, banco, tipo_cuenta, numero_cuenta
+  -- SIN empresa_id
+
+empleado_afiliaciones                          -- historizada
+  empleado_id, empresa_id (FK empresas, nullable), afiliado bool,
+  fecha_afiliacion, sueldo_declarado,
+  fecha_desde, fecha_hasta, motivo, registrado_por
+  -- unique parcial: una sola vigente por empleado (fecha_hasta is null)
+  -- check: afiliado = false ⇒ empresa_id null, fecha_afiliacion null, sueldo_declarado 0
+
+empleado_compensacion                          -- historizada
+  empleado_id, empresa_pagadora_id (FK empresas), sueldo_real,
+  fecha_desde, fecha_hasta, motivo, registrado_por
+  -- unique parcial: una sola vigente por empleado
+  -- empresa_pagadora_id puede diferir de la afiliadora
+
+empleado_documentos                            -- expediente digital
+  empleado_id, tipo (hoja_vida|cedula|papeleta_votacion|contrato|adendum|
+    titulo|certificado_laboral|certificado_medico|antecedentes|firma|foto|
+    aviso_entrada_iess|acta_finiquito|otro),
+  nombre, storage_path, mime, tamano_bytes,
+  fecha_emision, fecha_caducidad, subido_por, created_at, activo
+
+nomina_parametros                              -- por año, nunca en el código
+  anio, salario_basico_unificado,
+  pct_aporte_personal, pct_aporte_patronal, pct_fondos_reserva,
+  pct_iece, pct_secap, horas_jornada_semanal,
+  tope_multa_pct, tope_descuento_total_pct
+
+nomina_eventos                                 -- auditoría transversal del módulo
+```
+
+**Almacenamiento de documentos.** Bucket **privado** `expedientes` en Supabase Storage,
+path `empleados/{empleado_id}/{documento_id}.{ext}`. Política de acceso por el mismo rol.
+Nunca público, nunca URL firmada de larga duración.
+
+`fecha_caducidad` alimenta alertas: exámenes médicos, licencias, contratos eventuales.
+`tipo = 'firma'` guarda el PNG recortado que se estampa en roles y llamados impresos.
+
+**RPCs:** `guardar_empleado_v26`, `registrar_afiliacion_v26` (cierra la vigente y abre la
+nueva), `registrar_compensacion_v26`, `registrar_documento_empleado_v26`.
+
+---
+
+## v27 · Ausencias y vacaciones
+
+```
+feriados
+  anio, fecha, nombre, tipo (nacional|local), almacen_id nullable
+
+vacaciones_periodos                            -- uno por aniversario de ingreso real
+  empleado_id, periodo_desde, periodo_hasta, anos_servicio,
+  dias_derecho, dias_tomados, dias_pagados, dias_saldo (generated),
+  estado (abierto|agotado|liquidado|caducado)
+
+ausencias
+  empleado_id, tipo (vacaciones|enfermedad_iess|enfermedad_particular|
+    permiso_con_sueldo|permiso_sin_sueldo|maternidad|paternidad|lactancia|
+    calamidad_domestica|falta_injustificada|suspension_disciplinaria),
+  fecha_desde, fecha_hasta, horas,
+  dias_calendario, dias_habiles,
+  vacaciones_periodo_id nullable,
+  documento_respaldo_id (FK empleado_documentos),
+  solicitado_por, aprobado_por, aprobado_at,
+  estado (solicitada|aprobada|rechazada|anulada), observacion
+```
+
+- Derecho a vacaciones: 15 días desde el primer año; +1 día por año desde el sexto,
+  tope 30 (Art. 69 CT). Acumulables hasta tres períodos (Art. 75 CT).
+- El período se genera contra `fecha_ingreso_real`, no contra la afiliación.
+- `tipo = 'vacaciones'` descuenta de `vacaciones_periodos`, **FIFO** por el período más
+  antiguo abierto.
+- `falta_injustificada` y `permiso_sin_sueldo` descuentan días en el rol.
+- `dias_habiles` se calcula contra `feriados`; sin la tabla cargada el cálculo miente.
+
+---
+
+## v28 · Novedades disciplinarias
+
+```
+novedades_empleado
+  empleado_id, empresa_id (bajo qué RUC se emite),
+  numero (correlativo por empresa y año),
+  tipo (llamado_atencion|amonestacion_escrita|memorando|acta_compromiso|
+    felicitacion|sancion_economica|solicitud_visto_bueno),
+  fecha, asunto, hechos,
+  base_reglamento, base_legal,
+  descargo_empleado, resolucion,
+  emitido_por, aprobado_por,
+  estado (borrador|emitida|notificada|con_descargo|archivada),
+  notificado_at, forma_notificacion (fisica|correo|testigos),
+  firma_empleado_doc_id, documento_pdf_id,
+  genera_descuento bool, monto_descuento, descuento_id
+
+novedad_eventos
+```
+
+- El correlativo por empresa+año hace verificable el documento impreso.
+- La impresión arma: datos del empleado, RUC que emite, hechos, base legal invocada,
+  espacio de descargo y firma. El PDF generado se guarda en el expediente.
+- Consulta de acumulación: novedades por empleado en ventana móvil de días. El sistema
+  **muestra** el conteo (relevante para visto bueno, Art. 172 CT); no decide por sí solo.
+- Multa: tope en `nomina_parametros.tope_multa_pct`. Solo procede si está prevista en el
+  reglamento interno aprobado por el MDT — el Art. 44 lit. b) CT prohíbe multas no
+  previstas en él. Si `genera_descuento`, se crea la fila en `descuentos_programados`.
+
+---
+
+## v29 · Anticipos y descuentos
+
+```
+anticipos
+  empleado_id, empresa_pagadora_id, fecha, monto, motivo, cuotas,
+  solicitado_por, aprobado_por,
+  estado (solicitado|aprobado|rechazado|desembolsado|anulado),
+  desembolsado_at, forma_desembolso
+
+descuentos_programados                         -- motor único de egresos recurrentes
+  empleado_id, origen (anticipo|prestamo_iess|prestamo_quirografario|
+    prestamo_hipotecario|prestamo_empresa|multa|judicial|uniforme|
+    consumo_interno|otro),
+  origen_id, descripcion,
+  monto_total, cuotas_total, cuotas_pagadas, monto_cuota, saldo (generated),
+  fecha_inicio, fecha_fin, documento_respaldo_id,
+  estado (vigente|pagado|suspendido|condonado),
+  prioridad
+```
+
+Al calcular el rol se leen las cuotas vigentes del período. Si la suma supera
+`tope_descuento_total_pct`, se aplican por `prioridad` — retención judicial y pensiones
+alimenticias primero, siempre — y el resto se difiere al período siguiente.
+**Nunca se fuerza un neto negativo.**
+
+---
+
+## v30 · Períodos y cálculo
+
+```
+nomina_periodos
+  grupo_id, anio, mes, estado (abierto|calculado|cerrado),
+  generado_por, calculado_at, cerrado_por, cerrado_at
+
+nomina_rol_lineas                              -- snapshot congelado
+  periodo_id, empleado_id,
+
+  -- identidad congelada
+  empresa_afiliacion_id, afiliado, fecha_afiliacion, sueldo_declarado,
+  empresa_pagadora_id, sueldo_real, cargo, area, fecha_ingreso_real,
+
+  -- asistencia
+  dias_periodo, dias_laborados, dias_vacaciones,
+  dias_ausencia_con_sueldo, dias_ausencia_sin_sueldo,
+  horas_extra_50, horas_extra_100,
+
+  -- ingresos
+  sueldo_proporcional_real, sueldo_proporcional_declarado,
+  valor_horas_extra, comisiones, bonos, vacaciones_pagadas,
+  decimo_tercero_mensualizado, decimo_cuarto_mensualizado,
+  fondos_reserva_pagados, otros_ingresos,
+
+  -- egresos
+  aporte_personal, anticipos_cuota, multas,
+  prestamos_iess, prestamos_empresa, retencion_judicial, otros_descuentos,
+
+  -- costo patronal (no se descuenta al trabajador)
+  aporte_patronal, provision_decimo_tercero, provision_decimo_cuarto,
+  provision_vacaciones, provision_fondos_reserva,
+
+  -- resultados
+  total_ingresos_real, total_ingresos_declarado, total_egresos,
+  neto_real, neto_declarado, brecha (generated),
+  costo_empleador_real, costo_empleador_declarado
+
+nomina_rubros / nomina_rol_rubros
+  -- detalle de lo variable, para que el rol impreso muestre
+  -- "Anticipo 15/03 — cuota 2 de 3 — $50,00"
+```
+
+**RPCs:** `abrir_periodo_nomina_v30` (crea el período y genera una línea por empleado
+activo con el snapshot), `calcular_rol_v30` (aplica las fórmulas del año),
+`cerrar_periodo_nomina_v30` (lo vuelve inmutable).
+
+### Fórmulas — todas leídas de `nomina_parametros` del año del período
+
+| Concepto | Base | Tasa |
+|---|---|---|
+| Aporte personal IESS | sueldo declarado | 9,45 % |
+| Aporte patronal IESS | sueldo declarado | 11,15 % |
+| Fondos de reserva | sueldo declarado | 8,33 % — desde el mes 13 contado sobre `fecha_afiliacion` |
+| Décimo tercero | ingresos del mes | 8,33 % (1/12) |
+| Décimo cuarto | SBU del año | SBU/12 — monto fijo, no proporcional al sueldo |
+| Vacaciones | ingresos del mes | 4,17 % (1/24) |
+| Hora suplementaria | valor hora | +50 % |
+| Hora extraordinaria | valor hora | +100 % |
+
+El bloque declarado se calcula solo si `afiliado = true`; en caso contrario queda en cero
+y la línea reporta únicamente el rol real.
+
+Impuesto a la renta en relación de dependencia **no entra en v30**: requiere proyección
+anual, gastos personales y liquidación en enero. Va en v32.
+
+---
+
+## v31 · Reportes e interfaz
+
+Vistas: `vista_rol_real`, `vista_rol_declarado`, `vista_brecha_nomina`,
+`vista_costo_empleador_por_empresa`, `vista_pagos_por_empresa_pagadora`.
+
+Módulo `app/nomina/` con secciones **Empleados · Expediente · Ausencias · Novedades ·
+Roles · Parámetros · Reportes**, visible solo para `admin`, `gerencia` y `nomina`.
+
+Impresiones: rol individual real y declarado · planilla consolidada por RUC · llamado de
+atención y memorando · solicitud y aprobación de vacaciones · comprobante de anticipo ·
+certificado laboral · ficha completa con historial.
+
+---
+
+## v32 · Extensiones
+
+Impuesto a la renta en relación de dependencia · liquidaciones y actas de finiquito ·
+enlace del costo real de mano de obra con `ruta_produccion_etapas.costo_estimado`, que
+cierra el costeo real abierto en v25.
+
+---
+
+## Orden de construcción
+
+**v26 y v30 bastan para tener roles funcionando.** v27, v28 y v29 los enriquecen y se
+acoplan sin rehacer nada: cada uno solo aporta filas a `nomina_rol_rubros` y días a las
+columnas de asistencia de la línea.
+
+---
+
+## Pendiente antes de escribir v26
+
+- [ ] Corte inicial: qué persona está en qué RUC hoy, con qué sueldo declarado, con qué
+      `fecha_ingreso_real` y qué `fecha_afiliacion`.
+- [ ] Definir si el pago hecho desde un RUC distinto al afiliador se registra como gasto
+      propio de la pagadora o como cuenta por cobrar intercompañía.
+- [ ] Cargar `nomina_parametros` del año en curso (SBU vigente y porcentajes).
+- [ ] Cargar `feriados` del año antes de usar v27.
+
+## Reparto de trabajo
+
+Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
+
+| Fase | Responsable | Estado |
+|---|---|---|
+| v26 | — | pendiente |
+| v27 | — | pendiente |
+| v28 | — | pendiente |
+| v29 | — | pendiente |
+| v30 | — | pendiente |
+| v31 | — | pendiente |
+| v32 | — | pendiente |

@@ -243,6 +243,28 @@ Fotos de producto · código de barras · alertas por correo · costos/valoraci�
 
 ---
 
+## Nómina (v26 → v32) — reservado
+
+El plan completo está en **`docs/plan_nomina.md`**: modelo de datos, reglas de negocio
+acordadas con Fidel, fórmulas y reparto de fases. Léelo antes de tocar nada de nómina.
+
+Lo mínimo que hay que saber sin abrirlo:
+
+- **Numeración reservada v26–v32.** Producción llega hasta v25. Cualquier migración
+  ajena a nómina arranca en **v33**.
+- El personal **no** cuelga de una empresa: `empleados` no tiene `empresa_id`. La
+  afiliación (`empleado_afiliaciones`) y la compensación real (`empleado_compensacion`)
+  son tablas historizadas separadas, y la empresa que **paga** puede diferir de la que
+  **afilia**.
+- Existen dos fechas de inicio distintas y no son intercambiables:
+  `fecha_ingreso_real` (vacaciones, décimos, antigüedad) y `fecha_afiliacion`
+  (fondos de reserva, historia IESS).
+- El rol de pago **congela un snapshot**; un período cerrado es inmutable.
+- Se agrega el rol `nomina` a `rol_usuario`. Solo `admin`, `gerencia` y `nomina` acceden
+  a esas tablas — ninguna vista general del ERP debe tocarlas.
+
+---
+
 ## Personas
 
 | Nombre | Rol |
