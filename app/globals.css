@@ -762,3 +762,24 @@ button.btn-mini {
 
 .check-inline { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: #374151; }
 .negativo { color: #b91c1c; }
+
+/* Selector de documento de respaldo, reutilizado en varios formularios */
+.selector-documento {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.selector-documento-cab {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.selector-documento-subida { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.selector-documento-subida input[type="text"] { min-width: 160px; }
+.obligatorio { color: #b91c1c; }

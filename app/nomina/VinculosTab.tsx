@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import { soloFecha, hoyISO, mensajeError } from "./lib";
+import SelectorDocumento from "./SelectorDocumento";
 
 type Reingresable = {
   empleado_id: string;
@@ -66,12 +67,21 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
   const [guardando, setGuardando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [reingresando, setReingresando] = useState<Reingresable | null>(null);
+  const [saliendo, setSaliendo] = useState<Vinculo | null>(null);
 
   const [form, setForm] = useState({
     fecha_ingreso: hoyISO(),
     respeta_antiguedad: false,
     motivo: "",
     cargo: "",
+  });
+
+  const [salida, setSalida] = useState({
+    fecha_salida: hoyISO(),
+    tipo_salida: "renuncia",
+    motivo: "",
+    liquidado: false,
+    documento_finiquito_id: null as string | null,
   });
 
   async function cargar() {
@@ -129,38 +139,30 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
     cargar();
   }
 
-  async function registrarSalida(empleadoId: string, nombre: string) {
-    const tipo = window.prompt(
-      "Tipo de salida: renuncia, despido, visto_bueno, fin_contrato, abandono o mutuo_acuerdo",
-      "renuncia"
-    );
-    if (!tipo) return;
-    const motivo = window.prompt(`Motivo de la salida de ${nombre}:`);
-    if (!motivo?.trim()) return;
-    const fecha = window.prompt("Fecha de salida (AAAA-MM-DD):", hoyISO());
-    if (!fecha) return;
-    const liquidado = window.confirm(
-      "¿Se le pagó finiquito?\n\nAceptar = sí, se liquidó (al volver, la antigüedad arranca de cero).\nCancelar = no se liquidó (al volver puede conservar su antigüedad)."
-    );
-    if (liquidado) {
-      window.alert(
-        "Un finiquito pagado exige adjuntar el acta. Cárgala primero en el expediente y vuelve a intentarlo."
-      );
-      return;
-    }
+  async function confirmarSalida() {
+    if (!saliendo) return;
+    if (!salida.motivo.trim()) return setError("El motivo de la salida es obligatorio.");
+    if (salida.liquidado && !salida.documento_finiquito_id)
+      return setError("Un finiquito pagado exige adjuntar el acta que lo respalda.");
 
     setGuardando(true);
+    setError(null);
     const { error } = await supabase.rpc("registrar_salida_v33", {
-      p_empleado_id: empleadoId,
-      p_fecha_salida: fecha,
-      p_tipo_salida: tipo,
-      p_motivo: motivo,
-      p_liquidado: false,
-      p_documento_finiquito_id: null,
+      p_empleado_id: saliendo.empleado_id,
+      p_fecha_salida: salida.fecha_salida,
+      p_tipo_salida: salida.tipo_salida,
+      p_motivo: salida.motivo,
+      p_liquidado: salida.liquidado,
+      p_documento_finiquito_id: salida.documento_finiquito_id,
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Salida registrada. La afiliación y el sueldo quedaron cerrados en esa fecha.");
+    setAviso(
+      salida.liquidado
+        ? "Salida registrada con finiquito. Si vuelve, su antigüedad arrancará de cero."
+        : "Salida registrada sin liquidar. Si vuelve, podrá conservar su antigüedad."
+    );
+    setSaliendo(null);
     cargar();
   }
 
@@ -273,6 +275,90 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
               {guardando ? "Registrando…" : "Confirmar reingreso"}
             </button>
             <button className="secondary" onClick={() => setReingresando(null)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {saliendo && (
+        <div className="card-interna">
+          <h4>Salida de {saliendo.nombre_completo}</h4>
+          <p className="ayuda">
+            Al registrarla se cierran su afiliación y su sueldo en esa fecha. Lo que
+            decide su antigüedad si vuelve es <strong>si se le pagó finiquito</strong>.
+          </p>
+          <div className="form-grid">
+            <label>
+              Fecha de salida
+              <input
+                type="date"
+                value={salida.fecha_salida}
+                onChange={(e) => setSalida({ ...salida, fecha_salida: e.target.value })}
+              />
+            </label>
+            <label>
+              Tipo de salida
+              <select
+                value={salida.tipo_salida}
+                onChange={(e) => setSalida({ ...salida, tipo_salida: e.target.value })}
+              >
+                {Object.entries(ETIQUETA_SALIDA).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="ancho-total">
+              Motivo
+              <input
+                type="text"
+                value={salida.motivo}
+                onChange={(e) => setSalida({ ...salida, motivo: e.target.value })}
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={salida.liquidado}
+                onChange={(e) =>
+                  setSalida({
+                    ...salida,
+                    liquidado: e.target.checked,
+                    documento_finiquito_id: e.target.checked
+                      ? salida.documento_finiquito_id
+                      : null,
+                  })
+                }
+              />{" "}
+              Se le pagó finiquito
+              <small>
+                {salida.liquidado
+                  ? "La antigüedad queda liquidada: si vuelve, arranca de cero."
+                  : "Si vuelve, podrá conservar la antigüedad que traía."}
+              </small>
+            </label>
+          </div>
+          {salida.liquidado && (
+            <div className="form-grid">
+              <div className="ancho-total">
+                <SelectorDocumento
+                  empleadoId={saliendo.empleado_id}
+                  valor={salida.documento_finiquito_id}
+                  onCambio={(id) => setSalida({ ...salida, documento_finiquito_id: id })}
+                  tipoSugerido="acta_finiquito"
+                  etiqueta="Acta de finiquito"
+                  requerido
+                />
+              </div>
+            </div>
+          )}
+          <div className="filtros">
+            <button onClick={confirmarSalida} disabled={guardando}>
+              {guardando ? "Registrando…" : "Registrar salida"}
+            </button>
+            <button className="secondary" onClick={() => setSaliendo(null)}>
               Cancelar
             </button>
           </div>
@@ -419,7 +505,17 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
                         <button
                           className="btn-mini secondary"
                           disabled={guardando}
-                          onClick={() => registrarSalida(v.empleado_id, v.nombre_completo)}
+                          onClick={() => {
+                            setSaliendo(v);
+                            setSalida({
+                              fecha_salida: hoyISO(),
+                              tipo_salida: "renuncia",
+                              motivo: "",
+                              liquidado: false,
+                              documento_finiquito_id: null,
+                            });
+                            setError(null);
+                          }}
                         >
                           Registrar salida
                         </button>

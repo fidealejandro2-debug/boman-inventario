@@ -12,6 +12,7 @@ import {
   ETIQUETA_AUSENCIA,
   type Empleado,
 } from "./lib";
+import SelectorDocumento from "./SelectorDocumento";
 
 type Ausencia = {
   id: string;
@@ -70,6 +71,7 @@ export default function AusenciasTab({
     fecha_hasta: hoyISO(),
     horas: "",
     observacion: "",
+    documento_respaldo_id: null as string | null,
   });
 
   async function cargar() {
@@ -103,14 +105,14 @@ export default function AusenciasTab({
       p_fecha_hasta: form.horas ? form.fecha_desde : form.fecha_hasta,
       p_horas: form.horas ? Number(form.horas) : null,
       p_almacen_id: null,
-      p_documento_respaldo_id: null,
+      p_documento_respaldo_id: form.documento_respaldo_id,
       p_observacion: form.observacion || null,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
     setAviso("Ausencia registrada.");
-    setForm({ ...form, observacion: "", horas: "" });
+    setForm({ ...form, observacion: "", horas: "", documento_respaldo_id: null });
     cargar();
   }
 
@@ -245,6 +247,16 @@ export default function AusenciasTab({
           <button onClick={solicitar} disabled={guardando}>
             Registrar
           </button>
+          {/* El certificado médico o el permiso firmado justifican la ausencia. */}
+          {form.empleado_id && (
+            <SelectorDocumento
+              empleadoId={form.empleado_id}
+              valor={form.documento_respaldo_id}
+              onCambio={(id) => setForm({ ...form, documento_respaldo_id: id })}
+              tipoSugerido="certificado_medico"
+              etiqueta="Justificante"
+            />
+          )}
         </div>
       )}
 

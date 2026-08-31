@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import EmpleadoForm from "./EmpleadoForm";
+import CambioSueldoForm from "./CambioSueldoForm";
 import { dinero, soloFecha, type Empresa } from "./lib";
 
 type Personal = {
@@ -52,6 +53,7 @@ export default function PersonalTab({
 }) {
   const supabase = createClient();
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [cambiando, setCambiando] = useState<Personal | null>(null);
   const [filas, setFilas] = useState<Personal[]>([]);
   const [vencen, setVencen] = useState<DocPorVencer[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -182,6 +184,25 @@ export default function PersonalTab({
         </p>
       )}
 
+      {cambiando && puedeEscribir && (
+        <CambioSueldoForm
+          empleadoId={cambiando.empleado_id}
+          nombre={cambiando.nombre_completo}
+          sueldoActual={cambiando.sueldo_real}
+          declaradoActual={cambiando.sueldo_declarado}
+          empresaPagadoraActual={cambiando.empresa_pagadora_id}
+          empresaAfiliacionActual={cambiando.empresa_afiliacion_id}
+          afiliadoActual={cambiando.afiliado}
+          empresas={empresas}
+          onCancelar={() => setCambiando(null)}
+          onListo={() => {
+            setCambiando(null);
+            cargar();
+            onCambio();
+          }}
+        />
+      )}
+
       {mostrarForm && puedeEscribir && (
         <EmpleadoForm
           empresas={empresas}
@@ -261,6 +282,7 @@ export default function PersonalTab({
               <th>Paga</th>
               <th className="num">Real</th>
               <th className="num">Brecha</th>
+              {puedeEscribir && <th></th>}
             </tr>
           </thead>
           <tbody>
@@ -305,11 +327,20 @@ export default function PersonalTab({
                     dinero(f.brecha_sueldo)
                   )}
                 </td>
+                {puedeEscribir && (
+                  <td>
+                    {f.estado === "activo" && (
+                      <button className="btn-mini secondary" onClick={() => setCambiando(f)}>
+                        Cambiar
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {!visibles.length && (
               <tr>
-                <td colSpan={10} className="vacio">
+                <td colSpan={puedeEscribir ? 11 : 10} className="vacio">
                   Ningún empleado coincide con los filtros.
                 </td>
               </tr>
