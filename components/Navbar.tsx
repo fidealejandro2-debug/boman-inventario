@@ -15,7 +15,7 @@ type OpcionMenu = {
 };
 
 type ModuloMenu = {
-  id: "ventas" | "compras" | "produccion" | "inventario" | "reportes" | "administracion";
+  id: "ventas" | "compras" | "produccion" | "inventario" | "reportes" | "nomina" | "administracion";
   etiqueta: string;
   icono: string;
   opciones: OpcionMenu[];
@@ -67,6 +67,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerVentas = ["admin", "control", "tienda", "bodega", "gerencia"].includes(perfil.rol);
   const puedeVerCompras = ["admin", "control", "bodega", "gerencia"].includes(perfil.rol);
   const puedeVerProduccion = ["admin", "control", "bodega", "logistica", "gerencia"].includes(perfil.rol);
+  const puedeVerNomina = ["admin", "gerencia", "nomina"].includes(perfil.rol);
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -74,6 +75,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     gerencia: "Gerencia",
     tienda: "Tienda",
     control: "Control",
+    nomina: "Nómina",
   } as Record<string, string>)[perfil.rol] ?? perfil.rol;
 
   const modulosBase: ModuloMenu[] = [
@@ -121,6 +123,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       icono: "▥",
       opciones: [
         { href: "/reportes", etiqueta: "Reportes y análisis", descripcion: "Stock, valoración, reposición y cumplimiento", visible: puedeVerReportes },
+      ],
+    },
+    {
+      id: "nomina",
+      etiqueta: "Nómina",
+      icono: "☰",
+      opciones: [
+        { href: "/nomina", etiqueta: "Personal y roles", descripcion: "Empleados, expediente, roles de pago y costo por RUC", visible: puedeVerNomina },
       ],
     },
     {

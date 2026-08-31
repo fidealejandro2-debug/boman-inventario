@@ -401,6 +401,32 @@ columnas de asistencia de la línea.
 - [ ] Cargar `nomina_parametros` del año en curso (SBU vigente y porcentajes).
 - [ ] Cargar `feriados` del año antes de usar v27.
 
+### Notas de v31 (para v30 y para quien siga la interfaz)
+
+v31 es **solo vistas**: no crea tablas ni RPC, así que puede reejecutarse sin riesgo si
+v30 cambia. Lee de `nomina_rol_lineas`, `nomina_periodos`, `nomina_rubros` y
+`nomina_rol_rubros` con los nombres de columna del plan.
+
+Las 9 vistas: `vista_rol_real_v31`, `vista_rol_declarado_v31`, `vista_brecha_nomina_v31`,
+`vista_costo_empleador_por_empresa_v31`, `vista_pagos_por_empresa_pagadora_v31`,
+`vista_planilla_iess_v31`, `vista_resumen_periodo_nomina_v31`, `vista_rol_impresion_v31`,
+`vista_rol_rubros_v31`. Todas con `security_invoker = true`.
+
+Si v30 renombra alguna columna de `nomina_rol_lineas`, hay que reejecutar v31 — es el
+único acoplamiento entre ambas.
+
+`verificacion_v31.sql` incluye cuadres contables que valen como prueba de v30: que el
+neto real nunca sea negativo, que ingresos − egresos = neto, que la brecha no se invierta,
+que los días no excedan los del período, y que las sumas por RUC pagador y por RUC
+afiliador cuadren con el total del período.
+
+**Interfaz.** `app/nomina/` con tres pestañas: Personal, Roles de pago y Reportes. La
+página exige rol `admin`, `gerencia` o `nomina`; `gerencia` entra en modo consulta.
+Pendientes de la interfaz: formularios de alta y cambio de sueldo, pestañas de Ausencias
+(v27) y Novedades (v28), parámetros anuales, e impresión del rol y del llamado de
+atención (las vistas `vista_rol_impresion_v31` y `vista_novedad_impresion_v28` ya dan
+todos los campos).
+
 ## Reparto de trabajo
 
 Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
@@ -412,5 +438,5 @@ Anotar aquí quién toma cada fase antes de empezarla, para no cruzarse.
 | v28 | Claude | SQL y verificación listos localmente — falta ejecutar en Supabase |
 | v29 | Codex | instalada y verificada en Supabase 2026-08-30 |
 | v30 | Codex | en corrección desde 2026-08-30; reemplaza borrador incompatible |
-| v31 | — | pendiente |
+| v31 | Claude | vistas + módulo `app/nomina/` listos localmente — falta ejecutar en Supabase |
 | v32 | — | pendiente |
