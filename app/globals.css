@@ -848,3 +848,50 @@ button.btn-mini {
 }
 .fq-totales strong { font-size: 18px; color: #1f3864; }
 .tabla-scroll input[type="number"] { width: 84px; }
+
+/* Conciliación de factura XML en el panel de franquicia */
+.fx-linea {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+.fx-cab {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.fx-estado { margin-bottom: 6px; }
+.fx-asig {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 5px 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.fx-asig input[type="number"] { width: 76px; }
+
+/* Pedidos sin código en la solicitud de reposición */
+.bloque-sin-codigo {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+.linea-sin-codigo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.linea-sin-codigo input[type="text"],
+.linea-sin-codigo input:not([type]) { flex: 1 1 260px; }

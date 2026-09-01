@@ -23,6 +23,7 @@ type Linea = {
   cantidad_no_conforme: number;
   cantidad_no_recibida: number;
   observacion: string | null;
+  descripcion_libre: string | null;
   producto: ProductoDocumento | null;
 };
 type Documento = {
@@ -66,6 +67,8 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const [recibiendo, setRecibiendo] = useState<Documento | null>(null);
   const [recepcion, setRecepcion] = useState<Record<string, { recibida: number; noConforme: number; noRecibida: number; observacion: string }>>({});
   const [notaRecepcion, setNotaRecepcion] = useState("");
+  const [sinCodigo, setSinCodigo] = useState<{ descripcion: string; cantidad: number }[]>([]);
+  const [asignando, setAsignando] = useState<Record<string, string>>({});
   const [rectificando, setRectificando] = useState<Documento | null>(null);
   const [motivoRectificacion, setMotivoRectificacion] = useState("");
 
@@ -91,7 +94,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
         lineas:documento_inventario_lineas(
           id, producto_id, cantidad_solicitada, cantidad_aprobada, cantidad_preparada,
           cantidad_despachada, cantidad_recibida, cantidad_rechazada,
-          cantidad_no_conforme, cantidad_no_recibida, observacion,
+          cantidad_no_conforme, cantidad_no_recibida, observacion, descripcion_libre,
           producto:productos(id, sku, nombre, talla, color)
         )
       `).in("tipo", ["solicitud_reposicion", "transferencia"]).order("created_at", { ascending: false }).limit(300),
@@ -119,13 +122,21 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const listaActual = tab === "solicitudes" ? solicitudes : transferencias;
 
   function limpiarFormulario() {
-    setLineas([]); setNota(""); setPrioridad("normal"); setOrigenId("");
+    setLineas([]); setSinCodigo([]); setNota(""); setPrioridad("normal"); setOrigenId("");
     setMostrarNuevo(false);
   }
 
   async function crearDocumento(e: React.FormEvent) {
     e.preventDefault(); setMsg(null);
-    const items = lineas.filter((l) => l.cantidad > 0);
+    const libres = modoNuevo === "solicitud"
+      ? sinCodigo
+          .filter((l) => l.cantidad > 0 && l.descripcion.trim())
+          .map((l) => ({ producto_id: null, cantidad: l.cantidad, descripcion: l.descripcion.trim() }))
+      : [];
+    if (libres.some((l) => l.descripcion.length < 5)) {
+      setMsg({ tipo: "error", texto: "Describe cada producto sin código con al menos 5 caracteres." }); return;
+    }
+    const items = [...lineas.filter((l) => l.cantidad > 0), ...libres];
     if (!items.length) { setMsg({ tipo: "error", texto: "Agrega al menos un producto con cantidad." }); return; }
     if (!destinoId || (modoNuevo === "transferencia" && !origenId)) {
       setMsg({ tipo: "error", texto: "Selecciona los almacenes del documento." }); return;
@@ -147,8 +158,25 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
     limpiarFormulario(); await cargar();
   }
 
+  async function asignarProducto(linea: Linea) {
+    const productoId = asignando[linea.id] || "";
+    if (!productoId) { setMsg({ tipo: "error", texto: "Elige el producto del catálogo para esa línea." }); return; }
+    setProcesando(linea.id); setMsg(null);
+    const { error } = await supabase.rpc("asignar_producto_linea_v43", {
+      p_linea_id: linea.id, p_producto_id: productoId,
+    });
+    setProcesando(null);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    setMsg({ tipo: "ok", texto: "Pedido sin código convertido a producto del catálogo." });
+    await cargar();
+  }
+
   async function resolverSolicitud(documento: Documento, aprobar: boolean) {
     const origen = origenSolicitud[documento.id] || "";
+    if (aprobar && documento.lineas.some((l) => !l.producto_id)) {
+      setMsg({ tipo: "error", texto: "Hay pedidos sin código. Crea el producto en Catálogo y asígnalo antes de aprobar." });
+      return;
+    }
     if (aprobar && !origen) { setMsg({ tipo: "error", texto: "Selecciona la bodega que atenderá la solicitud." }); return; }
     const motivo = aprobar ? "Solicitud aprobada para preparación" : window.prompt("Motivo del rechazo:")?.trim();
     if (!aprobar && !motivo) return;
@@ -314,7 +342,25 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
             <div className="field"><label>Observación</label><input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Motivo, campaña o referencia" style={{ width: "100%" }} /></div>
           </div>
           <LineasDocumentoEditor productos={productos} lineas={lineas} onChange={setLineas} />
-          <button disabled={procesando === "nuevo" || !lineas.length}>{procesando === "nuevo" ? "Guardando..." : "Crear documento"}</button>
+          {modoNuevo === "solicitud" && (
+            <div className="bloque-sin-codigo">
+              <div className="header-row">
+                <div><strong>Productos que aún no están en el catálogo</strong>
+                  <div className="conteo">Descríbelo y bodega lo creará antes de aprobar la solicitud.</div></div>
+                <button type="button" className="secondary" onClick={() => setSinCodigo([...sinCodigo, { descripcion: "", cantidad: 1 }])}>+ Pedir sin código</button>
+              </div>
+              {sinCodigo.map((l, i) => (
+                <div className="linea-sin-codigo" key={i}>
+                  <input value={l.descripcion} placeholder="Ej.: Camiseta polo azul marino talla L, cuello redondo"
+                    onChange={(e) => setSinCodigo(sinCodigo.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x))} />
+                  <input type="number" min={1} value={l.cantidad} style={{ width: 80 }}
+                    onChange={(e) => setSinCodigo(sinCodigo.map((x, j) => j === i ? { ...x, cantidad: Number(e.target.value) || 0 } : x))} />
+                  <button type="button" className="chip-limpiar" onClick={() => setSinCodigo(sinCodigo.filter((_, j) => j !== i))}>Quitar</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button disabled={procesando === "nuevo" || (!lineas.length && !sinCodigo.length)}>{procesando === "nuevo" ? "Guardando..." : "Crear documento"}</button>
         </form>
       )}
 
@@ -334,10 +380,21 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
               </div>
               <div className="ruta-documento"><span>{documento.origen?.nombre ?? "Origen por asignar"}</span><b>→</b><span>{documento.destino?.nombre ?? "-"}</span></div>
               <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th className="num">Solic.</th><th className="num">Aprob.</th><th className="num">Prepar.</th><th className="num">Desp.</th><th className="num">Recib.</th></tr></thead><tbody>
-                {documento.lineas.map((l) => <tr key={l.id}><td>{l.producto?.sku}</td><td>{l.producto?.nombre}{l.producto?.talla ? <small> · {l.producto.talla}</small> : null}</td><td className="num">{l.cantidad_solicitada ?? "-"}</td><td className="num">{l.cantidad_aprobada ?? "-"}</td><td className="num">{l.cantidad_preparada ?? "-"}</td><td className="num">{l.cantidad_despachada ?? "-"}</td><td className="num">{l.cantidad_recibida ?? "-"}{(l.cantidad_no_conforme > 0 || l.cantidad_no_recibida > 0) && <small className="detalle-incidencia-linea">NC {l.cantidad_no_conforme} · No llegó {l.cantidad_no_recibida}</small>}</td></tr>)}
+                {documento.lineas.map((l) => <tr key={l.id} className={!l.producto_id ? "fila-alerta" : ""}><td>{l.producto?.sku ?? <span className="badge bajo">sin código</span>}</td><td>{l.producto?.nombre ?? l.descripcion_libre}{l.producto?.talla ? <small> · {l.producto.talla}</small> : null}</td><td className="num">{l.cantidad_solicitada ?? "-"}</td><td className="num">{l.cantidad_aprobada ?? "-"}</td><td className="num">{l.cantidad_preparada ?? "-"}</td><td className="num">{l.cantidad_despachada ?? "-"}</td><td className="num">{l.cantidad_recibida ?? "-"}{(l.cantidad_no_conforme > 0 || l.cantidad_no_recibida > 0) && <small className="detalle-incidencia-linea">NC {l.cantidad_no_conforme} · No llegó {l.cantidad_no_recibida}</small>}</td></tr>)}
               </tbody></table></div>
               {documento.nota && <p className="nota-documento">{documento.nota}</p>}
               <div className="acciones-documento">
+                {documento.tipo === "solicitud_reposicion" && documento.estado === "solicitado" && puedeResolver
+                  && documento.lineas.filter((l) => !l.producto_id).map((l) => (
+                  <div className="linea-sin-codigo" key={l.id} style={{ width: "100%" }}>
+                    <span>Sin código: <strong>{l.descripcion_libre}</strong> ({l.cantidad_solicitada})</span>
+                    <select value={asignando[l.id] ?? ""} onChange={(e) => setAsignando({ ...asignando, [l.id]: e.target.value })}>
+                      <option value="">Producto del catálogo...</option>
+                      {productos.map((p) => <option key={p.id} value={p.id}>{p.sku} · {p.nombre}{p.talla ? " · " + p.talla : ""}</option>)}
+                    </select>
+                    <button disabled={procesando === l.id} onClick={() => asignarProducto(l)}>Asignar</button>
+                  </div>
+                ))}
                 {documento.tipo === "solicitud_reposicion" && documento.estado === "solicitado" && puedeResolver && <>
                   <select value={origenSolicitud[documento.id] ?? ""} onChange={(e) => setOrigenSolicitud({ ...origenSolicitud, [documento.id]: e.target.value })}><option value="">Bodega que atenderá...</option>{almacenesPropios.filter((a) => a.id !== documento.destino_id).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select>
                   <button disabled={procesando === documento.id} onClick={() => resolverSolicitud(documento, true)}>Aprobar y generar transferencia</button>

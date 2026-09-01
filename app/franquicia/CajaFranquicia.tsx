@@ -24,6 +24,7 @@ type Movimiento = {
   referencia: string | null;
   estado: string;
   venta_id: string | null;
+  reversa_de_id: string | null;
   motivo_reversa: string | null;
   saldo_acumulado: number;
   created_at: string;
@@ -119,7 +120,9 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
   }
 
   const totales = useMemo(() => {
-    const vig = movs.filter((m) => m.estado === "vigente");
+    // El original revertido ya sale del saldo; su contrapartida es evidencia
+    // en el diario, no un movimiento mas, o la reversa restaria dos veces.
+    const vig = movs.filter((m) => m.estado === "vigente" && !m.reversa_de_id);
     const ing = vig.filter((m) => m.tipo === "ingreso").reduce((s, m) => s + Number(m.monto), 0);
     const egr = vig.filter((m) => m.tipo === "egreso").reduce((s, m) => s + Number(m.monto), 0);
     return { ing, egr, saldo: ing - egr };

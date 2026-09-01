@@ -8,6 +8,7 @@ import { tienePermiso, type PermisoCodigo, type RolUsuario } from "@/lib/permiso
 import VentasFranquicia from "./VentasFranquicia";
 import CajaFranquicia from "./CajaFranquicia";
 import InventarioFranquicia from "./InventarioFranquicia";
+import FacturaXmlFranquicia from "./FacturaXmlFranquicia";
 
 export type Franquicia = {
   id: string;
@@ -18,7 +19,7 @@ export type Franquicia = {
   empresa_id: string;
 };
 
-type Pestana = "ventas" | "caja" | "inventario";
+type Pestana = "ventas" | "factura" | "caja" | "inventario";
 
 export default function FranquiciaCliente({
   rol,
@@ -82,7 +83,8 @@ export default function FranquiciaCliente({
   }
 
   const pestanas: { id: Pestana; etiqueta: string; visible: boolean }[] = [
-    { id: "ventas", etiqueta: "Ventas", visible: puedeVender },
+    { id: "ventas", etiqueta: "Venta rápida", visible: puedeVender },
+    { id: "factura", etiqueta: "Factura XML", visible: puedeVender },
     { id: "caja", etiqueta: "Caja", visible: puedeCaja },
     { id: "inventario", etiqueta: "Inventario", visible: puedeInventario },
   ];
@@ -119,6 +121,9 @@ export default function FranquiciaCliente({
 
           {tab === "ventas" && puedeVender && (
             <VentasFranquicia franquicia={franquicia} />
+          )}
+          {tab === "factura" && puedeVender && (
+            <FacturaXmlFranquicia franquicia={franquicia} />
           )}
           {tab === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} />}
           {tab === "inventario" && puedeInventario && (

@@ -335,12 +335,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (sinCorreo) {
+      // La clave viaja por fuera del sistema, así que queda marcada como
+      // temporal: el middleware no deja usar nada hasta que la cambie.
+      const { error: marcaError } = await admin
+        .from("perfiles")
+        .update({ clave_temporal_desde: new Date().toISOString() })
+        .eq("id", creado.user.id);
+
       return NextResponse.json(
         {
           ok: true,
           email,
           clave: claveTemporal,
-          mensaje: `Usuario creado. Entrega la clave a ${email}; conviene que la cambie al entrar.`,
+          mensaje: marcaError
+            ? `Usuario creado, pero no se pudo exigir el cambio de clave (${marcaError.message}). Pídele que la cambie a mano.`
+            : `Usuario creado. Entrega la clave a ${email}: al entrar el sistema le exigirá cambiarla antes de usar nada.`,
         },
         { headers: { "Cache-Control": "no-store" } }
       );

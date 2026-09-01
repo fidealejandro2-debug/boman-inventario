@@ -243,6 +243,7 @@ export default function ProductosCliente() {
     )?.id || null;
     setEditando(p.id);
     setEdit({
+      sku: p.sku,
       nombre: p.nombre,
       categoria: p.categoria,
       categoria_id: categoriaId,
@@ -269,7 +270,18 @@ export default function ProductosCliente() {
       setMsg({ tipo: "error", texto: "La subcategoría no pertenece a la categoría seleccionada." });
       return;
     }
+    const sku = (edit.sku ?? "").trim().toUpperCase();
+    if (!sku) { setMsg({ tipo: "error", texto: "El SKU es obligatorio." }); return; }
+    const skuAnterior = productos.find((x) => x.id === id)?.sku ?? "";
+    if (sku !== skuAnterior && !window.confirm(
+      `Vas a cambiar el SKU de ${skuAnterior} a ${sku}.
+
+El histórico de movimientos, transferencias y ventas seguirá apuntando al mismo producto, pero las etiquetas físicas y los archivos exportados con el código anterior quedarán desactualizados.
+
+¿Continuar?`
+    )) return;
     const { error } = await supabase.from("productos").update({
+      sku,
       nombre: edit.nombre,
       categoria_id: categoriaSeleccionada.id,
       categoria: categoriaSeleccionada.nombre,
@@ -280,7 +292,10 @@ export default function ProductosCliente() {
       stock_minimo: Number(edit.stock_minimo) || 0,
       precio: edit.precio === null || edit.precio === undefined || (edit.precio as any) === "" ? null : Number(edit.precio),
     }).eq("id", id).select("id").single();
-    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    if (error) {
+      setMsg({ tipo: "error", texto: error.message.includes("duplicate") ? "Ese SKU ya pertenece a otro producto." : error.message });
+      return;
+    }
     setEditando(null);
     setMsg({ tipo: "ok", texto: "Producto actualizado." });
     await cargar();
@@ -623,7 +638,7 @@ export default function ProductosCliente() {
                       <td style={{ textAlign: "center" }}>
                         <input type="checkbox" checked={seleccionados.has(p.id)} onChange={() => alternarSeleccion(p.id)} disabled={aplicandoMasivo} aria-label={`Seleccionar ${p.nombre}`} />
                       </td>
-                      <td>{p.sku}</td>
+                      <td><input value={edit.sku ?? ""} onChange={(e) => setEdit({ ...edit, sku: e.target.value })} style={{ width: 110 }} /></td>
                       <td><input value={edit.nombre ?? ""} onChange={(e) => setEdit({ ...edit, nombre: e.target.value })} style={{ width: "100%" }} /></td>
                       <td>
                         <div style={{ display: "grid", gap: 5, minWidth: 170 }}>

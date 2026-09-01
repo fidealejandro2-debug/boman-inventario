@@ -377,7 +377,8 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
               <p className="ayuda">
                 Entrega estos datos a <strong>{claveGenerada.email}</strong>. La clave{" "}
                 <strong>se muestra una sola vez</strong>: si la pierdes, genera un enlace
-                de acceso desde la lista de usuarios.
+                de acceso desde la lista de usuarios. Al entrar, el sistema{" "}
+                <strong>le exigirá cambiarla</strong> antes de dejarlo usar cualquier pantalla.
               </p>
               <div className="fq-totales">
                 <span>{claveGenerada.email}</span>

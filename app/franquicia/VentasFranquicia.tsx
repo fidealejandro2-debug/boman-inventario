@@ -186,7 +186,26 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
     cargar();
   }
 
-  const ventasHoy = ventas.filter((v) => v.fecha === hoyLocalISO() && v.estado === "vigente");
+  async function anular(v: Venta) {
+    const motivo = window.prompt(
+      `Motivo de la anulación de la venta #${v.numero} (mínimo 10 caracteres).
+
+El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada como anulada.`
+    )?.trim();
+    if (!motivo) return;
+    if (motivo.length < 10) return setError("El motivo debe tener al menos 10 caracteres.");
+    setGuardando(true);
+    setError(null);
+    const { data, error } = await supabase.rpc("anular_venta_franquicia_v44", {
+      p_venta_id: v.id, p_motivo: motivo, p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso((data as { mensaje?: string } | null)?.mensaje ?? "Venta anulada.");
+    cargar();
+  }
+
+  const ventasHoy = ventas.filter((v) => v.fecha === hoyLocalISO() && v.estado === "registrada");
   const totalHoy = ventasHoy.reduce((s, v) => s + Number(v.total), 0);
 
   if (cargando) return <p className="ayuda">Cargando productos del local…</p>;
@@ -426,11 +445,12 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
               <th className="num">Total</th>
               <th>Vendedor</th>
               <th>Estado</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {ventas.map((v) => (
-              <tr key={v.id} className={v.estado !== "vigente" ? "fila-anulada" : ""}>
+              <tr key={v.id} className={v.estado !== "registrada" ? "fila-anulada" : ""}>
                 <td className="num">{v.numero}</td>
                 <td>{fmtFecha(v.created_at)}</td>
                 <td>{v.medio_pago}</td>
@@ -442,11 +462,18 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
                 <td>
                   <span className={`badge estado-${v.estado}`}>{v.estado}</span>
                 </td>
+                <td>
+                  {v.estado === "registrada" && (
+                    <button className="btn-mini secondary" disabled={guardando} onClick={() => anular(v)}>
+                      Anular
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {!ventas.length && (
               <tr>
-                <td colSpan={7} className="vacio">
+                <td colSpan={8} className="vacio">
                   Todavía no hay ventas registradas en este local.
                 </td>
               </tr>

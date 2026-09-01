@@ -51,6 +51,16 @@ export default function EstablecerClavePage() {
       setError(actualizarError.message);
       return;
     }
+    // Levanta la marca de clave temporal. La función comprueba en el servidor
+    // que la contraseña cambió de verdad, así que no sirve llamarla sola.
+    const { data: liberado } = await supabase.rpc("confirmar_cambio_clave_v44");
+    if (liberado === false) {
+      // Sin esto el middleware devolvería a esta misma pantalla en bucle.
+      setError(
+        "La contraseña se guardó, pero el sistema no pudo confirmar el cambio. Cierra sesión, vuelve a entrar con la nueva contraseña y avisa a Administración si el problema sigue."
+      );
+      return;
+    }
     router.push("/dashboard");
     router.refresh();
   }

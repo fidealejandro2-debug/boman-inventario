@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
   if (user) {
     const { data: perfil, error: perfilError } = await supabase
       .from("perfiles")
-      .select("activo")
+      .select("activo, clave_temporal_desde")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -57,6 +57,15 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.search = `?motivo=${perfil ? "inactivo" : "sin-perfil"}`;
+      return redirectConCookies(url);
+    }
+
+    // Con clave temporal vigente no se entra a ninguna otra pantalla: la clave
+    // se entrego por fuera del sistema y deja de servir recien cuando la cambia.
+    if (perfil.clave_temporal_desde && !request.nextUrl.pathname.startsWith("/establecer-clave")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/establecer-clave";
+      url.search = "?motivo=clave-temporal";
       return redirectConCookies(url);
     }
   }
