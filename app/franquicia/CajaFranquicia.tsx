@@ -74,6 +74,8 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
   const [hasta, setHasta] = useState(hoyLocalISO());
   const [fechaCierre, setFechaCierre] = useState(hoyLocalISO());
   const [saldoInicial, setSaldoInicial] = useState("");
+  // null = es el primer cierre del local y hay que declararlo a mano.
+  const [saldoDerivado, setSaldoDerivado] = useState<number | null>(null);
   const [efectivoContado, setEfectivoContado] = useState("");
   const [notaCierre, setNotaCierre] = useState("");
 
@@ -122,8 +124,15 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
         setEfectivoContado(String(Number(cierreActual.efectivo_contado)));
         setNotaCierre(cierreActual.nota ?? "");
       } else {
-        const anterior = lista.find((c) => c.fecha < fechaCierre && c.estado === "cerrado");
-        setSaldoInicial((actual) => actual || String(Number(anterior?.efectivo_contado ?? 0)));
+        // El saldo inicial ya no se escribe: lo calcula el servidor a partir del
+        // ultimo cierre. Si lo eligiera quien cuenta el efectivo, cualquier
+        // faltante se podria dejar en cero.
+        const { data: derivado } = await supabase.rpc("saldo_inicial_caja_franquicia_v49", {
+          p_franquicia_id: franquicia.id, p_fecha: fechaCierre,
+        });
+        const valor = derivado === null || derivado === undefined ? null : Number(derivado);
+        setSaldoDerivado(valor);
+        if (valor !== null) setSaldoInicial(String(valor));
       }
     }
     if (!resumen.error) {
@@ -210,7 +219,7 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
     }
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("cerrar_caja_franquicia_v47", {
+    const { error } = await supabase.rpc("cerrar_caja_franquicia_v49", {
       p_fecha: fechaCierre,
       p_saldo_inicial_efectivo: Number(saldoInicial),
       p_efectivo_contado: Number(efectivoContado),
@@ -307,9 +316,15 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
               step="0.01"
               min="0"
               value={saldoInicial}
+              readOnly={saldoDerivado !== null}
               disabled={cierreSeleccionado?.estado === "cerrado"}
               onChange={(e) => setSaldoInicial(e.target.value)}
             />
+            <small className="ayuda">
+              {saldoDerivado !== null
+                ? "Viene del último cierre del local más el efectivo de los días sin cerrar. No se edita."
+                : "Primer cierre del local: indica con cuánto efectivo arranca la caja."}
+            </small>
           </label>
           <label>
             Efectivo contado

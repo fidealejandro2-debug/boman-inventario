@@ -10,6 +10,7 @@ import CajaFranquicia from "./CajaFranquicia";
 import InventarioFranquicia from "./InventarioFranquicia";
 import FacturaXmlFranquicia from "./FacturaXmlFranquicia";
 import AlertasFranquicia from "./AlertasFranquicia";
+import MensualFranquicia from "./MensualFranquicia";
 
 export type Franquicia = {
   id: string;
@@ -20,7 +21,7 @@ export type Franquicia = {
   empresa_id: string;
 };
 
-type Pestana = "ventas" | "factura" | "caja" | "inventario" | "alertas";
+type Pestana = "ventas" | "factura" | "caja" | "inventario" | "alertas" | "mensual";
 
 export default function FranquiciaCliente({
   rol,
@@ -38,6 +39,8 @@ export default function FranquiciaCliente({
 
   const puedeVender = tienePermiso(perfil, "franquicia.ventas");
   const puedeCaja = tienePermiso(perfil, "franquicia.caja");
+  const puedePrecio = tienePermiso(perfil, "franquicia.precio_libre");
+  const puedeDescuento = tienePermiso(perfil, "franquicia.descuento");
   const puedeInventario = tienePermiso(perfil, "franquicia.inventario");
   const puedeReposicion = tienePermiso(perfil, "franquicia.reposicion");
 
@@ -88,6 +91,7 @@ export default function FranquiciaCliente({
     { id: "ventas", etiqueta: "Venta rápida", visible: puedeVender },
     { id: "factura", etiqueta: "Factura XML", visible: puedeVender },
     { id: "caja", etiqueta: "Caja", visible: puedeCaja },
+    { id: "mensual", etiqueta: "Mensual", visible: puedeCaja },
     { id: "inventario", etiqueta: "Inventario", visible: puedeInventario },
     { id: "alertas", etiqueta: "Alertas", visible: puedeReposicion },
   ];
@@ -126,7 +130,11 @@ export default function FranquiciaCliente({
           </div>
 
           {tabActiva === "ventas" && puedeVender && (
-            <VentasFranquicia franquicia={franquicia} />
+            <VentasFranquicia
+              franquicia={franquicia}
+              puedePrecio={puedePrecio}
+              puedeDescuento={puedeDescuento}
+            />
           )}
           {tabActiva === "factura" && puedeVender && (
             <FacturaXmlFranquicia franquicia={franquicia} />
@@ -134,6 +142,9 @@ export default function FranquiciaCliente({
           {tabActiva === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} />}
           {tabActiva === "inventario" && puedeInventario && (
             <InventarioFranquicia franquicia={franquicia} />
+          )}
+          {tabActiva === "mensual" && puedeCaja && (
+            <MensualFranquicia franquicia={franquicia} />
           )}
           {tabActiva === "alertas" && puedeReposicion && (
             <AlertasFranquicia franquicia={franquicia} />

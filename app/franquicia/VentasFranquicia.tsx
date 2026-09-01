@@ -54,7 +54,16 @@ type Venta = {
   pagos: PagoVenta[];
 };
 
-export default function VentasFranquicia({ franquicia }: { franquicia: Franquicia }) {
+export default function VentasFranquicia({
+  franquicia,
+  puedePrecio,
+  puedeDescuento,
+}: {
+  franquicia: Franquicia;
+  /** Sin esto la venta va al precio de catalogo; la base lo vuelve a validar. */
+  puedePrecio: boolean;
+  puedeDescuento: boolean;
+}) {
   const supabase = createClient();
   const [stock, setStock] = useState<Disponible[]>([]);
   const [ventas, setVentas] = useState<Venta[]>([]);
@@ -217,7 +226,7 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
 
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("registrar_venta_franquicia_v47", {
+    const { error } = await supabase.rpc("registrar_venta_franquicia_v50", {
       p_fecha: fechaVenta,
       p_items: lineas.map((l) => ({
         producto_id: l.producto_id,
@@ -382,6 +391,8 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                           step="0.01"
                           min="0"
                           value={l.precio_unitario}
+                          readOnly={!puedePrecio}
+                          title={puedePrecio ? "" : "Se vende al precio del catálogo"}
                           onChange={(e) =>
                             actualizar(
                               l.producto_id,
@@ -397,6 +408,8 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                           step="0.01"
                           min="0"
                           value={l.descuento}
+                          readOnly={!puedeDescuento}
+                          title={puedeDescuento ? "" : "No tienes permiso para descontar"}
                           onChange={(e) =>
                             actualizar(l.producto_id, "descuento", Number(e.target.value))
                           }
@@ -440,6 +453,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                   min="0"
                   max={subtotal}
                   value={descuentoGeneral}
+                readOnly={!puedeDescuento}
                   onChange={(e) => setDescuentoGeneral(e.target.value)}
                 />
               </label>
