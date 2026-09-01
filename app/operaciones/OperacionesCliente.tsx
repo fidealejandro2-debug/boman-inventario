@@ -70,11 +70,11 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const [motivoRectificacion, setMotivoRectificacion] = useState("");
 
   const rolGlobal = ["admin", "control", "gerencia"].includes(perfil.rol);
-  const puedeSolicitar = ["admin", "control", "bodega", "tienda"].includes(perfil.rol);
+  const puedeSolicitar = ["admin", "control", "bodega", "tienda", "franquiciado"].includes(perfil.rol);
   const puedeCrearTransferencia = ["admin", "control", "bodega"].includes(perfil.rol);
   const puedeResolver = ["admin", "control", "bodega"].includes(perfil.rol);
   const puedeTransportar = ["admin", "control", "bodega", "logistica"].includes(perfil.rol);
-  const puedeRecibir = ["admin", "control", "bodega", "tienda"].includes(perfil.rol);
+  const puedeRecibir = ["admin", "control", "bodega", "tienda", "franquiciado"].includes(perfil.rol);
 
   async function cargar() {
     setCargando(true);
@@ -133,7 +133,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
     const clave = nuevaClaveIdempotencia();
     setProcesando("nuevo");
     const respuesta = modoNuevo === "solicitud"
-      ? await supabase.rpc("crear_solicitud_reposicion", {
+      ? await supabase.rpc(perfil.rol === "franquiciado" ? "crear_solicitud_reposicion_v42" : "crear_solicitud_reposicion", {
           p_destino_id: destinoId, p_items: items, p_prioridad: prioridad,
           p_nota: nota || null, p_idempotency_key: clave,
         })
@@ -252,7 +252,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
       setMsg({ tipo: "error", texto: "Explica la diferencia o el rechazo antes de recibir." }); return;
     }
     setProcesando(recibiendo.id); setMsg(null);
-    const { data, error } = await supabase.rpc("recibir_transferencia", {
+    const { data, error } = await supabase.rpc(perfil.rol === "franquiciado" ? "recibir_transferencia_franquicia_v42" : "recibir_transferencia", {
       p_documento_id: recibiendo.id, p_items: items, p_nota: notaRecepcion || "Recepción completa verificada",
     });
     setProcesando(null);

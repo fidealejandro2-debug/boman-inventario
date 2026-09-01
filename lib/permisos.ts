@@ -5,7 +5,9 @@ export type RolUsuario =
   | "gerencia"
   | "tienda"
   | "control"
-  | "nomina";
+  | "nomina"
+  | "franquiciado"
+  | "vendedor_franquicia";
 
 export type PermisoCodigo =
   | "inventario.acceder"
@@ -18,7 +20,12 @@ export type PermisoCodigo =
   | "control.acceder"
   | "reportes.acceder"
   | "nomina.acceder"
-  | "nomina.editar";
+  | "nomina.editar"
+  | "franquicia.acceder"
+  | "franquicia.ventas"
+  | "franquicia.caja"
+  | "franquicia.inventario"
+  | "franquicia.reposicion";
 
 export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "inventario.acceder",
@@ -32,6 +39,11 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "reportes.acceder",
   "nomina.acceder",
   "nomina.editar",
+  "franquicia.acceder",
+  "franquicia.ventas",
+  "franquicia.caja",
+  "franquicia.inventario",
+  "franquicia.reposicion",
 ];
 
 export type Perfil = {

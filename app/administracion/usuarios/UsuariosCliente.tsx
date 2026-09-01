@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fecha } from "@/lib/utils";
 
-type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "nomina";
+type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "nomina" | "franquiciado" | "vendedor_franquicia";
 type Almacen = { id: string; nombre: string; tipo: string; activo: boolean };
 type Usuario = {
   id: string;
@@ -32,9 +32,12 @@ const ROLES: { valor: Rol; etiqueta: string }[] = [
   { valor: "control", etiqueta: "Control" },
   { valor: "gerencia", etiqueta: "Gerencia" },
   { valor: "nomina", etiqueta: "Nómina" },
+  { valor: "franquiciado", etiqueta: "Franquiciado" },
+  { valor: "vendedor_franquicia", etiqueta: "Vendedor de franquicia" },
 ];
 
 const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "nomina"];
+const ROLES_UN_SOLO_ALMACEN: Rol[] = ["franquiciado", "vendedor_franquicia"];
 
 const NUEVO = {
   email: "",
@@ -96,6 +99,10 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
       setMsg({ tipo: "error", texto: "Los usuarios operativos deben tener al menos un almacén asignado." });
       return;
     }
+    if (ROLES_UN_SOLO_ALMACEN.includes(nuevo.rol) && nuevo.almacen_ids.length !== 1) {
+      setMsg({ tipo: "error", texto: "Los usuarios de franquicia deben tener exactamente un local asignado." });
+      return;
+    }
 
     setGuardando(true);
     try {
@@ -136,6 +143,10 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
     const almacenIds = edicion.almacen_ids ?? [];
     if (!ROLES_SIN_ALMACEN.includes(rol) && Boolean(edicion.activo) && !almacenIds.length) {
       setMsg({ tipo: "error", texto: "Selecciona al menos un almacén antes de guardar." });
+      return;
+    }
+    if (Boolean(edicion.activo) && ROLES_UN_SOLO_ALMACEN.includes(rol) && almacenIds.length !== 1) {
+      setMsg({ tipo: "error", texto: "Los usuarios de franquicia deben tener exactamente un local asignado." });
       return;
     }
     setGuardando(true);
@@ -326,7 +337,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                 <div className="field">
                   <label>Almacenes asignados</label>
                   <div className="selector-almacenes">
-                    {almacenes.map((a) => <label key={a.id}><input type="checkbox" checked={nuevo.almacen_ids.includes(a.id)} onChange={(e) => setNuevo({ ...nuevo, almacen_ids: e.target.checked ? [...nuevo.almacen_ids, a.id] : nuevo.almacen_ids.filter((id) => id !== a.id) })} /> {a.nombre}</label>)}
+                    {almacenes.map((a) => <label key={a.id}><input type="checkbox" checked={nuevo.almacen_ids.includes(a.id)} onChange={(e) => setNuevo({ ...nuevo, almacen_ids: e.target.checked ? (ROLES_UN_SOLO_ALMACEN.includes(nuevo.rol) ? [a.id] : [...nuevo.almacen_ids, a.id]) : nuevo.almacen_ids.filter((id) => id !== a.id) })} /> {a.nombre}</label>)}
                   </div>
                 </div>
               )}
@@ -373,7 +384,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                       </td>
                       <td>
                         {estaEditando && !ROLES_SIN_ALMACEN.includes(rolEdicion) ? (
-                          <div className="selector-almacenes compacto">{almacenes.map((a) => { const ids = edicion.almacen_ids ?? []; return <label key={a.id}><input type="checkbox" checked={ids.includes(a.id)} onChange={(e) => setEdicion({ ...edicion, almacen_ids: e.target.checked ? [...ids, a.id] : ids.filter((id) => id !== a.id) })} /> {a.nombre}</label>; })}</div>
+                          <div className="selector-almacenes compacto">{almacenes.map((a) => { const ids = edicion.almacen_ids ?? []; return <label key={a.id}><input type="checkbox" checked={ids.includes(a.id)} onChange={(e) => setEdicion({ ...edicion, almacen_ids: e.target.checked ? (ROLES_UN_SOLO_ALMACEN.includes(rolEdicion) ? [a.id] : [...ids, a.id]) : ids.filter((id) => id !== a.id) })} /> {a.nombre}</label>; })}</div>
                         ) : ROLES_SIN_ALMACEN.includes(estaEditando ? rolEdicion : usuario.rol)
                           ? "Todos"
                           : usuario.almacen_ids.map((id) => almacenes.find((a) => a.id === id)?.nombre).filter(Boolean).join(", ") || "Sin asignación"}

@@ -4,9 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "nomina"] as const;
+const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "nomina", "franquiciado", "vendedor_franquicia"] as const;
 type Rol = (typeof ROLES)[number];
 const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "nomina"];
+const ROLES_UN_SOLO_ALMACEN: Rol[] = ["franquiciado", "vendedor_franquicia"];
 const UUID_VALIDO = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type DatosPerfil = {
@@ -250,6 +251,9 @@ export async function POST(request: NextRequest) {
     if (!ROLES_SIN_ALMACEN.includes(rol) && !almacenIds.length) {
       return NextResponse.json({ error: "Los usuarios operativos deben tener al menos un almacén asignado." }, { status: 400 });
     }
+    if (ROLES_UN_SOLO_ALMACEN.includes(rol) && almacenIds.length !== 1) {
+      return NextResponse.json({ error: "Los usuarios de franquicia deben tener exactamente un local asignado." }, { status: 400 });
+    }
     const errorAlmacenes = await validarAlmacenesActivos(contexto.supabase, almacenIds);
     if (errorAlmacenes) {
       return NextResponse.json({ error: errorAlmacenes }, { status: 400 });
@@ -270,7 +274,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: perfilError } = await contexto.supabase.rpc("admin_guardar_usuario_v37", {
+    const { error: perfilError } = await contexto.supabase.rpc("admin_guardar_usuario_v42", {
       p_perfil_id: invitacion.user.id,
       p_nombre_completo: nombre,
       p_rol: rol,
@@ -319,12 +323,15 @@ export async function PATCH(request: NextRequest) {
     if (!ROLES_SIN_ALMACEN.includes(rol) && !almacenIds.length) {
       return NextResponse.json({ error: "Los usuarios operativos deben tener al menos un almacén asignado." }, { status: 400 });
     }
+    if (activo && ROLES_UN_SOLO_ALMACEN.includes(rol) && almacenIds.length !== 1) {
+      return NextResponse.json({ error: "Los usuarios de franquicia deben tener exactamente un local asignado." }, { status: 400 });
+    }
     const errorAlmacenes = await validarAlmacenesActivos(contexto.supabase, almacenIds);
     if (errorAlmacenes) {
       return NextResponse.json({ error: errorAlmacenes }, { status: 400 });
     }
 
-    const { error } = await contexto.supabase.rpc("admin_guardar_usuario_v37", {
+    const { error } = await contexto.supabase.rpc("admin_guardar_usuario_v42", {
       p_perfil_id: id,
       p_nombre_completo: nombre,
       p_rol: rol,

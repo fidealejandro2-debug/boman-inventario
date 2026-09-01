@@ -42,6 +42,14 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "nomina.acceder", "nomina.editar",
   ],
+  franquiciado: [
+    "inventario.acceder", "operaciones.acceder", "franquicia.acceder",
+    "franquicia.ventas", "franquicia.caja", "franquicia.inventario",
+    "franquicia.reposicion",
+  ],
+  vendedor_franquicia: [
+    "inventario.acceder", "franquicia.acceder", "franquicia.ventas",
+  ],
 };
 
 export async function getPerfilActual(): Promise<Perfil> {

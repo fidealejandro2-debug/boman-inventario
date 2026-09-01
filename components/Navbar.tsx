@@ -15,7 +15,7 @@ type OpcionMenu = {
 };
 
 type ModuloMenu = {
-  id: "ventas" | "compras" | "produccion" | "inventario" | "reportes" | "nomina" | "administracion";
+  id: "ventas" | "compras" | "produccion" | "inventario" | "franquicias" | "reportes" | "nomina" | "administracion";
   etiqueta: string;
   icono: string;
   opciones: OpcionMenu[];
@@ -68,6 +68,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerCompras = tienePermiso(perfil, "compras.acceder");
   const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
   const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
+  const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -76,6 +77,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     tienda: "Tienda",
     control: "Control",
     nomina: "Nómina",
+    franquiciado: "Franquiciado",
+    vendedor_franquicia: "Vendedor de franquicia",
   } as Record<string, string>)[perfil.rol] ?? perfil.rol;
 
   const modulosBase: ModuloMenu[] = [
@@ -115,6 +118,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
         { href: "/control", etiqueta: "Centro de Control", descripcion: "Aprobaciones, incidencias y auditoría", visible: puedeVerControl },
         { href: "/productos", etiqueta: "Catálogo de productos", descripcion: "Productos, categorías, precios e importación", visible: puedeEditarProductos },
         { href: "/configuracion/inventario", etiqueta: "Políticas de stock", descripcion: "Mínimos, máximos y puntos de reposición", visible: puedeConfigurarStock },
+      ],
+    },
+    {
+      id: "franquicias",
+      etiqueta: "Franquicia",
+      icono: "FQ",
+      opciones: [
+        { href: "/franquicia", etiqueta: "Operación del local", descripcion: "Ventas, caja e inventario aislados por franquicia", visible: puedeVerFranquicia },
       ],
     },
     {

@@ -15,7 +15,7 @@ type FilaMatriz = {
   configurable: boolean;
 };
 
-const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "nomina"];
+const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "nomina", "franquiciado", "vendedor_franquicia"];
 const ETIQUETAS_ROL: Record<string, string> = {
   admin: "Administrador",
   bodega: "Bodega",
@@ -24,6 +24,8 @@ const ETIQUETAS_ROL: Record<string, string> = {
   tienda: "Tienda",
   control: "Control",
   nomina: "Nómina",
+  franquiciado: "Franquiciado",
+  vendedor_franquicia: "Vendedor de franquicia",
 };
 
 export default function PermisosCliente() {
