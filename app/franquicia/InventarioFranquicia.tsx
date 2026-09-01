@@ -35,8 +35,11 @@ type LineaAjuste = {
 
 export default function InventarioFranquicia({
   franquicia,
+  soloLectura = false,
 }: {
   franquicia: Franquicia;
+  /** Admin y Control revisan el stock del local; ajustarlo es del titular. */
+  soloLectura?: boolean;
 }) {
   const supabase = createClient();
   const [stock, setStock] = useState<Fila[]>([]);
@@ -264,13 +267,13 @@ export default function InventarioFranquicia({
       </p>
 
       <div className="filtros">
-        <button onClick={() => setMostrarAjuste(!mostrarAjuste)}>
+        <button disabled={soloLectura} onClick={() => setMostrarAjuste(!mostrarAjuste)}>
           {mostrarAjuste ? "Cancelar ajuste" : "Registrar ajuste"}
         </button>
-        <button className="secondary" onClick={() => setEditandoMinimos(!editandoMinimos)}>
+        <button className="secondary" disabled={soloLectura} onClick={() => setEditandoMinimos(!editandoMinimos)}>
           {editandoMinimos ? "Cancelar minimos" : "Configurar minimos"}
         </button>
-        <button onClick={solicitarSugerido} disabled={guardando || sugerido <= 0}>
+        <button onClick={solicitarSugerido} disabled={guardando || soloLectura || sugerido <= 0}>
           Solicitar reposicion sugerida ({sugerido})
         </button>
         <input

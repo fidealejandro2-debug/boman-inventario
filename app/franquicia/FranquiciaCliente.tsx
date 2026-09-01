@@ -33,21 +33,43 @@ export default function FranquiciaCliente({
   const perfil = { rol, permisos };
   const supabase = createClient();
   const [franquicia, setFranquicia] = useState<Franquicia | null>(null);
+  const [locales, setLocales] = useState<Franquicia[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Pestana>("ventas");
 
-  const puedeVender = tienePermiso(perfil, "franquicia.ventas");
-  const puedeCaja = tienePermiso(perfil, "franquicia.caja");
+  // Admin, Control y Gerencia no tienen local propio: entran a revisar
+  // cualquiera. usuario_puede_franquicia_v42 ya les da lectura sobre todos, asi
+  // que el panel solo tiene que dejarlos elegir y esconder lo que es de operacion.
+  const esRevision = ["admin", "control", "gerencia"].includes(rol);
+
+  const puedeVender = tienePermiso(perfil, "franquicia.ventas") && !esRevision;
+  const puedeCaja = tienePermiso(perfil, "franquicia.caja") || esRevision;
   const puedePrecio = tienePermiso(perfil, "franquicia.precio_libre");
   const puedeDescuento = tienePermiso(perfil, "franquicia.descuento");
-  const puedeInventario = tienePermiso(perfil, "franquicia.inventario");
-  const puedeReposicion = tienePermiso(perfil, "franquicia.reposicion");
+  const puedeInventario = tienePermiso(perfil, "franquicia.inventario") || esRevision;
+  const puedeReposicion = tienePermiso(perfil, "franquicia.reposicion") || esRevision;
 
   useEffect(() => {
     (async () => {
-      // La franquicia sale del almacén asignado al perfil: el usuario no la
-      // elige, así queda aislado de los demás locales del grupo.
+      if (esRevision) {
+        const { data, error } = await supabase
+          .from("franquicias")
+          .select("id, nombre, codigo, ciudad, almacen_id, empresa_id")
+          .eq("activo", true)
+          .order("nombre");
+        if (error) setError(error.message);
+        else {
+          const lista = (data as Franquicia[]) ?? [];
+          setLocales(lista);
+          setFranquicia(lista[0] ?? null);
+        }
+        setCargando(false);
+        return;
+      }
+
+      // Para quien opera, la franquicia sale del almacén asignado al perfil: no
+      // la elige, así queda aislado de los demás locales del grupo.
       const { data: id, error: errId } = await supabase.rpc(
         "franquicia_usuario_actual_v42"
       );
@@ -69,7 +91,7 @@ export default function FranquiciaCliente({
       else setFranquicia(data as Franquicia);
       setCargando(false);
     })();
-  }, [supabase]);
+  }, [supabase, esRevision]);
 
   if (cargando) return <p className="ayuda">Cargando local…</p>;
   if (error) return <p className="error">No se pudo abrir el local: {error}</p>;
@@ -79,9 +101,9 @@ export default function FranquiciaCliente({
       <div className="card">
         <h2>Franquicia</h2>
         <p className="aviso">
-          Tu usuario no está asignado a ninguna franquicia activa. La franquicia se
-          determina por el almacén que tengas asignado, así que pide en Administración
-          que te vinculen al local correspondiente.
+          {esRevision
+            ? "Todavía no hay ningún local activo. Créalo en Administración → Franquicias."
+            : "Tu usuario no está asignado a ninguna franquicia activa. La franquicia se determina por el almacén que tengas asignado, así que pide en Administración que te vinculen al local correspondiente."}
         </p>
       </div>
     );
@@ -102,7 +124,23 @@ export default function FranquiciaCliente({
 
   return (
     <div className="card">
-      <h2>{franquicia.nombre}</h2>
+      <div className="header-row">
+        <h2>{franquicia.nombre}</h2>
+        {esRevision && locales.length > 1 && (
+          <select
+            value={franquicia.id}
+            onChange={(e) =>
+              setFranquicia(locales.find((l) => l.id === e.target.value) ?? franquicia)
+            }
+          >
+            {locales.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.nombre}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
       <p className="ayuda">
         Local <strong>{franquicia.codigo}</strong>
         {franquicia.ciudad ? ` · ${franquicia.ciudad}` : ""}. Las ventas descuentan el
@@ -139,9 +177,9 @@ export default function FranquiciaCliente({
           {tabActiva === "factura" && puedeVender && (
             <FacturaXmlFranquicia franquicia={franquicia} />
           )}
-          {tabActiva === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} />}
+          {tabActiva === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} soloLectura={esRevision} />}
           {tabActiva === "inventario" && puedeInventario && (
-            <InventarioFranquicia franquicia={franquicia} />
+            <InventarioFranquicia franquicia={franquicia} soloLectura={esRevision} />
           )}
           {tabActiva === "mensual" && puedeCaja && (
             <MensualFranquicia franquicia={franquicia} />

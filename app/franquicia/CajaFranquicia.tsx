@@ -54,7 +54,14 @@ type ResumenDia = {
   egresos_efectivo: number;
 };
 
-export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia }) {
+export default function CajaFranquicia({
+  franquicia,
+  soloLectura = false,
+}: {
+  franquicia: Franquicia;
+  /** Admin y Control revisan la caja del local; operarla es del titular. */
+  soloLectura?: boolean;
+}) {
   const supabase = createClient();
   const [movs, setMovs] = useState<Movimiento[]>([]);
   const [cierres, setCierres] = useState<Cierre[]>([]);
@@ -367,7 +374,11 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
             <span className="label">Diferencia</span>
           </div>
         </div>
-        {cierreSeleccionado?.estado === "cerrado" ? (
+        {soloLectura ? (
+          <p className="ayuda">
+            Estás revisando este local. El cierre lo confirma el titular.
+          </p>
+        ) : cierreSeleccionado?.estado === "cerrado" ? (
           <div className="filtros">
             <span className="badge ok">Dia cerrado</span>
             <span>
@@ -469,7 +480,7 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
             />
           </label>
         </div>
-        <button onClick={registrar} disabled={guardando}>
+        <button onClick={registrar} disabled={guardando || soloLectura}>
           {guardando ? "Registrando…" : "Registrar movimiento"}
         </button>
       </div>
