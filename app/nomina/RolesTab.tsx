@@ -70,10 +70,12 @@ const CAMPOS_NOVEDAD = [
 
 export default function RolesTab({
   puedeEscribir,
+  esAdmin,
   grupoId,
   empresas,
 }: {
   puedeEscribir: boolean;
+  esAdmin: boolean;
   grupoId: string;
   empresas: Empresa[];
 }) {
@@ -161,7 +163,8 @@ export default function RolesTab({
     setAviso(
       `Período ${MESES[nuevo.mes - 1]} ${nuevo.anio} abierto con una línea por persona activa. Ahora carga las novedades y calcula.`
     );
-    cargarPeriodos((data as any)?.periodo_id ?? (data as any)?.id);
+    const resultado = data as { periodo_id?: string; id?: string } | null;
+    void cargarPeriodos(resultado?.periodo_id ?? resultado?.id);
   }
 
   async function calcular() {
@@ -211,8 +214,9 @@ export default function RolesTab({
     });
     setOcupado(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Período reabierto.");
-    cargarPeriodos(activo);
+    setAviso("Período reabierto. Ya puedes corregir novedades y volver a calcular.");
+    await cargarPeriodos(activo);
+    void cargarLineas();
   }
 
   function abrirNovedades(l: Linea) {
@@ -313,19 +317,19 @@ export default function RolesTab({
                 </option>
               ))}
             </select>
-            {puedeEscribir && (abierto || calculado) && (
+            {puedeEscribir && abierto && (
               <button onClick={calcular} disabled={ocupado}>
-                {calculado ? "Recalcular" : "Calcular rol"}
+                Calcular rol
+              </button>
+            )}
+            {esAdmin && calculado && (
+              <button className="secondary" onClick={reabrir} disabled={ocupado}>
+                Reabrir para corregir
               </button>
             )}
             {puedeEscribir && calculado && (
               <button onClick={cerrar} disabled={ocupado}>
                 Cerrar período
-              </button>
-            )}
-            {puedeEscribir && cerrado && (
-              <button className="secondary" onClick={reabrir} disabled={ocupado}>
-                Reabrir
               </button>
             )}
             <input

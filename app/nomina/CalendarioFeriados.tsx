@@ -202,8 +202,9 @@ export default function CalendarioFeriados({
         <p className="aviso">
           No se pudo determinar el grupo económico, así que el calendario de feriados
           no está disponible. Suele pasar cuando el usuario no tiene ninguna empresa
-          activa asignada. Sin feriados cargados, los días hábiles de las ausencias se
-          calculan como si no hubiera ninguno.
+          activa visible. Hasta resolver el acceso y confirmar el calendario, el sistema
+          bloqueará el registro de ausencias para evitar un cálculo incorrecto de días
+          hábiles.
         </p>
       ) : (
         <>

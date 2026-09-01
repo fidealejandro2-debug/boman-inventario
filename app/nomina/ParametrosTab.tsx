@@ -21,7 +21,7 @@ const CAMPOS: { clave: keyof Parametros; etiqueta: string; ayuda?: string }[] = 
   { clave: "salario_basico_unificado", etiqueta: "Salario básico unificado", ayuda: "Base del décimo cuarto" },
   { clave: "pct_aporte_personal", etiqueta: "Aporte personal %", ayuda: "Descuento al trabajador" },
   { clave: "pct_aporte_patronal", etiqueta: "Aporte patronal %", ayuda: "Costo del empleador" },
-  { clave: "pct_fondos_reserva", etiqueta: "Fondos de reserva %", ayuda: "Desde el mes 13 de afiliación" },
+  { clave: "pct_fondos_reserva", etiqueta: "Fondos de reserva %", ayuda: "Desde el mes 13 acumulado bajo el mismo RUC" },
   { clave: "pct_iece", etiqueta: "IECE %" },
   { clave: "pct_secap", etiqueta: "SECAP %" },
   { clave: "horas_jornada_semanal", etiqueta: "Horas de jornada semanal" },

@@ -434,6 +434,7 @@ export default function ImportacionNominaTab({
           if (!mesAplicacion) errores.push("el descuento requiere MES_APLICACION válido");
           if (!descripcion) errores.push("el descuento requiere DESCRIPCION");
           if (!documento) errores.push("el descuento requiere DOCUMENTO del expediente");
+          if (!empresa) errores.push("el descuento requiere EMPRESA_RUC o empresa pagadora vigente");
         }
         if (tipo === "anticipo") {
           if (!fecha) errores.push("el anticipo requiere FECHA válida");

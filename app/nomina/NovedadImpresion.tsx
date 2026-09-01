@@ -59,7 +59,7 @@ const FORMATO: Record<string, Formato> = {
   llamado_atencion: {
     codigo: "BOM-TH-LA-01",
     titulo: "COMUNICACIÓN DE LLAMADO DE ATENCIÓN",
-    subtitulo: "Amonestación Por Escrito — Primera Instancia",
+    subtitulo: "Comunicación Preventiva — Primera Instancia",
     intro:
       "BOMAN valora profundamente la presencia y el aporte de cada colaborador/a. Este llamado de atención no es una sanción: es una herramienta de acompañamiento institucional. Entendemos que diversas circunstancias pueden afectar el desempeño; sin embargo, el cumplimiento de lo acordado es un compromiso compartido que impacta en el bienestar del equipo y en la continuidad de los procesos productivos.",
     seccionHechos: "SITUACIONES OBSERVADAS",
@@ -71,7 +71,7 @@ const FORMATO: Record<string, Formato> = {
     advertencia:
       "De persistir la situación, se procederá con la emisión de una amonestación escrita como segunda instancia.",
     declaracion:
-      "declaro haber recibido, leído y comprendido este llamado de atención, y me comprometo a corregir la situación observada y a comunicar oportunamente cualquier circunstancia que afecte su cumplimiento.",
+      "declaro haber recibido copia de este llamado de atención. Mi firma deja constancia de la recepción y no implica aceptación de los hechos ni renuncia a presentar mi descargo.",
     lema:
       "« Este documento es un acto de cuidado, no de sanción. BOMAN cree en su potencial y quiere que usted continúe creciendo con nosotros. »",
     pideDescargo: true,
@@ -89,9 +89,9 @@ const FORMATO: Record<string, Formato> = {
       "Sujetarse a un período de seguimiento de 30 días con evaluación de la Jefatura.",
     ],
     advertencia:
-      "La reiteración de esta conducta habilita a la empresa a solicitar el visto bueno ante la Inspectoría del Trabajo, conforme al Art. 172 del Código del Trabajo.",
+      "La reiteración será evaluada conforme al Reglamento Interno y a la normativa vigente. Solo si los hechos encajan en una causal legal podrá iniciarse el procedimiento de visto bueno correspondiente.",
     declaracion:
-      "declaro haber recibido, leído y comprendido la presente amonestación escrita, y quedo notificado/a de las consecuencias que acarrea su reiteración.",
+      "declaro haber recibido copia de la presente amonestación. Mi firma deja constancia de la recepción y no implica aceptación de los hechos ni renuncia a presentar mi descargo.",
     lema: "",
     pideDescargo: true,
   },
@@ -151,7 +151,7 @@ const FORMATO: Record<string, Formato> = {
     titulo: "SANCIÓN ECONÓMICA",
     subtitulo: "Multa Prevista en el Reglamento Interno",
     intro:
-      "BOMAN impone al colaborador/a la sanción económica que se detalla, prevista en el Reglamento Interno de Trabajo legalmente aprobado por el Ministerio del Trabajo. Conforme al Art. 44 literal b) del Código del Trabajo, solo procede la multa contemplada en dicho reglamento.",
+      "BOMAN comunica la sanción económica que se detalla, siempre que se encuentre prevista en el Reglamento Interno de Trabajo legalmente aprobado. Conforme al Art. 44 literales a) y b) del Código del Trabajo, la multa debe constar en dicho reglamento y la retención no puede exceder el límite legal.",
     seccionHechos: "HECHOS QUE MOTIVAN LA SANCIÓN",
     expectativas: [
       "Cesar de inmediato la conducta sancionada.",
@@ -160,7 +160,7 @@ const FORMATO: Record<string, Formato> = {
     advertencia:
       "La reiteración de la conducta faculta a la empresa a aplicar las medidas disciplinarias adicionales previstas en el Reglamento Interno.",
     declaracion:
-      "declaro haber recibido, leído y comprendido la presente sanción económica, y quedo notificado/a del descuento que se aplicará sobre mi remuneración.",
+      "declaro haber recibido copia de la presente comunicación. Mi firma deja constancia de la recepción y no implica aceptación de los hechos, autorización adicional de descuento ni renuncia a presentar mi descargo.",
     lema: "",
     pideDescargo: true,
   },
@@ -170,13 +170,13 @@ const FORMATO: Record<string, Formato> = {
     titulo: "NOTIFICACIÓN DE SOLICITUD DE VISTO BUENO",
     subtitulo: "Trámite ante la Inspectoría del Trabajo",
     intro:
-      "BOMAN notifica al colaborador/a que, agotadas las instancias disciplinarias previas y persistiendo la causal que se detalla, ha resuelto solicitar el visto bueno ante la Inspectoría del Trabajo, conforme al Art. 172 del Código del Trabajo.",
+      "BOMAN comunica al colaborador/a que los hechos descritos serán sometidos al procedimiento de visto bueno únicamente si encajan en una causal legal y se cumplen los requisitos previos y formales previstos por la normativa vigente. Este documento interno no reemplaza la solicitud ni la notificación de la autoridad laboral.",
     seccionHechos: "CAUSAL INVOCADA Y HECHOS",
     expectativas: [],
     advertencia:
-      "Presentada la solicitud, el Inspector del Trabajo notificará al colaborador/a y le concederá dos días para contestar, conforme al Art. 183 del Código del Trabajo. La resolución del visto bueno corresponde exclusivamente a la autoridad.",
+      "El trámite, la contestación y sus plazos se rigen por la normativa vigente. La existencia de la causal y la resolución del visto bueno corresponden exclusivamente a la autoridad laboral competente.",
     declaracion:
-      "declaro haber sido notificado/a de la decisión de la empresa de solicitar el visto bueno ante la Inspectoría del Trabajo, y de que podré ejercer mi defensa ante dicha autoridad.",
+      "declaro haber recibido copia de esta comunicación interna. Mi firma acredita únicamente la recepción y no limita mi derecho a presentar descargos ni a ejercer mi defensa ante la autoridad competente.",
     lema: "",
     pideDescargo: false,
   },
@@ -394,9 +394,7 @@ export default function NovedadImpresion({
         <div className="dth-banda">
           {doc.tipo === "acta_compromiso"
             ? "DECLARACIÓN DE LAS PARTES"
-            : doc.tipo === "memorando" || doc.tipo === "felicitacion"
-            ? "CONSTANCIA DE RECEPCIÓN"
-            : "DECLARACIÓN DE RECEPCIÓN Y COMPROMISO"}
+            : "CONSTANCIA DE RECEPCIÓN"}
         </div>
         <p className="dth-declara">
           Yo, <strong>{doc.nombre_completo}</strong>, con cédula {doc.identificacion},{" "}
@@ -408,9 +406,7 @@ export default function NovedadImpresion({
         <div className="dth-banda">
           {doc.tipo === "acta_compromiso"
             ? "FIRMAS DE ACUERDO"
-            : doc.tipo === "memorando" || doc.tipo === "felicitacion"
-            ? "FIRMAS"
-            : "FIRMAS DE ACEPTACIÓN Y CONFORMIDAD"}
+            : "FIRMAS DE CONSTANCIA DE RECEPCIÓN"}
         </div>
         <table className="dth-firmas">
           <tbody>

@@ -140,9 +140,9 @@ export default function NominaCliente({
       {listo && !empresas.length && (
         <p className="aviso">
           Tu usuario no puede ver ninguna empresa activa, así que los selectores de
-          empresa aparecerán vacíos. Si tu rol es <strong>nómina</strong>, hace falta
-          ejecutar <code>sql/v39_nomina_lee_empresas.sql</code>; si no, pedí que te
-          asignen empresas en Administración.
+          empresa aparecerán vacíos. Si tu cargo tiene permiso de Nómina, verifica que
+          estén instaladas <code>v39</code> y <code>v40</code>; si no, pide que te asignen
+          empresas en Administración.
         </p>
       )}
 
@@ -210,6 +210,7 @@ export default function NominaCliente({
           {tab === "roles" && (
             <RolesTab
               puedeEscribir={puedeEscribir}
+              esAdmin={esAdmin}
               grupoId={grupoId}
               empresas={empresas}
             />

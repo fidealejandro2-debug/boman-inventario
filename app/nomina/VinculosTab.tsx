@@ -41,6 +41,22 @@ type Vinculo = {
   acta_finiquito: string | null;
 };
 
+type FondoReservaResumen = {
+  empleado_id: string;
+  identificacion: string;
+  nombre_completo: string;
+  empresa_id: string;
+  ruc: string;
+  empresa: string;
+  primer_servicio_desde: string;
+  ultima_salida: string | null;
+  segmentos_historial: number;
+  dias_acumulados: number;
+  dias_requeridos: number;
+  derecho_adquirido: boolean;
+  vigente_en_ruc: boolean;
+};
+
 const ETIQUETA_VINCULO: Record<string, string> = {
   inicial: "Vínculo inicial",
   reingreso_continuidad: "Reingreso con antigüedad",
@@ -52,6 +68,7 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
   const [vista, setVista] = useState<"reingresables" | "historial">("reingresables");
   const [reingresables, setReingresables] = useState<Reingresable[]>([]);
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
+  const [fondosReserva, setFondosReserva] = useState<FondoReservaResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -77,17 +94,23 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
 
   async function cargar() {
     setCargando(true);
-    const [r, v] = await Promise.all([
+    const [r, v, f] = await Promise.all([
       supabase.from("vista_reingresables_v33").select("*").order("ultima_salida", { ascending: false }),
       supabase
         .from("vista_vinculos_empleado_v33")
         .select("*")
         .order("nombre_completo")
         .order("secuencia", { ascending: false }),
+      supabase
+        .from("vista_antiguedad_fondo_reserva_v41")
+        .select("*")
+        .order("nombre_completo")
+        .order("ruc"),
     ]);
     if (r.error) setError(r.error.message);
     else setReingresables((r.data as Reingresable[]) ?? []);
     if (!v.error) setVinculos((v.data as Vinculo[]) ?? []);
+    if (!f.error) setFondosReserva((f.data as FondoReservaResumen[]) ?? []);
     setCargando(false);
   }
 
@@ -100,7 +123,8 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
     setReingresando(r);
     setForm({
       fecha_ingreso: hoyISO(),
-      // Con finiquito pagado la antigüedad ya se liquidó y no puede conservarse.
+      // El finiquito cierra la antigüedad para beneficios del vínculo. El
+      // acumulado de fondos de reserva por el mismo RUC se conserva aparte.
       respeta_antiguedad: r.puede_conservar_antiguedad,
       motivo: "",
       cargo: r.cargo ?? "",
@@ -150,7 +174,7 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
     if (error) return setError(mensajeError(error));
     setAviso(
       salida.liquidado
-        ? "Salida registrada con finiquito. Si vuelve, su antigüedad arrancará de cero."
+        ? "Salida registrada con finiquito. Si vuelve, reinician los beneficios del nuevo vínculo; el fondo de reserva conserva los días del mismo RUC."
         : "Salida registrada sin liquidar. Si vuelve, podrá conservar su antigüedad."
     );
     setSaliendo(null);
@@ -174,6 +198,18 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
   }, [vinculos, busqueda]);
 
   const conVarios = vinculos.filter((v) => v.secuencia > 1).length;
+
+  const fondosVisibles = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return fondosReserva;
+    return fondosReserva.filter(
+      (f) =>
+        f.nombre_completo.toLowerCase().includes(q) ||
+        f.identificacion.includes(q) ||
+        f.ruc.includes(q) ||
+        f.empresa.toLowerCase().includes(q)
+    );
+  }, [fondosReserva, busqueda]);
 
   if (cargando) return <p className="ayuda">Cargando vínculos…</p>;
 
@@ -207,6 +243,56 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
         </div>
       </div>
 
+      {vista === "historial" && fondosVisibles.length > 0 && (
+        <div className="card-interna">
+          <h4>Control de antigüedad para fondos de reserva por RUC</h4>
+          <p className="ayuda">
+            El finiquito puede cerrar los beneficios del vínculo anterior, pero no
+            elimina los días de servicio acumulados si la persona vuelve al mismo
+            empleador. El tiempo que estuvo fuera no se cuenta y un RUC distinto
+            lleva un acumulado separado.
+          </p>
+          <div className="tabla-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Persona</th>
+                  <th>RUC empleador</th>
+                  <th>Primer servicio</th>
+                  <th className="num">Días acumulados</th>
+                  <th className="num">Meta</th>
+                  <th>Derecho</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fondosVisibles.map((f) => (
+                  <tr key={`${f.empleado_id}-${f.empresa_id}`}>
+                    <td>{f.nombre_completo}</td>
+                    <td>
+                      {f.empresa}
+                      <small>{f.ruc}</small>
+                    </td>
+                    <td>{soloFecha(f.primer_servicio_desde)}</td>
+                    <td className="num">{f.dias_acumulados}</td>
+                    <td className="num">{f.dias_requeridos}</td>
+                    <td>
+                      {f.derecho_adquirido ? (
+                        <span className="badge ok">adquirido</span>
+                      ) : (
+                        <span className="badge bajo">
+                          faltan {Math.max(f.dias_requeridos - f.dias_acumulados, 0)} días
+                        </span>
+                      )}
+                      {f.vigente_en_ruc && <span className="badge ok">vigente</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {reingresando && (
         <div className="card-interna">
           <h4>Reingreso de {reingresando.nombre_completo}</h4>
@@ -215,7 +301,7 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
             {ETIQUETA_SALIDA[reingresando.tipo_salida ?? ""] ?? reingresando.tipo_salida}),
             hace {reingresando.dias_fuera} días.{" "}
             {reingresando.liquidado
-              ? "Se le pagó finiquito, así que la antigüedad ya se liquidó y arranca de cero."
+              ? "Se pagó el finiquito: los beneficios del nuevo vínculo arrancan de cero, pero los días para fondo de reserva continúan si vuelve al mismo RUC."
               : "No se le pagó finiquito, así que puede conservar su antigüedad."}
           </p>
           <div className="form-grid">
@@ -248,7 +334,7 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
               Conserva la antigüedad anterior
               <small>
                 {reingresando.liquidado
-                  ? "No disponible: el finiquito ya cerró la antigüedad."
+                  ? "No disponible para vacaciones y décimos. El fondo de reserva se controla aparte por RUC."
                   : `Contaría desde ${soloFecha(reingresando.antiguedad_previa)} para vacaciones y décimos.`}
               </small>
             </label>
@@ -277,7 +363,9 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
           <h4>Salida de {saliendo.nombre_completo}</h4>
           <p className="ayuda">
             Al registrarla se cierran su afiliación y su sueldo en esa fecha. Lo que
-            decide su antigüedad si vuelve es <strong>si se le pagó finiquito</strong>.
+            decide la antigüedad general del nuevo vínculo es{" "}
+            <strong>si se le pagó finiquito</strong>. Para fondo de reserva, los días
+            del mismo RUC permanecen acumulados aunque exista finiquito.
           </p>
           <div className="form-grid">
             <label>
@@ -326,7 +414,7 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
               Se le pagó finiquito
               <small>
                 {salida.liquidado
-                  ? "La antigüedad queda liquidada: si vuelve, arranca de cero."
+                  ? "Vacaciones y beneficios del vínculo se liquidan; el fondo de reserva no pierde los días del mismo RUC."
                   : "Si vuelve, podrá conservar la antigüedad que traía."}
               </small>
             </label>
@@ -413,7 +501,7 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
                   <td>
                     {r.puede_conservar_antiguedad
                       ? `puede conservar desde ${soloFecha(r.antiguedad_previa)}`
-                      : "arranca de cero"}
+                      : "reinicia beneficios; fondo de reserva conserva días por RUC"}
                   </td>
                   {puedeEscribir && (
                     <td>

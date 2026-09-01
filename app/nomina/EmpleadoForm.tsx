@@ -483,7 +483,10 @@ export default function EmpleadoForm({
                   setAfiliacion({ ...afiliacion, fecha_afiliacion: e.target.value })
                 }
               />
-              <small>Manda para fondos de reserva. Puede ser posterior al ingreso.</small>
+              <small>
+                Registra este período ante el IESS. Para fondos de reserva se suman
+                los períodos anteriores bajo el mismo RUC y no se cuentan las pausas.
+              </small>
             </label>
             <label>
               Sueldo declarado

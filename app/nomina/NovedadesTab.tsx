@@ -313,7 +313,8 @@ export default function NovedadesTab({
     });
   }, [filas, filtroEstado, busqueda]);
 
-  // Tres o más sanciones en 12 meses: base para un visto bueno (Art. 172 CT).
+  // Alerta operativa para revisar reincidencia. El número de novedades por sí
+  // solo no constituye una causal legal de visto bueno.
   const reincidentes = useMemo(() => {
     const corte = new Date();
     corte.setFullYear(corte.getFullYear() - 1);
@@ -348,10 +349,11 @@ export default function NovedadesTab({
 
       {reincidentes.length > 0 && (
         <p className="aviso">
-          <strong>{reincidentes.length}</strong> persona(s) acumulan tres o más sanciones
+          <strong>{reincidentes.length}</strong> persona(s) acumulan tres o más novedades
           en los últimos 12 meses:{" "}
-          {reincidentes.map((r) => `${r.nombre} (${r.n})`).join(", ")}. Es el supuesto del
-          Art. 172 del Código del Trabajo; la decisión sigue siendo del empleador.
+          {reincidentes.map((r) => `${r.nombre} (${r.n})`).join(", ")}. Revisa cada caso,
+          sus fechas y el Reglamento Interno. Este conteo es solo una alerta y no basta
+          por sí mismo para solicitar un visto bueno.
         </p>
       )}
 
@@ -660,7 +662,7 @@ export default function NovedadesTab({
                   )}
                   {/* Sin este botón una novedad con multa no se podía anular:
                       anular_novedad_v28 se niega mientras exista el descuento. */}
-                  {puedeEscribir && f.descuento_aplicado && f.estado !== "anulada" && (
+                  {esAdmin && f.descuento_aplicado && f.estado !== "anulada" && (
                     <button
                       className="btn-mini secondary"
                       disabled={guardando}
