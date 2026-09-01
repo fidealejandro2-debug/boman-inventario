@@ -30,44 +30,170 @@ type Impresion = {
   sanciones_ultimo_anio: number;
 };
 
-// Cada tipo de novedad usa su propio codigo del sistema de gestion de
-// calidad, igual que el formato en papel que ya usa Talento Humano.
-const FORMATO: Record<string, { codigo: string; titulo: string; subtitulo: string }> = {
+type Formato = {
+  codigo: string;
+  titulo: string;
+  subtitulo: string;
+  /** Párrafo de apertura: fija el tono del documento. */
+  intro: string;
+  /** Cómo se llama la sección donde van los hechos. */
+  seccionHechos: string;
+  /** Qué se espera en adelante. Vacío cuando el documento no exige conducta. */
+  expectativas: string[];
+  /** Consecuencia de reincidir. Vacío en los que no sancionan. */
+  advertencia: string;
+  /** Texto que firma el trabajador. */
+  declaracion: string;
+  /** Frase de cierre. Solo donde acompaña, no en los de mayor gravedad. */
+  lema: string;
+  /** Si corresponde ofrecerle presentar descargo. */
+  pideDescargo: boolean;
+};
+
+// Cada tipo de novedad tiene su propio codigo del sistema de gestion de
+// calidad y su propio lenguaje: un memorando informa, un acta se acuerda
+// entre las partes, una solicitud de visto bueno abre un tramite ante la
+// autoridad. Compartir un texto generico entre todos los volvia
+// indistinguibles y, en los graves, hasta contradictorios.
+const FORMATO: Record<string, Formato> = {
   llamado_atencion: {
     codigo: "BOM-TH-LA-01",
     titulo: "COMUNICACIÓN DE LLAMADO DE ATENCIÓN",
     subtitulo: "Amonestación Por Escrito — Primera Instancia",
+    intro:
+      "BOMAN valora profundamente la presencia y el aporte de cada colaborador/a. Este llamado de atención no es una sanción: es una herramienta de acompañamiento institucional. Entendemos que diversas circunstancias pueden afectar el desempeño; sin embargo, el cumplimiento de lo acordado es un compromiso compartido que impacta en el bienestar del equipo y en la continuidad de los procesos productivos.",
+    seccionHechos: "SITUACIONES OBSERVADAS",
+    expectativas: [
+      "Corregir la situación observada a partir de la fecha de suscripción de este documento.",
+      "Comunicar anticipadamente a la Jefatura cualquier circunstancia excepcional que pueda afectar el cumplimiento.",
+      "Mantener un desempeño sin novedades durante el período de seguimiento de 30 días.",
+    ],
+    advertencia:
+      "De persistir la situación, se procederá con la emisión de una amonestación escrita como segunda instancia.",
+    declaracion:
+      "declaro haber recibido, leído y comprendido este llamado de atención, y me comprometo a corregir la situación observada y a comunicar oportunamente cualquier circunstancia que afecte su cumplimiento.",
+    lema:
+      "« Este documento es un acto de cuidado, no de sanción. BOMAN cree en su potencial y quiere que usted continúe creciendo con nosotros. »",
+    pideDescargo: true,
   },
+
   amonestacion_escrita: {
     codigo: "BOM-TH-AE-01",
     titulo: "AMONESTACIÓN ESCRITA",
     subtitulo: "Amonestación Por Escrito — Segunda Instancia",
+    intro:
+      "Habiéndose comunicado previamente al colaborador/a la necesidad de corregir su conducta, y persistiendo la situación observada, BOMAN emite la presente amonestación escrita. Este documento constituye una sanción disciplinaria y se incorpora al expediente laboral del colaborador/a.",
+    seccionHechos: "HECHOS QUE MOTIVAN LA AMONESTACIÓN",
+    expectativas: [
+      "Cesar de inmediato la conducta observada.",
+      "Sujetarse a un período de seguimiento de 30 días con evaluación de la Jefatura.",
+    ],
+    advertencia:
+      "La reiteración de esta conducta habilita a la empresa a solicitar el visto bueno ante la Inspectoría del Trabajo, conforme al Art. 172 del Código del Trabajo.",
+    declaracion:
+      "declaro haber recibido, leído y comprendido la presente amonestación escrita, y quedo notificado/a de las consecuencias que acarrea su reiteración.",
+    lema: "",
+    pideDescargo: true,
   },
+
   memorando: {
     codigo: "BOM-TH-ME-01",
     titulo: "MEMORANDO",
     subtitulo: "Comunicación Interna de Talento Humano",
+    intro:
+      "Por medio del presente memorando, BOMAN comunica formalmente al colaborador/a la información y las disposiciones que se detallan a continuación, para su conocimiento y cumplimiento.",
+    seccionHechos: "CONTENIDO DE LA COMUNICACIÓN",
+    expectativas: [],
+    advertencia: "",
+    declaracion:
+      "declaro haber recibido y leído el presente memorando, y quedo enterado/a de su contenido.",
+    lema: "",
+    pideDescargo: false,
   },
+
   acta_compromiso: {
     codigo: "BOM-TH-AC-01",
     titulo: "ACTA DE COMPROMISO",
     subtitulo: "Acuerdo de Mejora — Talento Humano",
+    intro:
+      "Reunidas las partes, y con el ánimo de resolver de común acuerdo la situación que se detalla, se suscribe la presente acta de compromiso. Este documento recoge acuerdos aceptados voluntariamente por el colaborador/a y por la empresa.",
+    seccionHechos: "ANTECEDENTES Y ACUERDOS",
+    expectativas: [
+      "Cumplir los acuerdos aquí recogidos en los plazos convenidos.",
+      "Someterse a las reuniones de seguimiento que acuerden las partes.",
+    ],
+    advertencia:
+      "El incumplimiento de los acuerdos aquí suscritos faculta a la empresa a continuar con el procedimiento disciplinario que corresponda.",
+    declaracion:
+      "suscribo la presente acta de compromiso de manera libre y voluntaria, declarando conocer y aceptar los acuerdos que en ella constan.",
+    lema:
+      "« Los acuerdos que se construyen entre las partes son los que mejor se sostienen en el tiempo. »",
+    pideDescargo: false,
   },
+
   felicitacion: {
     codigo: "BOM-TH-FE-01",
     titulo: "RECONOCIMIENTO",
     subtitulo: "Felicitación por Desempeño",
+    intro:
+      "BOMAN reconoce y agradece el aporte del colaborador/a. El presente documento deja constancia formal de un desempeño que la organización valora, y se incorpora a su expediente como antecedente favorable.",
+    seccionHechos: "MOTIVO DEL RECONOCIMIENTO",
+    expectativas: [],
+    advertencia: "",
+    declaracion: "declaro haber recibido el presente reconocimiento.",
+    lema:
+      "« El trabajo bien hecho merece ser nombrado. Gracias por su compromiso con BOMAN. »",
+    pideDescargo: false,
   },
+
   sancion_economica: {
     codigo: "BOM-TH-SE-01",
     titulo: "SANCIÓN ECONÓMICA",
     subtitulo: "Multa Prevista en el Reglamento Interno",
+    intro:
+      "BOMAN impone al colaborador/a la sanción económica que se detalla, prevista en el Reglamento Interno de Trabajo legalmente aprobado por el Ministerio del Trabajo. Conforme al Art. 44 literal b) del Código del Trabajo, solo procede la multa contemplada en dicho reglamento.",
+    seccionHechos: "HECHOS QUE MOTIVAN LA SANCIÓN",
+    expectativas: [
+      "Cesar de inmediato la conducta sancionada.",
+      "Sujetarse al período de seguimiento que determine la Jefatura.",
+    ],
+    advertencia:
+      "La reiteración de la conducta faculta a la empresa a aplicar las medidas disciplinarias adicionales previstas en el Reglamento Interno.",
+    declaracion:
+      "declaro haber recibido, leído y comprendido la presente sanción económica, y quedo notificado/a del descuento que se aplicará sobre mi remuneración.",
+    lema: "",
+    pideDescargo: true,
   },
+
   solicitud_visto_bueno: {
     codigo: "BOM-TH-VB-01",
-    titulo: "SOLICITUD DE VISTO BUENO",
+    titulo: "NOTIFICACIÓN DE SOLICITUD DE VISTO BUENO",
     subtitulo: "Trámite ante la Inspectoría del Trabajo",
+    intro:
+      "BOMAN notifica al colaborador/a que, agotadas las instancias disciplinarias previas y persistiendo la causal que se detalla, ha resuelto solicitar el visto bueno ante la Inspectoría del Trabajo, conforme al Art. 172 del Código del Trabajo.",
+    seccionHechos: "CAUSAL INVOCADA Y HECHOS",
+    expectativas: [],
+    advertencia:
+      "Presentada la solicitud, el Inspector del Trabajo notificará al colaborador/a y le concederá dos días para contestar, conforme al Art. 183 del Código del Trabajo. La resolución del visto bueno corresponde exclusivamente a la autoridad.",
+    declaracion:
+      "declaro haber sido notificado/a de la decisión de la empresa de solicitar el visto bueno ante la Inspectoría del Trabajo, y de que podré ejercer mi defensa ante dicha autoridad.",
+    lema: "",
+    pideDescargo: false,
   },
+};
+
+const FORMATO_GENERICO: Formato = {
+  codigo: "BOM-TH-GE-01",
+  titulo: "COMUNICACIÓN DE TALENTO HUMANO",
+  subtitulo: "Gestión de Talento Humano",
+  intro:
+    "Por medio del presente documento, BOMAN comunica formalmente al colaborador/a la situación que se detalla a continuación.",
+  seccionHechos: "DETALLE",
+  expectativas: [],
+  advertencia: "",
+  declaracion: "declaro haber recibido, leído y comprendido el presente documento.",
+  lema: "",
+  pideDescargo: true,
 };
 
 export default function NovedadImpresion({
@@ -97,11 +223,9 @@ export default function NovedadImpresion({
   if (!doc) return <p className="ayuda">Preparando documento…</p>;
 
   const fmt = FORMATO[doc.tipo] ?? {
-    codigo: "BOM-TH-GE-01",
+    ...FORMATO_GENERICO,
     titulo: (ETIQUETA_NOVEDAD[doc.tipo] ?? doc.tipo).toUpperCase(),
-    subtitulo: "Gestión de Talento Humano",
   };
-  const esFelicitacion = doc.tipo === "felicitacion";
 
   return (
     <>
@@ -177,18 +301,14 @@ export default function NovedadImpresion({
         <p className="dth-intro">
           <strong>Estimado/a colaborador/a,</strong>
           <br />
-          {esFelicitacion
-            ? "BOMAN reconoce y agradece su aporte. Este documento deja constancia formal de un desempeño que la organización valora y quiere destacar."
-            : "BOMAN valora profundamente la presencia y el aporte de cada colaborador/a. Este documento no es una sanción: es una herramienta de acompañamiento institucional, y busca dejar constancia de una situación que conviene corregir para el bienestar del equipo y la continuidad de los procesos productivos."}
+          {fmt.intro}
         </p>
 
         {/* Asunto y hechos */}
         <div className="dth-banda">ASUNTO</div>
         <p className="dth-p">{doc.asunto}</p>
 
-        <div className="dth-banda">
-          {esFelicitacion ? "MOTIVO DEL RECONOCIMIENTO" : "SITUACIONES OBSERVADAS"}
-        </div>
+        <div className="dth-banda">{fmt.seccionHechos}</div>
         <p className="dth-p dth-pre">{doc.hechos}</p>
         <p className="dth-fecha-hechos">
           Fecha de los hechos: <strong>{soloFecha(doc.fecha_hechos)}</strong>
@@ -223,32 +343,24 @@ export default function NovedadImpresion({
           </>
         )}
 
-        {!esFelicitacion && (
+        {fmt.expectativas.length > 0 && (
           <>
             <p className="dth-espera">
-              <strong>BOMAN espera en lo sucesivo:</strong>
+              <strong>
+                {doc.tipo === "acta_compromiso"
+                  ? "Las partes acuerdan:"
+                  : "BOMAN espera en lo sucesivo:"}
+              </strong>
             </p>
             <ul className="dth-lista">
-              <li>
-                Corregir la situación observada a partir de la fecha de suscripción de
-                este documento.
-              </li>
-              <li>
-                Comunicar anticipadamente a la Jefatura cualquier circunstancia
-                excepcional que pueda afectar el cumplimiento.
-              </li>
-              <li>
-                Mantener un desempeño sin novedades durante el período de seguimiento de
-                30 días.
-              </li>
+              {fmt.expectativas.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
             </ul>
-            <p className="dth-adv">
-              De persistir la situación, se procederá con la emisión de una nueva
-              amonestación escrita y, de ser necesario, las medidas disciplinarias
-              previstas en el Reglamento Interno y en el Código del Trabajo.
-            </p>
           </>
         )}
+
+        {fmt.advertencia && <p className="dth-adv">{fmt.advertencia}</p>}
 
         {doc.descargo_empleado && (
           <>
@@ -264,7 +376,7 @@ export default function NovedadImpresion({
           </>
         )}
 
-        {!doc.descargo_empleado && !esFelicitacion && (
+        {!doc.descargo_empleado && fmt.pideDescargo && (
           <>
             <div className="dth-banda">DESCARGO</div>
             <p className="dth-nota">
@@ -279,23 +391,27 @@ export default function NovedadImpresion({
           </>
         )}
 
-        <div className="dth-banda">DECLARACIÓN DE RECEPCIÓN Y COMPROMISO</div>
+        <div className="dth-banda">
+          {doc.tipo === "acta_compromiso"
+            ? "DECLARACIÓN DE LAS PARTES"
+            : doc.tipo === "memorando" || doc.tipo === "felicitacion"
+            ? "CONSTANCIA DE RECEPCIÓN"
+            : "DECLARACIÓN DE RECEPCIÓN Y COMPROMISO"}
+        </div>
         <p className="dth-declara">
-          Yo, <strong>{doc.nombre_completo}</strong>, con cédula {doc.identificacion},
-          declaro haber recibido, leído y comprendido el presente documento
-          {esFelicitacion
-            ? "."
-            : ", y me comprometo a corregir la situación observada y a comunicar oportunamente cualquier circunstancia que afecte su cumplimiento."}
+          Yo, <strong>{doc.nombre_completo}</strong>, con cédula {doc.identificacion},{" "}
+          {fmt.declaracion}
         </p>
 
-        {!esFelicitacion && (
-          <p className="dth-lema">
-            « Este documento es un acto de cuidado, no de sanción. BOMAN cree en su
-            potencial y quiere que usted continúe creciendo con nosotros. »
-          </p>
-        )}
+        {fmt.lema && <p className="dth-lema">{fmt.lema}</p>}
 
-        <div className="dth-banda">FIRMAS DE ACEPTACIÓN Y CONFORMIDAD</div>
+        <div className="dth-banda">
+          {doc.tipo === "acta_compromiso"
+            ? "FIRMAS DE ACUERDO"
+            : doc.tipo === "memorando" || doc.tipo === "felicitacion"
+            ? "FIRMAS"
+            : "FIRMAS DE ACEPTACIÓN Y CONFORMIDAD"}
+        </div>
         <table className="dth-firmas">
           <tbody>
             <tr>
