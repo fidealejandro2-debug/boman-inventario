@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { exportarCSV } from "@/lib/utils";
 import { dinero, mensajeError, pedirMotivo, type Empresa } from "./lib";
+import RolImpresion from "./RolImpresion";
 
 type Periodo = {
   periodo_id: string;
@@ -95,6 +96,7 @@ export default function RolesTab({
     anio: hoy.getFullYear(),
     mes: hoy.getMonth() + 1,
   });
+  const [imprimiendo, setImprimiendo] = useState<string | null>(null);
   const [editando, setEditando] = useState<Linea | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
   const [empresaNov, setEmpresaNov] = useState("");
@@ -266,6 +268,12 @@ export default function RolesTab({
   const cerrado = periodo?.estado === "cerrado";
 
   if (cargando) return <p className="ayuda">Cargando períodos…</p>;
+
+  // El comprobante ocupa la pantalla completa: al imprimir, globals.css oculta
+  // todo lo que no sea .doc-th.
+  if (imprimiendo) {
+    return <RolImpresion rolLineaId={imprimiendo} onCerrar={() => setImprimiendo(null)} />;
+  }
 
   return (
     <>
@@ -470,7 +478,7 @@ export default function RolesTab({
                     <th className="num">Multas</th>
                     <th className="num">Egresos</th>
                     <th className="num">Neto</th>
-                    {puedeEscribir && abierto && <th></th>}
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -501,21 +509,27 @@ export default function RolesTab({
                       <td className="num">
                         <strong>{dinero(l.neto_real)}</strong>
                       </td>
-                      {puedeEscribir && abierto && (
-                        <td>
+                      <td>
+                        {puedeEscribir && abierto && (
                           <button
                             className="btn-mini secondary"
                             onClick={() => abrirNovedades(l)}
                           >
                             Novedades
                           </button>
-                        </td>
-                      )}
+                        )}
+                        <button
+                          className="btn-mini secondary"
+                          onClick={() => setImprimiendo(l.id)}
+                        >
+                          Rol
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {!visibles.length && (
                     <tr>
-                      <td colSpan={puedeEscribir && abierto ? 13 : 12} className="vacio">
+                      <td colSpan={13} className="vacio">
                         El período no tiene líneas. Si acabas de abrirlo y sigue vacío,
                         revisa que haya personal activo con afiliación y sueldo vigentes.
                       </td>
