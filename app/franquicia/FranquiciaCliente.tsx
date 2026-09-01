@@ -89,6 +89,9 @@ export default function FranquiciaCliente({
     { id: "inventario", etiqueta: "Inventario", visible: puedeInventario },
   ];
   const visibles = pestanas.filter((p) => p.visible);
+  // Si Administracion deshabilita el permiso de la pestana que estaba activa,
+  // abre la primera permitida en vez de dejar el panel aparentemente vacio.
+  const tabActiva = visibles.some((p) => p.id === tab) ? tab : visibles[0]?.id;
 
   return (
     <div className="card">
@@ -111,7 +114,7 @@ export default function FranquiciaCliente({
             {visibles.map((p) => (
               <button
                 key={p.id}
-                className={`tab ${tab === p.id ? "activo" : ""}`}
+                className={`tab ${tabActiva === p.id ? "activo" : ""}`}
                 onClick={() => setTab(p.id)}
               >
                 {p.etiqueta}
@@ -119,14 +122,14 @@ export default function FranquiciaCliente({
             ))}
           </div>
 
-          {tab === "ventas" && puedeVender && (
+          {tabActiva === "ventas" && puedeVender && (
             <VentasFranquicia franquicia={franquicia} />
           )}
-          {tab === "factura" && puedeVender && (
+          {tabActiva === "factura" && puedeVender && (
             <FacturaXmlFranquicia franquicia={franquicia} />
           )}
-          {tab === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} />}
-          {tab === "inventario" && puedeInventario && (
+          {tabActiva === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} />}
+          {tabActiva === "inventario" && puedeInventario && (
             <InventarioFranquicia franquicia={franquicia} />
           )}
         </>

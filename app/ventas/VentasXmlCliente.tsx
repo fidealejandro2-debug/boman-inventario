@@ -404,7 +404,10 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
         numero_linea: linea.numeroLinea, producto_id: a.productoId, cantidad: Number(a.cantidad),
       }))
     );
-    const { data, error } = await supabase.rpc("aplicar_factura_venta_xml_v20", {
+    // v46 concentra la entrada operativa en una RPC que valida rol y permiso.
+    // Las funciones historicas quedan internas para impedir que una franquicia
+    // descuente stock por fuera de su envoltorio (que tambien registra caja).
+    const { data, error } = await supabase.rpc("aplicar_factura_venta_xml_operativa_v46", {
       p_documento: documento, p_almacen_id: almacenId, p_asignaciones: asignaciones, p_nota: nota || null,
       p_confirmar_codigo_no_estandar: validacionCodigo?.tipo !== "oficial" ? codigoConfirmado : false,
       p_codigo_nota: validacionCodigo?.tipo !== "oficial" ? codigoNota.trim() || null : null,
