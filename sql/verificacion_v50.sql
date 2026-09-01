@@ -36,10 +36,15 @@ select coalesce(bool_or(pg_get_functiondef(p.oid) like '%franquiciado%'), false)
        p.proname
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
-  and p.proname in ('crear_conteo_inventario', 'guardar_conteo_inventario',
-                    'guardar_reconteo_inventario')
+  and p.proname in ('crear_conteo_inventario', 'guardar_conteo_inventario')
 group by p.proname
 order by p.proname;
+
+-- CRITICO: el segundo conteo es de Control por diseno. Si el franquiciado
+-- pudiera hacerlo, estaria verificando su propio conteo.
+select pg_get_functiondef(p.oid) not like '%franquiciado%' as reconteo_sigue_en_control
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'guardar_reconteo_inventario';
 
 -- CRITICO: resolver_conteo_inventario NO debe admitir al franquiciado. Si esto
 -- sale false, el local podria aprobar su propio ajuste de inventario.

@@ -112,9 +112,14 @@ $fn$;
 -- ------------------------------------------------------------
 -- El motor de conteos de v12 ya hace lo necesario: congela el stock del
 -- sistema, admite reconteo, calcula diferencias y aplica el ajuste auditado.
--- Solo desconocia al franquiciado. Se le habilita el conteo y el reconteo,
--- NUNCA la resolucion: resolver_conteo_inventario sigue siendo de Control y ya
--- impide aprobar el conteo propio. El local cuenta, otro aprueba.
+-- Solo desconocia al franquiciado.
+--
+-- Se le habilita UNICAMENTE el primer conteo. El segundo conteo
+-- (guardar_reconteo_inventario) y la resolucion son de Control por diseno, y
+-- ademas impiden que la misma persona haga las dos cosas. Esa separacion es lo
+-- que da valor al ajuste: el local cuenta lo que tiene, otro lo verifica y lo
+-- aplica. Meter aqui al franquiciado convertiria el conteo en una declaracion
+-- sin contraparte.
 do $migra$
 declare
   v_fn text;
@@ -124,8 +129,7 @@ declare
 begin
   foreach v_fn in array array[
     'crear_conteo_inventario',
-    'guardar_conteo_inventario',
-    'guardar_reconteo_inventario'
+    'guardar_conteo_inventario'
   ] loop
     select p.oid into v_oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = v_fn
