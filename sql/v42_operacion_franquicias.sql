@@ -3,12 +3,30 @@
 -- Aisla cada franquicia por almacen, incorpora venta simple, diario de caja,
 -- ajustes auditados y reutiliza el flujo existente de reposicion.
 -- Ejecutar una sola vez DESPUES de v41.
+--
+-- ATENCION: ANTES de este archivo hay que ejecutar y confirmar
+-- sql/v42_paso1_roles.sql, que agrega los roles franquiciado y
+-- vendedor_franquicia al enum rol_usuario.
+--
+-- PostgreSQL no permite usar un valor de enum en la misma transaccion en que
+-- se agrega. Este archivo los usa en varias sentencias, asi que si se corren
+-- juntos falla con "unsafe use of new value ... of enum type". Mismo caso que
+-- tipo_movimiento en v21 y el rol nomina en v26.
 -- ============================================================
 
--- Si PostgreSQL informa "unsafe use of new value", ejecuta primero solamente
--- estas dos sentencias, confirma la transaccion y luego ejecuta el archivo.
-alter type public.rol_usuario add value if not exists 'franquiciado';
-alter type public.rol_usuario add value if not exists 'vendedor_franquicia';
+-- Corta la ejecucion con un mensaje claro si el paso 1 no se corrio.
+do $$
+begin
+  if not exists (
+    select 1 from pg_enum e
+    join pg_type t on t.oid = e.enumtypid
+    join pg_namespace n on n.oid = t.typnamespace
+    where n.nspname = 'public' and t.typname = 'rol_usuario'
+      and e.enumlabel = 'franquiciado'
+  ) then
+    raise exception 'Falta el paso previo: ejecuta sql/v42_paso1_roles.sql y confirma antes de este archivo';
+  end if;
+end $$;
 
 -- ------------------------------------------------------------
 -- 1. Configuracion y permisos
