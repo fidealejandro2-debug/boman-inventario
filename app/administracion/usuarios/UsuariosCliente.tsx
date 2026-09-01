@@ -57,6 +57,9 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
   const [edicion, setEdicion] = useState<Partial<Usuario>>({});
   const [busqueda, setBusqueda] = useState("");
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
+  const [claveGenerada, setClaveGenerada] = useState<
+    { email: string; clave: string } | null
+  >(null);
   const [enlaceAcceso, setEnlaceAcceso] = useState<EnlaceAcceso | null>(null);
 
   async function peticion(url: string, opciones?: RequestInit) {
@@ -92,9 +95,12 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
     );
   }, [usuarios, almacenes, busqueda]);
 
-  async function invitar(e: React.FormEvent) {
+  // conClave = true crea el acceso sin enviar correo y devuelve una clave
+  // temporal. Es la salida cuando Supabase agota su cuota de envíos por hora.
+  async function invitar(e: React.FormEvent, conClave = false) {
     e.preventDefault();
     setMsg(null);
+    setClaveGenerada(null);
     if (!ROLES_SIN_ALMACEN.includes(nuevo.rol) && !nuevo.almacen_ids.length) {
       setMsg({ tipo: "error", texto: "Los usuarios operativos deben tener al menos un almacén asignado." });
       return;
@@ -111,15 +117,18 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...nuevo,
+          accion: conClave ? "crear_con_clave" : "invitar",
           almacen_ids: ROLES_SIN_ALMACEN.includes(nuevo.rol) ? [] : nuevo.almacen_ids,
         }),
       });
       setMsg({ tipo: "ok", texto: data.mensaje ?? "Invitación enviada." });
+      // La clave se muestra una sola vez: no se guarda ni se puede recuperar.
+      if (data.clave) setClaveGenerada({ email: data.email, clave: data.clave });
       setNuevo({ ...NUEVO });
-      setMostrarInvitacion(false);
+      if (!data.clave) setMostrarInvitacion(false);
       await cargar();
     } catch (error) {
-      setMsg({ tipo: "error", texto: error instanceof Error ? error.message : "No se pudo enviar la invitación." });
+      setMsg({ tipo: "error", texto: error instanceof Error ? error.message : "No se pudo crear el usuario." });
     } finally {
       setGuardando(false);
     }
@@ -342,8 +351,65 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
                 </div>
               )}
             </div>
-            <button type="submit" disabled={guardando}>{guardando ? "Enviando..." : "Enviar invitación"}</button>
+            <div className="filtros">
+              <button type="submit" disabled={guardando}>
+                {guardando ? "Enviando..." : "Enviar invitación"}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={guardando}
+                onClick={(e) => invitar(e, true)}
+              >
+                Crear con clave temporal
+              </button>
+            </div>
+            <p className="ayuda">
+              Supabase limita los correos por hora. Si sale{" "}
+              <em>email rate limit exceeded</em>, usa la clave temporal: crea el acceso
+              sin enviar correo y te muestra la clave para que se la entregues.
+            </p>
           </form>
+
+          {claveGenerada && (
+            <div className="card-interna">
+              <h4>Acceso creado</h4>
+              <p className="ayuda">
+                Entrega estos datos a <strong>{claveGenerada.email}</strong>. La clave{" "}
+                <strong>se muestra una sola vez</strong>: si la pierdes, genera un enlace
+                de acceso desde la lista de usuarios.
+              </p>
+              <div className="fq-totales">
+                <span>{claveGenerada.email}</span>
+                <strong style={{ letterSpacing: 2, fontFamily: "monospace" }}>
+                  {claveGenerada.clave}
+                </strong>
+              </div>
+              <div className="filtros">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(
+                      `Usuario: ${claveGenerada.email}\nClave temporal: ${claveGenerada.clave}`
+                    );
+                    setMsg({ tipo: "ok", texto: "Datos copiados al portapapeles." });
+                  }}
+                >
+                  Copiar
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setClaveGenerada(null);
+                    setMostrarInvitacion(false);
+                  }}
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

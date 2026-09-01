@@ -53,6 +53,22 @@ function textoError(error: unknown) {
   return error instanceof Error ? error.message : "Ocurrió un error inesperado.";
 }
 
+/**
+ * Clave temporal legible para dictar por teléfono o WhatsApp.
+ *
+ * Sin caracteres que se confunden al leerlos (0/O, 1/l/I) y con formato
+ * XXXX-XXXX-XX. Se genera con crypto y no con Math.random: es la credencial
+ * de acceso de una persona, no un identificador cualquiera.
+ */
+function generarClaveTemporal() {
+  const alfabeto = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  const chars = Array.from(bytes, (b) => alfabeto[b % alfabeto.length]);
+  return `${chars.slice(0, 4).join("")}-${chars.slice(4, 8).join("")}-${chars
+    .slice(8, 10)
+    .join("")}`;
+}
+
 function validarOrigen(request: NextRequest) {
   const origin = request.headers.get("origin");
   return !origin || origin === request.nextUrl.origin;
@@ -262,20 +278,43 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const urlBase = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? request.nextUrl.origin;
     const redirectTo = new URL("/auth/callback", urlBase).toString();
-    const { data: invitacion, error: invitacionError } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: { nombre_completo: nombre },
-      redirectTo,
-    });
 
-    if (invitacionError || !invitacion.user) {
+    // Dos caminos para dar de alta. El correo de Supabase tiene un límite de
+    // envíos por hora, y al agotarlo devuelve "email rate limit exceeded" y no
+    // se puede crear a nadie más. Con clave temporal el alta no depende del
+    // correo: se crea el acceso y el administrador entrega la clave a mano.
+    const sinCorreo = accion === "crear_con_clave";
+    const claveTemporal = sinCorreo ? generarClaveTemporal() : null;
+
+    const { data: creado, error: creacionError } = sinCorreo
+      ? await admin.auth.admin.createUser({
+          email,
+          password: claveTemporal!,
+          // Sin confirmar, el usuario no podría entrar y volveríamos a
+          // depender de un correo que quizá no llega.
+          email_confirm: true,
+          user_metadata: { nombre_completo: nombre },
+        })
+      : await admin.auth.admin.inviteUserByEmail(email, {
+          data: { nombre_completo: nombre },
+          redirectTo,
+        });
+
+    if (creacionError || !creado.user) {
+      const detalle = creacionError?.message ?? "No se pudo crear el usuario.";
+      const esLimite = /rate limit/i.test(detalle);
       return NextResponse.json(
-        { error: invitacionError?.message ?? "No se pudo crear la invitación." },
+        {
+          error: esLimite
+            ? "Supabase alcanzó su límite de correos por hora. Usa la opción de crear con clave temporal, que no envía correo."
+            : detalle,
+        },
         { status: 400 }
       );
     }
 
     const { error: perfilError } = await contexto.supabase.rpc("admin_guardar_usuario_v42", {
-      p_perfil_id: invitacion.user.id,
+      p_perfil_id: creado.user.id,
       p_nombre_completo: nombre,
       p_rol: rol,
       p_almacen_ids: almacenIds,
@@ -283,7 +322,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (perfilError) {
-      const { error: reversionError } = await admin.auth.admin.deleteUser(invitacion.user.id);
+      const { error: reversionError } = await admin.auth.admin.deleteUser(creado.user.id);
       return NextResponse.json(
         {
           error: reversionError
@@ -292,6 +331,18 @@ export async function POST(request: NextRequest) {
           revertido: !reversionError,
         },
         { status: 500 }
+      );
+    }
+
+    if (sinCorreo) {
+      return NextResponse.json(
+        {
+          ok: true,
+          email,
+          clave: claveTemporal,
+          mensaje: `Usuario creado. Entrega la clave a ${email}; conviene que la cambie al entrar.`,
+        },
+        { headers: { "Cache-Control": "no-store" } }
       );
     }
 
