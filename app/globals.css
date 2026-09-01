@@ -798,3 +798,53 @@ button.btn-mini {
   /* Los fondos de las bandas y la cabecera deben salir en papel. */
   .dth-logo, .dth-meta, .dth-banda { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ---------- Panel de franquicia ---------- */
+.fq-resultados {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px;
+  background: #f8fafc;
+}
+.fq-resultado {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #1e293b;
+  font-weight: 400;
+}
+.fq-resultado:hover { border-color: #2e75b6; background: #f0f9ff; }
+.fq-sku { font-weight: 700; color: #1f3864; font-variant-numeric: tabular-nums; }
+.fq-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fq-datos { color: #64748b; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fq-alerta { font-size: 10px; color: #b91c1c; font-weight: 700; margin-top: 2px; }
+.fq-totales {
+  display: flex;
+  gap: 18px;
+  justify-content: flex-end;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.fq-totales strong { font-size: 18px; color: #1f3864; }
+.tabla-scroll input[type="number"] { width: 84px; }

@@ -152,6 +152,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
         { href: "/administracion/empresas", etiqueta: "Grupo y empresas", descripcion: "RUC, tiendas, bodegas y operadoras del grupo económico", visible: puedeAdministrar },
         { href: "/administracion/usuarios", etiqueta: "Usuarios", descripcion: "Roles, almacenes, contraseñas y eliminación de accesos", visible: puedeAdministrar },
         { href: "/administracion/permisos", etiqueta: "Permisos por rol", descripcion: "Matriz de acceso de cada rol a los módulos del ERP", visible: puedeAdministrar },
+        { href: "/administracion/franquicias", etiqueta: "Franquicias", descripcion: "Locales franquiciados, su empresa titular y su almacén", visible: puedeAdministrar },
       ],
     },
   ];
