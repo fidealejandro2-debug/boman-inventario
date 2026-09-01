@@ -273,15 +273,24 @@ export default function ProductosCliente() {
     const sku = (edit.sku ?? "").trim().toUpperCase();
     if (!sku) { setMsg({ tipo: "error", texto: "El SKU es obligatorio." }); return; }
     const skuAnterior = productos.find((x) => x.id === id)?.sku ?? "";
-    if (sku !== skuAnterior && !window.confirm(
-      `Vas a cambiar el SKU de ${skuAnterior} a ${sku}.
 
-El histórico de movimientos, transferencias y ventas seguirá apuntando al mismo producto, pero las etiquetas físicas y los archivos exportados con el código anterior quedarán desactualizados.
+    // El SKU no viaja en el update: v8 revoco esa columna porque es la identidad
+    // de la prenda. Va por su RPC, que exige motivo y deja rastro en la auditoria.
+    if (sku !== skuAnterior) {
+      const motivo = window.prompt(
+        `Vas a cambiar el código de ${skuAnterior} a ${sku}.
 
-¿Continuar?`
-    )) return;
+El histórico de movimientos, transferencias y ventas sigue apuntando a la misma prenda, pero las etiquetas físicas y los archivos exportados con el código anterior quedan desactualizados.
+
+Motivo del cambio (mínimo 10 caracteres):`
+      )?.trim();
+      if (!motivo) return;
+      const { error: skuError } = await supabase.rpc("admin_cambiar_sku_producto_v48", {
+        p_producto_id: id, p_sku: sku, p_motivo: motivo,
+      });
+      if (skuError) { setMsg({ tipo: "error", texto: skuError.message }); return; }
+    }
     const { error } = await supabase.from("productos").update({
-      sku,
       nombre: edit.nombre,
       categoria_id: categoriaSeleccionada.id,
       categoria: categoriaSeleccionada.nombre,

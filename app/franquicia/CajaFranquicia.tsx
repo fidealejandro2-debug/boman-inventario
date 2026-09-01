@@ -30,9 +30,40 @@ type Movimiento = {
   created_at: string;
 };
 
+type Cierre = {
+  id: string;
+  fecha: string;
+  estado: "cerrado" | "reabierto";
+  saldo_inicial_efectivo: number;
+  ingresos_efectivo: number;
+  egresos_efectivo: number;
+  saldo_esperado_efectivo: number;
+  efectivo_contado: number;
+  diferencia: number;
+  ingresos_total: number;
+  egresos_total: number;
+  nota: string | null;
+  motivo_reapertura: string | null;
+  cerrado_at: string;
+};
+
+type ResumenDia = {
+  ingresos_total: number;
+  egresos_total: number;
+  ingresos_efectivo: number;
+  egresos_efectivo: number;
+};
+
 export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia }) {
   const supabase = createClient();
   const [movs, setMovs] = useState<Movimiento[]>([]);
+  const [cierres, setCierres] = useState<Cierre[]>([]);
+  const [resumenDia, setResumenDia] = useState<ResumenDia>({
+    ingresos_total: 0,
+    egresos_total: 0,
+    ingresos_efectivo: 0,
+    egresos_efectivo: 0,
+  });
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +72,10 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
   const primerDia = `${hoyLocalISO().slice(0, 7)}-01`;
   const [desde, setDesde] = useState(primerDia);
   const [hasta, setHasta] = useState(hoyLocalISO());
+  const [fechaCierre, setFechaCierre] = useState(hoyLocalISO());
+  const [saldoInicial, setSaldoInicial] = useState("");
+  const [efectivoContado, setEfectivoContado] = useState("");
+  const [notaCierre, setNotaCierre] = useState("");
 
   const [form, setForm] = useState({
     fecha: hoyLocalISO(),
@@ -54,23 +89,60 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
 
   async function cargar() {
     setCargando(true);
-    const { data, error } = await supabase
-      .from("vista_caja_franquicia_v42")
-      .select("*")
-      .eq("franquicia_id", franquicia.id)
-      .gte("fecha", desde)
-      .lte("fecha", hasta)
-      .order("fecha", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (error) setError(error.message);
-    else setMovs((data as Movimiento[]) ?? []);
+    const [movimientos, historial, resumen] = await Promise.all([
+      supabase
+        .from("vista_caja_franquicia_v42")
+        .select("*")
+        .eq("franquicia_id", franquicia.id)
+        .gte("fecha", desde)
+        .lte("fecha", hasta)
+        .order("fecha", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("franquicia_caja_cierres")
+        .select("*")
+        .eq("franquicia_id", franquicia.id)
+        .order("fecha", { ascending: false })
+        .limit(60),
+      supabase
+        .from("vista_resumen_caja_diaria_franquicia_v47")
+        .select("ingresos_total, egresos_total, ingresos_efectivo, egresos_efectivo")
+        .eq("franquicia_id", franquicia.id)
+        .eq("fecha", fechaCierre)
+        .maybeSingle(),
+    ]);
+    if (movimientos.error) setError(movimientos.error.message);
+    else setMovs((movimientos.data as Movimiento[]) ?? []);
+    if (!historial.error) {
+      const lista = (historial.data as Cierre[]) ?? [];
+      setCierres(lista);
+      const cierreActual = lista.find((c) => c.fecha === fechaCierre);
+      if (cierreActual) {
+        setSaldoInicial(String(Number(cierreActual.saldo_inicial_efectivo)));
+        setEfectivoContado(String(Number(cierreActual.efectivo_contado)));
+        setNotaCierre(cierreActual.nota ?? "");
+      } else {
+        const anterior = lista.find((c) => c.fecha < fechaCierre && c.estado === "cerrado");
+        setSaldoInicial((actual) => actual || String(Number(anterior?.efectivo_contado ?? 0)));
+      }
+    }
+    if (!resumen.error) {
+      setResumenDia(
+        (resumen.data as ResumenDia | null) ?? {
+          ingresos_total: 0,
+          egresos_total: 0,
+          ingresos_efectivo: 0,
+          egresos_efectivo: 0,
+        }
+      );
+    }
     setCargando(false);
   }
 
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [franquicia.id, desde, hasta]);
+  }, [franquicia.id, desde, hasta, fechaCierre]);
 
   const categorias = CATEGORIAS_CAJA.filter((c) => c.tipo === form.tipo);
 
@@ -119,6 +191,57 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
     cargar();
   }
 
+  const cierreSeleccionado = cierres.find((c) => c.fecha === fechaCierre);
+  const saldoEsperado =
+    Number(saldoInicial || 0) +
+    Number(resumenDia.ingresos_efectivo || 0) -
+    Number(resumenDia.egresos_efectivo || 0);
+  const diferenciaCierre = Number(efectivoContado || 0) - saldoEsperado;
+
+  async function cerrarCaja() {
+    if (cierreSeleccionado?.estado === "cerrado") {
+      return setError("La caja de esa fecha ya esta cerrada.");
+    }
+    if (saldoInicial === "" || Number(saldoInicial) < 0) {
+      return setError("Indica el saldo inicial de efectivo.");
+    }
+    if (efectivoContado === "" || Number(efectivoContado) < 0) {
+      return setError("Cuenta el efectivo fisico e indica el valor encontrado.");
+    }
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("cerrar_caja_franquicia_v47", {
+      p_fecha: fechaCierre,
+      p_saldo_inicial_efectivo: Number(saldoInicial),
+      p_efectivo_contado: Number(efectivoContado),
+      p_nota: notaCierre.trim() || null,
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso("Caja cerrada. El dia queda bloqueado hasta una reapertura justificada.");
+    setNotaCierre("");
+    cargar();
+  }
+
+  async function reabrirCaja(cierre: Cierre) {
+    const motivo = window.prompt(
+      "Motivo de reapertura (minimo 10 caracteres). La accion queda auditada:"
+    )?.trim();
+    if (!motivo) return;
+    if (motivo.length < 10) return setError("El motivo debe tener al menos 10 caracteres.");
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("reabrir_caja_franquicia_v47", {
+      p_cierre_id: cierre.id,
+      p_motivo: motivo,
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso("Caja reabierta. Ya puedes corregir los movimientos y volver a cerrarla.");
+    cargar();
+  }
+
   const totales = useMemo(() => {
     // El original revertido ya sale del saldo; su contrapartida es evidencia
     // en el diario, no un movimiento mas, o la reversa restaria dos veces.
@@ -154,6 +277,101 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
           <span className="valor">{dinero(totales.saldo)}</span>
           <span className="label">Saldo del período</span>
         </div>
+      </div>
+
+      <div className="card-interna">
+        <h4>Cierre diario de efectivo</h4>
+        <p className="ayuda">
+          El sistema toma solamente los cobros y pagos en efectivo para calcular lo
+          esperado. Transferencias y tarjetas quedan en el total del dia, pero no en
+          el dinero que debe estar fisicamente en caja.
+        </p>
+        <div className="form-grid">
+          <label>
+            Fecha
+            <input
+              type="date"
+              value={fechaCierre}
+              max={hoyLocalISO()}
+              onChange={(e) => {
+                setFechaCierre(e.target.value);
+                setSaldoInicial("");
+                setEfectivoContado("");
+              }}
+            />
+          </label>
+          <label>
+            Saldo inicial en efectivo
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={saldoInicial}
+              disabled={cierreSeleccionado?.estado === "cerrado"}
+              onChange={(e) => setSaldoInicial(e.target.value)}
+            />
+          </label>
+          <label>
+            Efectivo contado
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={efectivoContado}
+              disabled={cierreSeleccionado?.estado === "cerrado"}
+              onChange={(e) => setEfectivoContado(e.target.value)}
+            />
+          </label>
+          <label className="ancho-total">
+            Nota del cierre
+            <input
+              type="text"
+              value={notaCierre}
+              disabled={cierreSeleccionado?.estado === "cerrado"}
+              onChange={(e) => setNotaCierre(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="kpis">
+          <div className="kpi">
+            <span className="valor">{dinero(resumenDia.ingresos_efectivo)}</span>
+            <span className="label">Ingresos en efectivo</span>
+          </div>
+          <div className="kpi">
+            <span className="valor">{dinero(resumenDia.egresos_efectivo)}</span>
+            <span className="label">Egresos en efectivo</span>
+          </div>
+          <div className="kpi">
+            <span className="valor">{dinero(saldoEsperado)}</span>
+            <span className="label">Efectivo esperado</span>
+          </div>
+          <div className={`kpi ${Math.abs(diferenciaCierre) >= 0.01 ? "alerta" : ""}`}>
+            <span className="valor">
+              {efectivoContado === "" ? "--" : dinero(diferenciaCierre)}
+            </span>
+            <span className="label">Diferencia</span>
+          </div>
+        </div>
+        {cierreSeleccionado?.estado === "cerrado" ? (
+          <div className="filtros">
+            <span className="badge ok">Dia cerrado</span>
+            <span>
+              Contado {dinero(cierreSeleccionado.efectivo_contado)} · diferencia{" "}
+              {dinero(cierreSeleccionado.diferencia)}
+            </span>
+            <button
+              className="secondary"
+              disabled={guardando}
+              onClick={() => reabrirCaja(cierreSeleccionado)}
+            >
+              Reabrir con motivo
+            </button>
+          </div>
+        ) : (
+          <button onClick={cerrarCaja} disabled={guardando}>
+            {guardando ? "Cerrando..." : "Confirmar cierre diario"}
+          </button>
+        )}
       </div>
 
       <div className="card-interna">
@@ -211,7 +429,7 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
               value={form.medio_pago}
               onChange={(e) => setForm({ ...form, medio_pago: e.target.value })}
             >
-              {MEDIOS_PAGO.map((m) => (
+              {MEDIOS_PAGO.filter((m) => m.valor !== "mixto").map((m) => (
                 <option key={m.valor} value={m.valor}>
                   {m.etiqueta}
                 </option>
@@ -239,6 +457,55 @@ export default function CajaFranquicia({ franquicia }: { franquicia: Franquicia 
         <button onClick={registrar} disabled={guardando}>
           {guardando ? "Registrando…" : "Registrar movimiento"}
         </button>
+      </div>
+
+      <div className="card-interna">
+        <h4>Historial de cierres</h4>
+        <div className="tabla-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th className="num">Inicial</th>
+                <th className="num">Ingreso efectivo</th>
+                <th className="num">Egreso efectivo</th>
+                <th className="num">Esperado</th>
+                <th className="num">Contado</th>
+                <th className="num">Diferencia</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {cierres.map((c) => (
+                <tr key={c.id} className={c.estado === "reabierto" ? "fila-anulada" : ""}>
+                  <td>{c.fecha.split("-").reverse().join("/")}</td>
+                  <td><span className={`badge estado-${c.estado}`}>{c.estado}</span></td>
+                  <td className="num">{dinero(c.saldo_inicial_efectivo)}</td>
+                  <td className="num">{dinero(c.ingresos_efectivo)}</td>
+                  <td className="num">{dinero(c.egresos_efectivo)}</td>
+                  <td className="num">{dinero(c.saldo_esperado_efectivo)}</td>
+                  <td className="num">{dinero(c.efectivo_contado)}</td>
+                  <td className="num"><strong>{dinero(c.diferencia)}</strong></td>
+                  <td>
+                    {c.estado === "cerrado" && (
+                      <button
+                        className="btn-mini secondary"
+                        disabled={guardando}
+                        onClick={() => reabrirCaja(c)}
+                      >
+                        Reabrir
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!cierres.length && (
+                <tr><td colSpan={9} className="vacio">Todavia no hay cierres diarios.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="filtros">

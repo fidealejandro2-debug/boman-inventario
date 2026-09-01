@@ -9,6 +9,7 @@ import VentasFranquicia from "./VentasFranquicia";
 import CajaFranquicia from "./CajaFranquicia";
 import InventarioFranquicia from "./InventarioFranquicia";
 import FacturaXmlFranquicia from "./FacturaXmlFranquicia";
+import AlertasFranquicia from "./AlertasFranquicia";
 
 export type Franquicia = {
   id: string;
@@ -19,7 +20,7 @@ export type Franquicia = {
   empresa_id: string;
 };
 
-type Pestana = "ventas" | "factura" | "caja" | "inventario";
+type Pestana = "ventas" | "factura" | "caja" | "inventario" | "alertas";
 
 export default function FranquiciaCliente({
   rol,
@@ -38,6 +39,7 @@ export default function FranquiciaCliente({
   const puedeVender = tienePermiso(perfil, "franquicia.ventas");
   const puedeCaja = tienePermiso(perfil, "franquicia.caja");
   const puedeInventario = tienePermiso(perfil, "franquicia.inventario");
+  const puedeReposicion = tienePermiso(perfil, "franquicia.reposicion");
 
   useEffect(() => {
     (async () => {
@@ -87,6 +89,7 @@ export default function FranquiciaCliente({
     { id: "factura", etiqueta: "Factura XML", visible: puedeVender },
     { id: "caja", etiqueta: "Caja", visible: puedeCaja },
     { id: "inventario", etiqueta: "Inventario", visible: puedeInventario },
+    { id: "alertas", etiqueta: "Alertas", visible: puedeReposicion },
   ];
   const visibles = pestanas.filter((p) => p.visible);
   // Si Administracion deshabilita el permiso de la pestana que estaba activa,
@@ -131,6 +134,9 @@ export default function FranquiciaCliente({
           {tabActiva === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} />}
           {tabActiva === "inventario" && puedeInventario && (
             <InventarioFranquicia franquicia={franquicia} />
+          )}
+          {tabActiva === "alertas" && puedeReposicion && (
+            <AlertasFranquicia franquicia={franquicia} />
           )}
         </>
       )}

@@ -27,6 +27,17 @@ type Linea = {
   stock: number;
 };
 
+type PagoVenta = {
+  medio_pago: string;
+  monto: number;
+  referencia: string | null;
+};
+
+type PagoMixto = Record<
+  "efectivo" | "transferencia" | "tarjeta",
+  { monto: string; referencia: string }
+>;
+
 type Venta = {
   id: string;
   numero: number;
@@ -40,6 +51,7 @@ type Venta = {
   vendedor: string;
   referencia: string | null;
   created_at: string;
+  pagos: PagoVenta[];
 };
 
 export default function VentasFranquicia({ franquicia }: { franquicia: Franquicia }) {
@@ -56,6 +68,11 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
   const [medioPago, setMedioPago] = useState("efectivo");
   const [descuentoGeneral, setDescuentoGeneral] = useState("0");
   const [referencia, setReferencia] = useState("");
+  const [pagosMixtos, setPagosMixtos] = useState<PagoMixto>({
+    efectivo: { monto: "", referencia: "" },
+    transferencia: { monto: "", referencia: "" },
+    tarjeta: { monto: "", referencia: "" },
+  });
   const [nota, setNota] = useState("");
   const [fechaVenta, setFechaVenta] = useState(hoyLocalISO());
 
@@ -68,7 +85,7 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
         .eq("almacen_id", franquicia.almacen_id)
         .order("producto"),
       supabase
-        .from("vista_ventas_franquicia_v42")
+        .from("vista_ventas_franquicia_v47")
         .select("*")
         .eq("franquicia_id", franquicia.id)
         .order("numero", { ascending: false })
@@ -136,6 +153,35 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
     0
   );
   const total = subtotal - Number(descuentoGeneral || 0);
+  const totalPagosMixtos = Object.values(pagosMixtos).reduce(
+    (s, p) => s + Number(p.monto || 0),
+    0
+  );
+  const diferenciaPagos = Math.round((totalPagosMixtos - total) * 100) / 100;
+
+  function actualizarPagoMixto(
+    medio: keyof PagoMixto,
+    campo: "monto" | "referencia",
+    valor: string
+  ) {
+    setPagosMixtos({
+      ...pagosMixtos,
+      [medio]: { ...pagosMixtos[medio], [campo]: valor },
+    });
+  }
+
+  const pagos: PagoVenta[] =
+    medioPago === "mixto"
+      ? (Object.entries(pagosMixtos) as [keyof PagoMixto, PagoMixto[keyof PagoMixto]][])
+          .filter(([, p]) => Number(p.monto || 0) > 0)
+          .map(([medio, p]) => ({
+            medio_pago: medio,
+            monto: Math.round(Number(p.monto) * 100) / 100,
+            referencia: p.referencia.trim() || null,
+          }))
+      : total > 0
+        ? [{ medio_pago: medioPago, monto: Math.round(total * 100) / 100, referencia: referencia.trim() || null }]
+        : [];
 
   // Se avisa antes de enviar: la base rechaza la venta entera si algo no cuadra.
   const problemas = lineas
@@ -152,6 +198,16 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
         ? `${l.sku}: solo hay ${l.stock} en el local`
         : `${l.sku}: cantidad, precio o descuento inválidos`
     );
+  if (medioPago === "mixto" && Math.abs(diferenciaPagos) >= 0.005) {
+    problemas.push(
+      diferenciaPagos < 0
+        ? `Falta distribuir ${dinero(Math.abs(diferenciaPagos))}`
+        : `Los pagos exceden el total por ${dinero(diferenciaPagos)}`
+    );
+  }
+  if (medioPago === "mixto" && pagos.length < 2) {
+    problemas.push("Un pago mixto debe usar al menos dos medios");
+  }
 
   async function registrar() {
     if (!lineas.length) return setError("Agrega al menos un producto.");
@@ -161,7 +217,7 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
 
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("registrar_venta_franquicia_v42", {
+    const { error } = await supabase.rpc("registrar_venta_franquicia_v47", {
       p_fecha: fechaVenta,
       p_items: lineas.map((l) => ({
         producto_id: l.producto_id,
@@ -169,9 +225,9 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
         precio_unitario: l.precio_unitario,
         descuento: l.descuento,
       })),
-      p_medio_pago: medioPago,
+      p_pagos: pagos,
       p_descuento: Number(descuentoGeneral || 0),
-      p_referencia: referencia || null,
+      p_referencia: medioPago === "mixto" ? null : referencia || null,
       p_nota: nota || null,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
@@ -182,6 +238,11 @@ export default function VentasFranquicia({ franquicia }: { franquicia: Franquici
     setLineas([]);
     setDescuentoGeneral("0");
     setReferencia("");
+    setPagosMixtos({
+      efectivo: { monto: "", referencia: "" },
+      transferencia: { monto: "", referencia: "" },
+      tarjeta: { monto: "", referencia: "" },
+    });
     setNota("");
     cargar();
   }
@@ -196,7 +257,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
     if (motivo.length < 10) return setError("El motivo debe tener al menos 10 caracteres.");
     setGuardando(true);
     setError(null);
-    const { data, error } = await supabase.rpc("anular_venta_franquicia_v44", {
+    const { data, error } = await supabase.rpc("anular_venta_franquicia_v47", {
       p_venta_id: v.id, p_motivo: motivo, p_idempotency_key: nuevaClaveIdempotencia(),
     });
     setGuardando(false);
@@ -382,6 +443,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                   onChange={(e) => setDescuentoGeneral(e.target.value)}
                 />
               </label>
+              {medioPago !== "mixto" && (
               <label>
                 Referencia
                 <input
@@ -391,6 +453,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                   onChange={(e) => setReferencia(e.target.value)}
                 />
               </label>
+              )}
               <label className="ancho-total">
                 Nota
                 <input
@@ -400,6 +463,54 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                 />
               </label>
             </div>
+
+            {medioPago === "mixto" && (
+              <div className="card-interna">
+                <h4>Distribucion del pago</h4>
+                <p className="ayuda">
+                  Escribe cuanto se recibio por cada medio. La suma debe coincidir
+                  exactamente con el total de la venta.
+                </p>
+                <div className="form-grid">
+                  {(["efectivo", "transferencia", "tarjeta"] as const).map((medio) => (
+                    <div key={medio}>
+                      <label>
+                        {medio.charAt(0).toUpperCase() + medio.slice(1)}
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={pagosMixtos[medio].monto}
+                          onChange={(e) => actualizarPagoMixto(medio, "monto", e.target.value)}
+                        />
+                      </label>
+                      {medio !== "efectivo" && (
+                        <label>
+                          Referencia
+                          <input
+                            type="text"
+                            value={pagosMixtos[medio].referencia}
+                            onChange={(e) =>
+                              actualizarPagoMixto(medio, "referencia", e.target.value)
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="fq-totales">
+                  <span>Distribuido: {dinero(totalPagosMixtos)}</span>
+                  <strong>
+                    {Math.abs(diferenciaPagos) < 0.005
+                      ? "Pago completo"
+                      : diferenciaPagos < 0
+                        ? `Falta ${dinero(Math.abs(diferenciaPagos))}`
+                        : `Exceso ${dinero(diferenciaPagos)}`}
+                  </strong>
+                </div>
+              </div>
+            )}
 
             <div className="fq-totales">
               <span>Subtotal: {dinero(subtotal)}</span>
@@ -453,7 +564,15 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
               <tr key={v.id} className={v.estado !== "registrada" ? "fila-anulada" : ""}>
                 <td className="num">{v.numero}</td>
                 <td>{fmtFecha(v.created_at)}</td>
-                <td>{v.medio_pago}</td>
+                <td>
+                  <strong>{v.medio_pago}</strong>
+                  {v.pagos?.map((p, i) => (
+                    <div key={`${p.medio_pago}-${i}`} className="fq-alerta">
+                      {p.medio_pago}: {dinero(p.monto)}
+                      {p.referencia ? ` · ${p.referencia}` : ""}
+                    </div>
+                  ))}
+                </td>
                 <td className="num">{v.unidades}</td>
                 <td className="num">
                   <strong>{dinero(v.total)}</strong>

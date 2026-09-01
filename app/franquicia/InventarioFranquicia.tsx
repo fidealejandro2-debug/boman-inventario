@@ -18,6 +18,11 @@ type Fila = {
   stock_fisico: number;
   stock_disponible: number;
   transito_entrada: number;
+  stock_minimo: number;
+  stock_maximo: number | null;
+  punto_reposicion: number;
+  bajo_minimo: boolean;
+  sugerido_reponer: number;
 };
 
 type LineaAjuste = {
@@ -40,6 +45,10 @@ export default function InventarioFranquicia({
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  // El local ve el catalogo completo porque producto_almacen_config se siembra
+  // para todas las prendas al crear el almacen. Para vender, lo unico que
+  // importa es lo que hay; el catalogo entero se consulta a proposito.
+  const [vista, setVista] = useState<"con_stock" | "bajo_minimo" | "todo">("con_stock");
 
   const [mostrarAjuste, setMostrarAjuste] = useState(false);
   const [tipo, setTipo] = useState<"entrada" | "salida">("salida");
@@ -47,13 +56,17 @@ export default function InventarioFranquicia({
   const [fechaAjuste, setFechaAjuste] = useState(hoyLocalISO());
   const [lineas, setLineas] = useState<LineaAjuste[]>([]);
   const [buscarAjuste, setBuscarAjuste] = useState("");
+  const [editandoMinimos, setEditandoMinimos] = useState(false);
+  const [minimos, setMinimos] = useState<
+    Record<string, { stock_minimo: string; stock_maximo: string }>
+  >({});
 
   async function cargar() {
     setCargando(true);
     const { data, error } = await supabase
       .from("vista_stock_operativo")
       .select(
-        "producto_id, sku, producto, talla, color, precio, stock_fisico, stock_disponible, transito_entrada"
+        "producto_id, sku, producto, talla, color, precio, stock_fisico, stock_disponible, transito_entrada, stock_minimo, stock_maximo, punto_reposicion, bajo_minimo, sugerido_reponer"
       )
       .eq("almacen_id", franquicia.almacen_id)
       .order("producto");
@@ -69,11 +82,21 @@ export default function InventarioFranquicia({
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return stock;
-    return stock.filter(
-      (p) => p.sku.toLowerCase().includes(q) || p.producto.toLowerCase().includes(q)
-    );
-  }, [stock, busqueda]);
+    return stock.filter((p) => {
+      // Buscar por codigo o nombre atraviesa la vista: si el vendedor escribe un
+      // SKU concreto quiere verlo aunque este en cero.
+      if (q) {
+        return p.sku.toLowerCase().includes(q) || p.producto.toLowerCase().includes(q);
+      }
+      if (vista === "con_stock") return p.stock_disponible > 0 || (p.transito_entrada ?? 0) > 0;
+      if (vista === "bajo_minimo") return p.bajo_minimo;
+      return true;
+    });
+  }, [stock, busqueda, vista]);
+
+  const conStock = stock.filter(
+    (p) => p.stock_disponible > 0 || (p.transito_entrada ?? 0) > 0
+  ).length;
 
   const candidatos = useMemo(() => {
     const q = buscarAjuste.trim().toLowerCase();
@@ -135,12 +158,69 @@ export default function InventarioFranquicia({
     cargar();
   }
 
+  function editarMinimo(p: Fila, campo: "stock_minimo" | "stock_maximo", valor: string) {
+    setMinimos({
+      ...minimos,
+      [p.producto_id]: {
+        stock_minimo: minimos[p.producto_id]?.stock_minimo ?? String(p.stock_minimo ?? 0),
+        stock_maximo:
+          minimos[p.producto_id]?.stock_maximo ??
+          String(p.stock_maximo ?? Math.max(p.stock_minimo ?? 0, p.stock_disponible)),
+        [campo]: valor,
+      },
+    });
+  }
+
+  async function guardarMinimos() {
+    const items = Object.entries(minimos).map(([producto_id, limites]) => ({
+      producto_id,
+      stock_minimo: Number(limites.stock_minimo),
+      stock_maximo: Number(limites.stock_maximo),
+    }));
+    if (!items.length) return setError("No has modificado ningun limite.");
+    const invalido = items.find(
+      (i) =>
+        !Number.isInteger(i.stock_minimo) ||
+        !Number.isInteger(i.stock_maximo) ||
+        i.stock_minimo < 0 ||
+        i.stock_maximo < i.stock_minimo
+    );
+    if (invalido) return setError("El maximo debe ser un entero igual o mayor al minimo.");
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("guardar_minimos_franquicia_v47", {
+      p_items: items,
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso(`${items.length} limites de reposicion guardados.`);
+    setMinimos({});
+    setEditandoMinimos(false);
+    cargar();
+  }
+
+  async function solicitarSugerido() {
+    if (sugerido <= 0) return setError("No hay productos que requieran reposicion.");
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("crear_reposicion_sugerida_franquicia_v47", {
+      p_nota: "Solicitud automatica segun minimos y mercaderia en transito",
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso("Solicitud de reposicion creada. Puedes seguirla en Operaciones.");
+    cargar();
+  }
+
   const valorInventario = stock.reduce(
     (s, p) => s + Number(p.precio ?? 0) * p.stock_fisico,
     0
   );
   const sinStock = stock.filter((p) => p.stock_disponible <= 0).length;
   const enTransito = stock.reduce((s, p) => s + (p.transito_entrada ?? 0), 0);
+  const bajoMinimo = stock.filter((p) => p.bajo_minimo).length;
+  const sugerido = stock.reduce((s, p) => s + Number(p.sugerido_reponer ?? 0), 0);
 
   if (cargando) return <p className="ayuda">Cargando inventario del local…</p>;
 
@@ -151,8 +231,8 @@ export default function InventarioFranquicia({
 
       <div className="kpis">
         <div className="kpi">
-          <span className="valor">{stock.length}</span>
-          <span className="label">Productos en el local</span>
+          <span className="valor">{conStock}</span>
+          <span className="label">Productos disponibles</span>
         </div>
         <div className="kpi">
           <span className="valor">{dinero(valorInventario)}</span>
@@ -165,6 +245,14 @@ export default function InventarioFranquicia({
         <div className="kpi">
           <span className="valor">{enTransito}</span>
           <span className="label">Unidades en tránsito</span>
+        </div>
+        <div className={`kpi ${bajoMinimo ? "alerta" : ""}`}>
+          <span className="valor">{bajoMinimo}</span>
+          <span className="label">Productos bajo minimo</span>
+        </div>
+        <div className={`kpi ${sugerido ? "alerta" : ""}`}>
+          <span className="valor">{sugerido}</span>
+          <span className="label">Unidades sugeridas</span>
         </div>
       </div>
 
@@ -179,12 +267,38 @@ export default function InventarioFranquicia({
         <button onClick={() => setMostrarAjuste(!mostrarAjuste)}>
           {mostrarAjuste ? "Cancelar ajuste" : "Registrar ajuste"}
         </button>
+        <button className="secondary" onClick={() => setEditandoMinimos(!editandoMinimos)}>
+          {editandoMinimos ? "Cancelar minimos" : "Configurar minimos"}
+        </button>
+        <button onClick={solicitarSugerido} disabled={guardando || sugerido <= 0}>
+          Solicitar reposicion sugerida ({sugerido})
+        </button>
         <input
           type="search"
-          placeholder="Buscar producto…"
+          placeholder="Buscar por código o nombre…"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
         />
+        <div className="tabs" style={{ margin: 0 }}>
+          <button
+            className={`tab ${vista === "con_stock" ? "activo" : ""}`}
+            onClick={() => setVista("con_stock")}
+          >
+            Con stock ({conStock})
+          </button>
+          <button
+            className={`tab ${vista === "bajo_minimo" ? "activo" : ""}`}
+            onClick={() => setVista("bajo_minimo")}
+          >
+            Bajo mínimo ({bajoMinimo})
+          </button>
+          <button
+            className={`tab ${vista === "todo" ? "activo" : ""}`}
+            onClick={() => setVista("todo")}
+          >
+            Todo el catálogo ({stock.length})
+          </button>
+        </div>
         <button
           className="secondary"
           onClick={() => exportarCSV("inventario_franquicia", visibles)}
@@ -319,6 +433,19 @@ export default function InventarioFranquicia({
         </div>
       )}
 
+      {editandoMinimos && (
+        <div className="card-interna">
+          <h4>Stock minimo y objetivo</h4>
+          <p className="ayuda">
+            Cuando disponible mas transito llega al minimo, el sistema sugiere pedir
+            hasta completar el maximo. Solo se guardan los productos modificados.
+          </p>
+          <button onClick={guardarMinimos} disabled={guardando || !Object.keys(minimos).length}>
+            {guardando ? "Guardando..." : `Guardar cambios (${Object.keys(minimos).length})`}
+          </button>
+        </div>
+      )}
+
       <div className="tabla-scroll">
         <table>
           <thead>
@@ -328,6 +455,9 @@ export default function InventarioFranquicia({
               <th className="num">Físico</th>
               <th className="num">Disponible</th>
               <th className="num">En tránsito</th>
+              <th className="num">Minimo</th>
+              <th className="num">Maximo</th>
+              <th className="num">Sugerido</th>
               <th className="num">Precio</th>
             </tr>
           </thead>
@@ -349,13 +479,47 @@ export default function InventarioFranquicia({
                   )}
                 </td>
                 <td className="num">{p.transito_entrada || "—"}</td>
+                <td className="num">
+                  {editandoMinimos ? (
+                    <input
+                      type="number"
+                      min="0"
+                      value={minimos[p.producto_id]?.stock_minimo ?? String(p.stock_minimo ?? 0)}
+                      onChange={(e) => editarMinimo(p, "stock_minimo", e.target.value)}
+                    />
+                  ) : p.stock_minimo}
+                </td>
+                <td className="num">
+                  {editandoMinimos ? (
+                    <input
+                      type="number"
+                      min="0"
+                      value={
+                        minimos[p.producto_id]?.stock_maximo ??
+                        String(p.stock_maximo ?? Math.max(p.stock_minimo ?? 0, p.stock_disponible))
+                      }
+                      onChange={(e) => editarMinimo(p, "stock_maximo", e.target.value)}
+                    />
+                  ) : (p.stock_maximo ?? "--")}
+                </td>
+                <td className="num">
+                  {p.sugerido_reponer > 0 ? (
+                    <span className="badge alerta">{p.sugerido_reponer}</span>
+                  ) : "--"}
+                </td>
                 <td className="num">{dinero(p.precio)}</td>
               </tr>
             ))}
             {!visibles.length && (
               <tr>
-                <td colSpan={6} className="vacio">
-                  Sin productos que coincidan.
+                <td colSpan={9} className="vacio">
+                  {busqueda
+                    ? "Ningún producto coincide con la búsqueda."
+                    : vista === "con_stock"
+                      ? "El local todavía no tiene stock. Mira «Todo el catálogo» para buscar una prenda y solicitar reposición."
+                      : vista === "bajo_minimo"
+                        ? "Ningún producto está bajo su mínimo."
+                        : "Sin productos en el catálogo."}
                 </td>
               </tr>
             )}

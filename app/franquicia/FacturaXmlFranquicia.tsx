@@ -8,7 +8,7 @@ import {
   type FacturaSri,
 } from "@/lib/xmlFacturaSri";
 import type { Franquicia } from "./FranquiciaCliente";
-import { dinero, mensajeError } from "./lib";
+import { dinero, MEDIOS_PAGO, mensajeError } from "./lib";
 
 type Producto = {
   producto_id: string;
@@ -21,6 +21,10 @@ type Producto = {
 
 type Asignacion = { productoId: string; cantidad: string };
 type EstadoLinea = { afectaInventario: boolean; asignaciones: Asignacion[] };
+type PagoMixto = Record<
+  "efectivo" | "transferencia" | "tarjeta",
+  { monto: string; referencia: string }
+>;
 
 type DocumentoAplicado = {
   id: string;
@@ -45,6 +49,13 @@ export default function FacturaXmlFranquicia({
   const [archivoNombre, setArchivoNombre] = useState("");
   const [archivoHash, setArchivoHash] = useState("");
   const [nota, setNota] = useState("");
+  const [medioPago, setMedioPago] = useState("efectivo");
+  const [referenciaPago, setReferenciaPago] = useState("");
+  const [pagosMixtos, setPagosMixtos] = useState<PagoMixto>({
+    efectivo: { monto: "", referencia: "" },
+    transferencia: { monto: "", referencia: "" },
+    tarjeta: { monto: "", referencia: "" },
+  });
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +124,13 @@ export default function FacturaXmlFranquicia({
       );
       setBusquedas({});
       setNota("");
+      setMedioPago("efectivo");
+      setReferenciaPago("");
+      setPagosMixtos({
+        efectivo: { monto: "", referencia: "" },
+        transferencia: { monto: "", referencia: "" },
+        tarjeta: { monto: "", referencia: "" },
+      });
     } catch (e: any) {
       setFactura(null);
       setError(e.message || "No se pudo leer el XML.");
@@ -168,6 +186,43 @@ export default function FacturaXmlFranquicia({
       .filter((x) => x.falta !== 0);
   }, [factura, lineas]);
 
+  const totalFactura = Number(factura?.importeTotal ?? 0);
+  const totalPagosMixtos = Object.values(pagosMixtos).reduce(
+    (s, p) => s + Number(p.monto || 0),
+    0
+  );
+  const diferenciaPagos = Math.round((totalPagosMixtos - totalFactura) * 100) / 100;
+  const pagos =
+    medioPago === "mixto"
+      ? (Object.entries(pagosMixtos) as [keyof PagoMixto, PagoMixto[keyof PagoMixto]][])
+          .filter(([, p]) => Number(p.monto || 0) > 0)
+          .map(([medio, p]) => ({
+            medio_pago: medio,
+            monto: Math.round(Number(p.monto) * 100) / 100,
+            referencia: p.referencia.trim() || null,
+          }))
+      : totalFactura > 0
+        ? [{
+            medio_pago: medioPago,
+            monto: Math.round(totalFactura * 100) / 100,
+            referencia: referenciaPago.trim() || null,
+          }]
+        : [];
+  const pagoInvalido =
+    medioPago === "mixto" &&
+    (Math.abs(diferenciaPagos) >= 0.005 || pagos.length < 2);
+
+  function actualizarPagoMixto(
+    medio: keyof PagoMixto,
+    campo: "monto" | "referencia",
+    valor: string
+  ) {
+    setPagosMixtos({
+      ...pagosMixtos,
+      [medio]: { ...pagosMixtos[medio], [campo]: valor },
+    });
+  }
+
   async function aplicar() {
     if (!factura) return;
     if (pendientes.length) {
@@ -176,6 +231,15 @@ export default function FacturaXmlFranquicia({
         p.falta > 0
           ? `Falta asignar ${p.falta} unidad(es) de la línea ${p.linea.numeroLinea} (${p.linea.descripcion}).`
           : `La línea ${p.linea.numeroLinea} tiene ${-p.falta} unidad(es) asignadas de más.`
+      );
+    }
+    if (pagoInvalido) {
+      return setError(
+        pagos.length < 2
+          ? "Un pago mixto debe usar al menos dos medios."
+          : diferenciaPagos < 0
+            ? `Falta distribuir ${dinero(Math.abs(diferenciaPagos))}.`
+            : `Los pagos exceden el total por ${dinero(diferenciaPagos)}.`
       );
     }
 
@@ -218,9 +282,10 @@ export default function FacturaXmlFranquicia({
 
     // El envoltorio v44 resuelve el almacen del local, admite los roles de
     // franquicia (el motor historico los rechaza) y registra el ingreso en caja.
-    const { data, error } = await supabase.rpc("aplicar_factura_venta_franquicia_v44", {
+    const { data, error } = await supabase.rpc("aplicar_factura_venta_franquicia_v47", {
       p_documento: documento,
       p_asignaciones: asignaciones,
+      p_pagos: pagos,
       p_nota: nota || null,
     });
     setProcesando(false);
@@ -233,6 +298,7 @@ export default function FacturaXmlFranquicia({
     setArchivoNombre("");
     setArchivoHash("");
     setNota("");
+    setReferenciaPago("");
     cargar();
   }
 
@@ -402,6 +468,24 @@ export default function FacturaXmlFranquicia({
           })}
 
           <div className="form-grid">
+            <label>
+              Medio de pago
+              <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)}>
+                {MEDIOS_PAGO.map((medio) => (
+                  <option key={medio.valor} value={medio.valor}>{medio.etiqueta}</option>
+                ))}
+              </select>
+            </label>
+            {medioPago !== "mixto" && (
+              <label>
+                Referencia del pago
+                <input
+                  type="text"
+                  value={referenciaPago}
+                  onChange={(e) => setReferenciaPago(e.target.value)}
+                />
+              </label>
+            )}
             <label className="ancho-total">
               Nota
               <input
@@ -412,6 +496,50 @@ export default function FacturaXmlFranquicia({
             </label>
           </div>
 
+          {medioPago === "mixto" && (
+            <div className="card-interna">
+              <h4>Distribucion del pago</h4>
+              <div className="form-grid">
+                {(["efectivo", "transferencia", "tarjeta"] as const).map((medio) => (
+                  <div key={medio}>
+                    <label>
+                      {medio.charAt(0).toUpperCase() + medio.slice(1)}
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={pagosMixtos[medio].monto}
+                        onChange={(e) => actualizarPagoMixto(medio, "monto", e.target.value)}
+                      />
+                    </label>
+                    {medio !== "efectivo" && (
+                      <label>
+                        Referencia
+                        <input
+                          type="text"
+                          value={pagosMixtos[medio].referencia}
+                          onChange={(e) =>
+                            actualizarPagoMixto(medio, "referencia", e.target.value)
+                          }
+                        />
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="fq-totales">
+                <span>Distribuido: {dinero(totalPagosMixtos)}</span>
+                <strong>
+                  {Math.abs(diferenciaPagos) < 0.005
+                    ? "Pago completo"
+                    : diferenciaPagos < 0
+                      ? `Falta ${dinero(Math.abs(diferenciaPagos))}`
+                      : `Exceso ${dinero(diferenciaPagos)}`}
+                </strong>
+              </div>
+            </div>
+          )}
+
           {pendientes.length > 0 && (
             <p className="aviso">
               Faltan líneas por relacionar con productos del local. Si alguna no debe
@@ -420,7 +548,10 @@ export default function FacturaXmlFranquicia({
           )}
 
           <div className="filtros">
-            <button onClick={aplicar} disabled={procesando || pendientes.length > 0}>
+            <button
+              onClick={aplicar}
+              disabled={procesando || pendientes.length > 0 || pagoInvalido}
+            >
               {procesando ? "Aplicando…" : "Aplicar factura y descontar stock"}
             </button>
             <button className="secondary" onClick={() => setFactura(null)}>
