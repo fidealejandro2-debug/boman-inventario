@@ -116,14 +116,13 @@ function enlacesValidos(...items: Array<EnlaceModulo | false>): EnlaceModulo[] {
 // convencion ecuatoriana de cuatro palabras -dos apellidos y dos nombres- el
 // nombre de pila es la tercera y el primer apellido la primera.
 //
-// Con otra cantidad de palabras no se adivina: se prefiere devolver el nombre
-// tal cual antes que inventar un orden y llamar mal a alguien.
+// Con otra cantidad de palabras no se adivina cual es el nombre de pila: se
+// prefiere devolver el nombre tal cual antes que inventar un orden y llamar mal
+// a alguien.
 function nombreParaSaludo(completo: string) {
   const p = (completo || "").trim().split(/s+/).filter(Boolean);
   if (p.length !== 4) return completo;
-  const capital = (t: string) =>
-    t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
-  return `${capital(p[2])} ${capital(p[0])}`;
+  return p[2].charAt(0).toUpperCase() + p[2].slice(1).toLowerCase();
 }
 
 export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
