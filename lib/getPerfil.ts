@@ -17,38 +17,45 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
   bodega: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
-    "produccion.acceder",
+    "produccion.acceder", "notificaciones.acceder",
+    "mantenimiento.acceder", "mantenimiento.editar",
   ],
   logistica: [
     "inventario.acceder", "operaciones.acceder",
-    "movimientos.acceder", "produccion.acceder",
+    "movimientos.acceder", "produccion.acceder", "notificaciones.acceder",
+    "mantenimiento.acceder", "mantenimiento.editar",
   ],
   gerencia: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
     "produccion.acceder", "control.acceder", "reportes.acceder",
-    "nomina.acceder",
+    "nomina.acceder", "notificaciones.acceder", "notificaciones.publicar",
+    "mantenimiento.acceder",
   ],
   tienda: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
-    "movimientos.acceder", "ventas.acceder",
+    "movimientos.acceder", "ventas.acceder", "notificaciones.acceder",
   ],
   control: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
     "produccion.acceder", "control.acceder", "reportes.acceder",
+    "notificaciones.acceder", "notificaciones.publicar",
+    "mantenimiento.acceder", "mantenimiento.editar",
   ],
   nomina: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "nomina.acceder", "nomina.editar",
+    "notificaciones.acceder",
   ],
   franquiciado: [
     "inventario.acceder", "operaciones.acceder", "franquicia.acceder",
     "franquicia.ventas", "franquicia.caja", "franquicia.inventario",
-    "franquicia.reposicion",
+    "franquicia.reposicion", "notificaciones.acceder",
   ],
   vendedor_franquicia: [
     "inventario.acceder", "franquicia.acceder", "franquicia.ventas",
+    "notificaciones.acceder",
   ],
 };
 
