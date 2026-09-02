@@ -1106,3 +1106,106 @@ button.btn-mini {
 @media (max-width: 700px) {
   .rol-columnas { grid-template-columns: 1fr; }
 }
+
+/* ── Rol de pago individual: replica el formato impreso de Talento Humano ── */
+.rol-hoja {
+  --rol-azul: #1f3864;
+  --rol-verde: #2e7d32;
+  --rol-rojo: #c00000;
+  --rol-morado: #7030a0;
+  --rol-borde: #b8cce4;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 14px 16px 8px;
+  border: 2px solid #9dc3e6;
+  background: #fff;
+  color: #000;
+  font-family: Calibri, "Segoe UI", Arial, sans-serif;
+  font-size: 12px;
+}
+.rol-marca { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+.rol-logo-b {
+  background: var(--rol-rojo); color: #fff; font-weight: 800;
+  font-size: 18px; line-height: 1; padding: 4px 7px; border-radius: 3px;
+}
+.rol-logo-txt { color: var(--rol-rojo); font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+
+.rol-titulo {
+  background: var(--rol-azul); color: #fff; text-align: center;
+  font-weight: 700; font-size: 11px; letter-spacing: 0.3px; padding: 4px;
+}
+
+.rol-datos { width: 100%; border-collapse: collapse; }
+.rol-datos th, .rol-datos td {
+  border: 1px solid var(--rol-borde); padding: 3px 6px; font-size: 12px;
+}
+.rol-datos th { background: #fff; text-align: left; font-weight: 700; width: 15%; }
+.rol-datos th.der { text-align: right; width: 16%; }
+.rol-datos th.azul, .rol-datos td.azul { color: var(--rol-azul); }
+.rol-datos td.nombre { font-weight: 700; }
+.rol-datos td.num { text-align: center; font-weight: 700; }
+
+.rol-tabla { width: 100%; border-collapse: collapse; }
+.rol-tabla th, .rol-tabla td {
+  border: 1px solid var(--rol-borde); padding: 3px 6px; font-size: 12px;
+}
+.rol-tabla .col-cant { width: 70px; }
+.rol-tabla .col-valor { width: 110px; }
+.rol-tabla td.num, .rol-tabla th.col-valor, .rol-tabla th.col-cant { text-align: right; }
+.rol-tabla td.azul { color: #0070c0; text-align: center; }
+.rol-tabla tbody tr:nth-child(even) td { background: #fdf7f7; }
+
+.rol-verde th, .rol-verde.total td { background: var(--rol-verde); color: #fff; font-weight: 700; }
+.rol-rojo th, .rol-rojo.total td { background: var(--rol-rojo); color: #fff; font-weight: 700; }
+.rol-azul.total td { background: var(--rol-azul); color: #fff; font-weight: 700; }
+.rol-verde th, .rol-rojo th { text-align: left; }
+.rol-verde th.col-cant, .rol-verde th.col-valor, .rol-rojo th.col-valor { text-align: right; }
+.rol-verde.total td:first-child, .rol-rojo.total td:first-child, .rol-azul.total td:first-child {
+  text-align: left;
+}
+.rol-base { color: #7030a0; font-weight: 700; margin-left: 10px; }
+
+.rol-obs-titulo {
+  background: var(--rol-morado); color: #fff; font-weight: 700;
+  padding: 3px 6px; font-size: 12px;
+}
+.rol-obs {
+  border: 1px solid var(--rol-borde); border-top: none;
+  background: #f2f7fc; padding: 10px 8px; min-height: 56px;
+  font-style: italic; color: var(--rol-azul); line-height: 1.5;
+}
+
+.rol-detalle { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.rol-detalle th, .rol-detalle td {
+  border: 1px solid var(--rol-borde); padding: 3px 6px; font-size: 11px;
+}
+.rol-detalle th { background: #eef4fb; text-align: left; font-weight: 700; }
+.rol-detalle td.num, .rol-detalle th.num { text-align: right; }
+.rol-detalle small { display: block; color: #666; }
+
+.rol-firma-titulo {
+  background: var(--rol-azul); color: #fff; font-weight: 700;
+  padding: 3px 6px; font-size: 12px; margin-top: 10px;
+}
+.rol-firma { width: 100%; border-collapse: collapse; }
+.rol-firma td {
+  border: 1px solid var(--rol-borde); padding: 26px 8px 6px;
+  font-size: 11px; vertical-align: bottom; width: 50%;
+}
+.rol-linea-firma { border-top: 1px solid #000; margin-bottom: 3px; width: 80%; }
+.rol-firma td.rol-ci { vertical-align: bottom; }
+.rol-pie {
+  display: flex; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--rol-borde); border-top: none;
+  padding: 3px 6px; font-size: 11px;
+}
+.rol-pie span { color: #666; }
+
+@media print {
+  .no-imprimir, .navbar, nav { display: none !important; }
+  .rol-hoja { max-width: none; border: none; margin: 0; }
+  /* El bloque de firma no puede quedar solo en la última hoja. */
+  .rol-firma-titulo, .rol-firma, .rol-pie { break-inside: avoid; }
+  .rol-detalle { break-inside: auto; }
+  .rol-tabla { break-inside: avoid; }
+}

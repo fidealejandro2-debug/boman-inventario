@@ -21,7 +21,6 @@ type Real = {
   fecha_ingreso_real: string;
   afiliado: boolean;
   empresa_afiliacion: string | null;
-  ruc_afiliador: string | null;
   empresa_pagadora: string | null;
   ruc_pagador: string | null;
   dias_laborados: number;
@@ -51,45 +50,41 @@ type Real = {
 };
 
 type Declarado = {
-  rol_linea_id: string;
-  anio: number;
-  mes: number;
-  identificacion: string;
-  nombre_completo: string;
-  cargo: string | null;
-  empresa_afiliacion: string;
-  ruc_afiliador: string;
-  fecha_afiliacion: string | null;
-  dias_laborados: number;
   dias_afiliados: number;
   sueldo_declarado: number;
   sueldo_proporcional_declarado: number;
   total_ingresos_declarado: number;
   aporte_personal: number;
   neto_declarado: number;
-  aporte_patronal: number;
-  provision_decimo_tercero: number;
-  provision_decimo_cuarto: number;
-  provision_vacaciones: number;
-  provision_fondos_reserva: number;
-  costo_empleador_declarado: number;
+  empresa_afiliacion: string;
+  ruc_afiliador: string;
 };
 
-type Rubro = {
+type Novedad = {
   rol_linea_id: string;
-  codigo: string;
-  nombre: string;
+  grupo: "ingreso" | "descuento" | "informativo";
   tipo: string;
+  etiqueta: string;
+  fecha: string | null;
   cantidad: number | null;
-  valor: number;
-  descripcion_extra: string | null;
+  monto: number | null;
+  detalle: string | null;
+  nota: string | null;
+  orden: number;
 };
 
-type Fila = { etiqueta: string; valor: number; detalle?: string };
+type Fila = { concepto: string; cantidad?: string; valor: number };
 
-/** Solo se imprime lo que tiene valor: un rol lleno de ceros no se lee. */
-function conValor(filas: Fila[]) {
-  return filas.filter((f) => Number(f.valor) !== 0);
+const dia = (f: string | null) =>
+  f ? f.slice(8, 10) + "/" + f.slice(5, 7) : "";
+
+/** "Multa (11/07) 5,00$ LIMPIEZA AREA" — como se lee en el Excel. */
+function frase(n: Novedad) {
+  const partes = [n.etiqueta];
+  if (n.fecha) partes.push("(" + dia(n.fecha) + ")");
+  if (n.monto) partes.push(Number(n.monto).toFixed(2).replace(".", ",") + "$");
+  if (n.detalle) partes.push(n.detalle);
+  return partes.join(" ");
 }
 
 export default function RolImpresion({
@@ -102,92 +97,97 @@ export default function RolImpresion({
   const supabase = createClient();
   const [real, setReal] = useState<Real | null>(null);
   const [declarado, setDeclarado] = useState<Declarado | null>(null);
-  const [rubros, setRubros] = useState<Rubro[]>([]);
+  const [novedades, setNovedades] = useState<Novedad[]>([]);
   const [version, setVersion] = useState<"real" | "declarado">("real");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const [r, d, ru] = await Promise.all([
+      const [r, d, n] = await Promise.all([
         supabase.from("vista_rol_impresion_v31").select("*").eq("rol_linea_id", rolLineaId).maybeSingle(),
         supabase.from("vista_rol_declarado_v31").select("*").eq("rol_linea_id", rolLineaId).maybeSingle(),
-        supabase.from("vista_rol_rubros_v31").select("*").eq("rol_linea_id", rolLineaId).order("codigo"),
+        supabase.from("vista_rol_novedades_v52").select("*").eq("rol_linea_id", rolLineaId)
+          .order("orden").order("fecha"),
       ]);
       if (!vivo) return;
       if (r.error) return setError(r.error.message);
       if (!r.data) return setError("La línea del rol ya no existe.");
       setReal(r.data as Real);
       setDeclarado((d.data as Declarado) ?? null);
-      setRubros((ru.data as Rubro[]) ?? []);
+      setNovedades((n.data as Novedad[]) ?? []);
     })();
-    return () => {
-      vivo = false;
-    };
+    return () => { vivo = false; };
   }, [supabase, rolLineaId]);
 
   if (error) return <p className="error">No se pudo cargar el rol: {error}</p>;
   if (!real) return <p className="ayuda">Preparando el comprobante…</p>;
 
+  const declaradoActivo = version === "declarado" && declarado !== null;
   const periodo = `${MESES[real.mes - 1]} ${real.anio}`;
-  const mostrandoDeclarado = version === "declarado" && declarado;
+  const base = declaradoActivo ? declarado!.sueldo_declarado : null;
 
-  const ingresosReales = conValor([
-    { etiqueta: "Sueldo del período", valor: real.sueldo_proporcional_real,
-      detalle: `${real.dias_laborados} días laborados` },
-    { etiqueta: "Horas extra", valor: real.valor_horas_extra,
-      detalle: `${real.horas_extra_50} h al 50% · ${real.horas_extra_100} h al 100%` },
-    { etiqueta: "Comisiones", valor: real.comisiones },
-    { etiqueta: "Bonos", valor: real.bonos },
-    { etiqueta: "Vacaciones pagadas", valor: real.vacaciones_pagadas,
-      detalle: real.dias_vacaciones ? `${real.dias_vacaciones} días` : undefined },
-    { etiqueta: "Décimo tercero mensualizado", valor: real.decimo_tercero_mensualizado },
-    { etiqueta: "Décimo cuarto mensualizado", valor: real.decimo_cuarto_mensualizado },
-    { etiqueta: "Fondos de reserva", valor: real.fondos_reserva_pagados },
-    { etiqueta: "Otros ingresos", valor: real.otros_ingresos },
-    ...rubros.filter((r) => r.tipo === "ingreso").map((r) => ({
-      etiqueta: r.nombre, valor: Number(r.valor), detalle: r.descripcion_extra ?? undefined,
-    })),
-  ]);
+  const ingresos: Fila[] = declaradoActivo
+    ? [{
+        concepto: "Sueldo (a recibir)",
+        cantidad: String(declarado!.dias_afiliados),
+        valor: declarado!.sueldo_proporcional_declarado,
+      }]
+    : [
+        { concepto: "Sueldo (a recibir)", valor: real.sueldo_proporcional_real },
+        {
+          concepto: "Horas Suplementarias",
+          cantidad: real.horas_extra_50 || real.horas_extra_100
+            ? String(Number(real.horas_extra_50) + Number(real.horas_extra_100))
+            : undefined,
+          valor: real.valor_horas_extra,
+        },
+        { concepto: "Comisiones", valor: real.comisiones },
+        { concepto: "Bonos", valor: real.bonos },
+        { concepto: "Vacaciones pagadas", valor: real.vacaciones_pagadas },
+        { concepto: "Décimo tercero", valor: real.decimo_tercero_mensualizado },
+        { concepto: "Décimo cuarto", valor: real.decimo_cuarto_mensualizado },
+        { concepto: "Fondos de reserva", valor: real.fondos_reserva_pagados },
+        { concepto: "Otros ingresos", valor: real.otros_ingresos },
+      ].filter((f) => Number(f.valor) !== 0);
 
-  const egresosReales = conValor([
-    { etiqueta: "Aporte personal IESS", valor: real.aporte_personal },
-    { etiqueta: "Anticipos", valor: real.anticipos_cuota },
-    { etiqueta: "Multas", valor: real.multas },
-    { etiqueta: "Préstamos IESS", valor: real.prestamos_iess },
-    { etiqueta: "Préstamos de la empresa", valor: real.prestamos_empresa },
-    { etiqueta: "Retención judicial", valor: real.retencion_judicial },
-    { etiqueta: "Otros descuentos", valor: real.otros_descuentos },
-    ...rubros.filter((r) => r.tipo === "egreso").map((r) => ({
-      etiqueta: r.nombre, valor: Number(r.valor), detalle: r.descripcion_extra ?? undefined,
-    })),
-  ]);
+  const descuentos: Fila[] = declaradoActivo
+    ? [{ concepto: "Aporte personal IESS", valor: declarado!.aporte_personal }]
+    : [
+        { concepto: "Aporte personal IESS", valor: real.aporte_personal },
+        { concepto: "Anticipos", valor: real.anticipos_cuota },
+        { concepto: "Descuentos Varios", valor: real.otros_descuentos },
+        { concepto: "Multas / Sanciones", valor: real.multas },
+        { concepto: "Préstamos IESS", valor: real.prestamos_iess },
+        { concepto: "Préstamos empresa", valor: real.prestamos_empresa },
+        { concepto: "Retención judicial", valor: real.retencion_judicial },
+      ].filter((f) => Number(f.valor) !== 0);
 
-  const ingresosDeclarados = declarado
-    ? conValor([
-        { etiqueta: "Sueldo declarado del período", valor: declarado.sueldo_proporcional_declarado,
-          detalle: `${declarado.dias_afiliados} días afiliados sobre ${dinero(declarado.sueldo_declarado)} mensuales` },
-      ])
-    : [];
-  const egresosDeclarados = declarado
-    ? conValor([{ etiqueta: "Aporte personal IESS", valor: declarado.aporte_personal }])
-    : [];
+  const totalIngresos = declaradoActivo ? declarado!.total_ingresos_declarado : real.total_ingresos_real;
+  const totalDescuentos = declaradoActivo ? declarado!.aporte_personal : real.total_egresos;
+  const neto = declaradoActivo ? declarado!.neto_declarado : real.neto_real;
+  const diasTrab = declaradoActivo ? declarado!.dias_afiliados : real.dias_laborados;
 
-  const ingresos = mostrandoDeclarado ? ingresosDeclarados : ingresosReales;
-  const egresos = mostrandoDeclarado ? egresosDeclarados : egresosReales;
-  const totalIngresos = mostrandoDeclarado ? declarado!.total_ingresos_declarado : real.total_ingresos_real;
-  const totalEgresos = mostrandoDeclarado ? declarado!.aporte_personal : real.total_egresos;
-  const neto = mostrandoDeclarado ? declarado!.neto_declarado : real.neto_real;
+  // Se agrupa por tipo, como en el Excel: los atrasos juntos, las multas
+  // juntas, separados por barra. Leer "Multa, Multa, Atraso, Multa" cuesta.
+  const porTipo = new Map<string, Novedad[]>();
+  for (const n of novedades) {
+    if (!porTipo.has(n.etiqueta)) porTipo.set(n.etiqueta, []);
+    porTipo.get(n.etiqueta)!.push(n);
+  }
+  const observaciones = [...porTipo.values()]
+    .map((grupo) => grupo.map(frase).join(", "))
+    .join(" | ");
+
+  // Filas vacías para que el bloque conserve la altura del formato impreso.
+  const relleno = (n: number) => Array.from({ length: Math.max(0, n) }, (_, i) => i);
 
   return (
     <>
       <div className="no-imprimir filtros">
         <button onClick={() => window.print()}>Imprimir</button>
         <div className="tabs" style={{ margin: 0 }}>
-          <button
-            className={`tab ${version === "real" ? "activo" : ""}`}
-            onClick={() => setVersion("real")}
-          >
+          <button className={`tab ${version === "real" ? "activo" : ""}`} onClick={() => setVersion("real")}>
             Rol real
           </button>
           <button
@@ -199,9 +199,7 @@ export default function RolImpresion({
             Rol declarado (IESS)
           </button>
         </div>
-        <button className="secondary" onClick={onCerrar}>
-          Volver
-        </button>
+        <button className="secondary" onClick={onCerrar}>Volver</button>
       </div>
 
       {real.estado_periodo !== "cerrado" && (
@@ -211,194 +209,144 @@ export default function RolImpresion({
         </p>
       )}
 
-      <article className="doc-th">
-        <table className="doc-th-cab">
-          <tbody>
-            <tr>
-              <td className="dth-logo">
-                <span className="dth-marca">BOMAN</span>
-                <span className="dth-marca-sub">SPORT</span>
-              </td>
-              <td className="dth-titulo">
-                <div className="dth-t1">
-                  {mostrandoDeclarado ? "ROL DE PAGOS — IESS" : "ROL DE PAGOS"}
-                </div>
-                <div className="dth-t2">{periodo}</div>
-              </td>
-              <td className="dth-meta">
-                <div>Código: {mostrandoDeclarado ? "BOM-TH-RP-02" : "BOM-TH-RP-01"}</div>
-                <div>Versión: v01</div>
-                <div>Proceso: Gestión de Talento Humano</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table className="dth-datos">
-          <tbody>
-            <tr>
-              <th>Trabajador</th>
-              <td>{real.nombre_completo}</td>
-              <th>Cédula</th>
-              <td>{real.identificacion}</td>
-            </tr>
-            <tr>
-              <th>Cargo</th>
-              <td>{real.cargo ?? "—"}</td>
-              <th>Área</th>
-              <td>{real.area ?? "—"}</td>
-            </tr>
-            {mostrandoDeclarado ? (
-              <tr>
-                <th>Empleador afiliante</th>
-                <td>
-                  {declarado!.empresa_afiliacion}
-                  <small> · RUC {declarado!.ruc_afiliador}</small>
-                </td>
-                <th>Afiliado desde</th>
-                <td>{soloFecha(declarado!.fecha_afiliacion)}</td>
-              </tr>
-            ) : (
-              <tr>
-                <th>Paga</th>
-                <td>
-                  {real.empresa_pagadora ?? "—"}
-                  {real.ruc_pagador ? <small> · RUC {real.ruc_pagador}</small> : null}
-                </td>
-                <th>Ingreso</th>
-                <td>{soloFecha(real.fecha_ingreso_real)}</td>
-              </tr>
-            )}
-            <tr>
-              <th>Período</th>
-              <td>{periodo}</td>
-              <th>Días</th>
-              <td>
-                {mostrandoDeclarado
-                  ? `${declarado!.dias_afiliados} afiliados`
-                  : `${real.dias_laborados} laborados` +
-                    (real.dias_ausencia_sin_sueldo
-                      ? ` · ${real.dias_ausencia_sin_sueldo} sin sueldo`
-                      : "")}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="rol-columnas">
-          <table className="rol-tabla">
-            <thead>
-              <tr>
-                <th colSpan={2}>INGRESOS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ingresos.map((f) => (
-                <tr key={f.etiqueta}>
-                  <td>
-                    {f.etiqueta}
-                    {f.detalle ? <small>{f.detalle}</small> : null}
-                  </td>
-                  <td className="num">{dinero(f.valor)}</td>
-                </tr>
-              ))}
-              {!ingresos.length && (
-                <tr>
-                  <td colSpan={2} className="vacio">Sin ingresos registrados</td>
-                </tr>
-              )}
-              <tr className="rol-total">
-                <td>Total ingresos</td>
-                <td className="num">{dinero(totalIngresos)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <table className="rol-tabla">
-            <thead>
-              <tr>
-                <th colSpan={2}>DESCUENTOS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {egresos.map((f) => (
-                <tr key={f.etiqueta}>
-                  <td>
-                    {f.etiqueta}
-                    {f.detalle ? <small>{f.detalle}</small> : null}
-                  </td>
-                  <td className="num">{dinero(f.valor)}</td>
-                </tr>
-              ))}
-              {!egresos.length && (
-                <tr>
-                  <td colSpan={2} className="vacio">Sin descuentos</td>
-                </tr>
-              )}
-              <tr className="rol-total">
-                <td>Total descuentos</td>
-                <td className="num">{dinero(totalEgresos)}</td>
-              </tr>
-            </tbody>
-          </table>
+      <article className="rol-hoja">
+        <div className="rol-marca">
+          <span className="rol-logo-b">B</span>
+          <span className="rol-logo-txt">BOMAN</span>
         </div>
 
-        <table className="rol-neto">
+        <div className="rol-titulo">
+          ROL DE PAGO {declaradoActivo ? "INDIVIDUAL · IESS" : "INDIVIDUAL"}
+        </div>
+
+        <table className="rol-datos">
           <tbody>
             <tr>
-              <td>NETO A RECIBIR</td>
+              <th>Período:</th>
+              <td>{periodo}</td>
+              <th className="der">N° Empleado:</th>
+              <td className="num azul">{real.identificacion}</td>
+            </tr>
+            <tr>
+              <th className="azul">EMPLEADO:</th>
+              <td className="nombre">{real.nombre_completo}</td>
+              <th className="der">Días trab.:</th>
+              <td className="num">{diasTrab}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table className="rol-tabla">
+          <thead>
+            <tr className="rol-verde">
+              <th>INGRESOS</th>
+              <th className="col-cant">CANT.</th>
+              <th className="col-valor">VALOR USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ingresos.map((f) => (
+              <tr key={f.concepto}>
+                <td>
+                  {f.concepto}
+                  {f.concepto.startsWith("Sueldo") && base ? (
+                    <span className="rol-base">Base: {dinero(base)}</span>
+                  ) : null}
+                </td>
+                <td className="num azul">{f.cantidad ?? ""}</td>
+                <td className="num">{dinero(f.valor)}</td>
+              </tr>
+            ))}
+            {relleno(6 - ingresos.length).map((i) => (
+              <tr key={"vi" + i}><td>&nbsp;</td><td /><td className="num">$0,00</td></tr>
+            ))}
+            <tr className="rol-verde total">
+              <td colSpan={2}>TOTAL INGRESOS</td>
+              <td className="num">{dinero(totalIngresos)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table className="rol-tabla">
+          <thead>
+            <tr className="rol-rojo">
+              <th colSpan={2}>DESCUENTOS</th>
+              <th className="col-valor">VALOR USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {descuentos.map((f) => (
+              <tr key={f.concepto}>
+                <td colSpan={2}>{f.concepto}</td>
+                <td className="num">{dinero(f.valor)}</td>
+              </tr>
+            ))}
+            {relleno(5 - descuentos.length).map((i) => (
+              <tr key={"vd" + i}><td colSpan={2}>&nbsp;</td><td className="num">$0,00</td></tr>
+            ))}
+            <tr className="rol-rojo total">
+              <td colSpan={2}>TOTAL DESCUENTOS</td>
+              <td className="num">{dinero(totalDescuentos)}</td>
+            </tr>
+            <tr className="rol-azul total">
+              <td colSpan={2}>NETO A PAGAR</td>
               <td className="num">{dinero(neto)}</td>
             </tr>
           </tbody>
         </table>
 
-        {mostrandoDeclarado && (
-          <table className="rol-tabla">
+        <div className="rol-obs-titulo">OBSERVACIONES:</div>
+        <div className="rol-obs">
+          {observaciones || "Sin novedades registradas en el período."}
+        </div>
+
+        {novedades.length > 0 && (
+          <table className="rol-detalle">
             <thead>
               <tr>
-                <th colSpan={2}>COSTO DEL EMPLEADOR (no se descuenta al trabajador)</th>
+                <th>Novedad</th>
+                <th>Fecha</th>
+                <th>Detalle</th>
+                <th className="num">Valor</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td>Aporte patronal</td><td className="num">{dinero(declarado!.aporte_patronal)}</td></tr>
-              <tr><td>Provisión décimo tercero</td><td className="num">{dinero(declarado!.provision_decimo_tercero)}</td></tr>
-              <tr><td>Provisión décimo cuarto</td><td className="num">{dinero(declarado!.provision_decimo_cuarto)}</td></tr>
-              <tr><td>Provisión vacaciones</td><td className="num">{dinero(declarado!.provision_vacaciones)}</td></tr>
-              <tr><td>Provisión fondos de reserva</td><td className="num">{dinero(declarado!.provision_fondos_reserva)}</td></tr>
-              <tr className="rol-total">
-                <td>Costo total</td>
-                <td className="num">{dinero(declarado!.costo_empleador_declarado)}</td>
-              </tr>
+              {novedades.map((n, i) => (
+                <tr key={i}>
+                  <td>{n.etiqueta}</td>
+                  <td>{n.fecha ? soloFecha(n.fecha) : "—"}</td>
+                  <td>
+                    {n.detalle ?? "—"}
+                    {n.nota ? <small>{n.nota}</small> : null}
+                  </td>
+                  <td className="num">{n.monto ? dinero(n.monto) : "—"}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
 
-        <p className="dth-declara">
-          Declaro haber recibido de conformidad el valor neto detallado en este rol de
-          pagos correspondiente a {periodo}, y que los rubros que lo componen
-          corresponden a lo efectivamente trabajado y acordado.
-        </p>
-
-        <table className="dth-firmas">
+        <div className="rol-firma-titulo">FIRMA EMPLEADO:</div>
+        <table className="rol-firma">
           <tbody>
             <tr>
               <td>
-                <div className="dth-linea-firma" />
+                <div className="rol-linea-firma" />
                 {real.nombre_completo}
-                <small>C.C. {real.identificacion} · Trabajador</small>
               </td>
-              <td>
-                <div className="dth-linea-firma" />
-                Talento Humano
-                <small>
-                  {mostrandoDeclarado
-                    ? declarado!.empresa_afiliacion
-                    : real.empresa_pagadora ?? "Boman Sport"}
-                </small>
-              </td>
+              <td className="rol-ci">C.I. / Fecha:</td>
             </tr>
           </tbody>
         </table>
+
+        <div className="rol-pie">
+          {real.nombre_completo}
+          <span>
+            {declaradoActivo
+              ? `${declarado!.empresa_afiliacion} · RUC ${declarado!.ruc_afiliador}`
+              : real.empresa_pagadora ?? ""}
+          </span>
+        </div>
       </article>
     </>
   );
