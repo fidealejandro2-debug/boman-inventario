@@ -209,6 +209,27 @@ Queda marcado como respaldo pendiente y aparecerá en la lista de documentos por
     cargar();
   }
 
+  async function anularDescuento(d: Descuento) {
+    const { motivo, error: errMotivo } = pedirMotivo(
+      `Vas a ANULAR el descuento de ${d.apellidos} ${d.nombres} por ${dinero(d.monto_total)}.
+
+Se usa cuando el descuento nunca debio existir: por ejemplo, la persona devolvió el anticipo antes de que corriera el rol. Se cancelan las cuotas pendientes para que el próximo cierre no las aplique.
+
+Motivo de la anulación:`
+    );
+    if (errMotivo) return setError(errMotivo);
+    if (!motivo) return;
+    setGuardando(true);
+    setError(null);
+    const { data, error } = await supabase.rpc("anular_descuento_v56", {
+      p_descuento_id: d.id, p_motivo: motivo, p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso((data as { mensaje?: string } | null)?.mensaje ?? "Descuento anulado.");
+    cargar();
+  }
+
   async function archivarDescuento(id: string, estado: string) {
     const { motivo, error: errMotivo } = pedirMotivo(
       `Vas a archivar un descuento en estado "${estado}".
@@ -888,8 +909,19 @@ Motivo del archivo:`
                           Reactivar
                         </button>
                       )}
-                      {/* Un descuento saldado se archiva, nunca se borra: es la
-                          prueba de un valor que ya se le retuvo a la persona. */}
+                      {/* Nada aplicado todavia: el descuento puede no haber
+                          existido nunca (devolvió el anticipo el mismo mes). */}
+                      {d.monto_aplicado === 0 && d.estado !== "anulado" && (
+                        <button
+                          className="btn-mini peligro"
+                          disabled={guardando}
+                          onClick={() => anularDescuento(d)}
+                        >
+                          Anular
+                        </button>
+                      )}
+                      {/* Un descuento con valores ya aplicados se archiva, nunca
+                          se borra: es la prueba de lo que se le retuvo. */}
                       {["pagado", "condonado", "anulado"].includes(d.estado) && (
                         <button
                           className="btn-mini secondary"

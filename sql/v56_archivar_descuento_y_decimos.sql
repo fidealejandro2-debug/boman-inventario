@@ -82,6 +82,95 @@ begin
 end;
 $fn$;
 
+-- ------------------------------------------------------------
+-- 1.b Anular un descuento que nunca llego a aplicarse
+-- ------------------------------------------------------------
+-- Caso real: se desembolsa un anticipo y la persona devuelve la plata el mismo
+-- mes, antes de que corra el rol. No hay nada que recuperar por nomina, asi que
+-- el descuento no debe quedar ni vigente ni "pagado": nunca ocurrio.
+--
+-- El anticipo desembolsado NO se anula y esta bien que no se pueda: el dinero
+-- salio de caja y volvio, y las dos cosas son historia. Lo que se anula es su
+-- recuperacion.
+create or replace function public.anular_descuento_v56(
+  p_descuento_id uuid,
+  p_motivo text,
+  p_idempotency_key uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  d public.descuentos_programados%rowtype;
+  v_evento_id uuid;
+  v_cuotas integer;
+begin
+  if not public.usuario_puede_nomina(true) then
+    raise exception 'Solo Administracion o Nomina puede anular descuentos';
+  end if;
+  if p_idempotency_key is null then
+    raise exception 'La clave de idempotencia es obligatoria';
+  end if;
+  if length(btrim(coalesce(p_motivo, ''))) < 10 then
+    raise exception 'La anulacion requiere un motivo de al menos 10 caracteres';
+  end if;
+
+  select id into v_evento_id from public.nomina_eventos
+  where idempotency_key = p_idempotency_key;
+  if found then return jsonb_build_object('evento_id', v_evento_id, 'duplicado', true); end if;
+
+  select * into d from public.descuentos_programados
+  where id = p_descuento_id for update;
+  if not found then raise exception 'El descuento programado no existe'; end if;
+  if d.estado = 'anulado' then raise exception 'Ese descuento ya estaba anulado'; end if;
+
+  -- La linea que no se cruza: si ya se le descontó algo a la persona, ese valor
+  -- existio en un rol firmado. Anular aqui lo borraria del control sin
+  -- devolverle nada. Primero se revierte la aplicacion, que si mueve el dinero.
+  if d.monto_aplicado > 0 then
+    raise exception
+      'Este descuento ya aplico % en nomina. Revierte primero esa aplicacion con revertir_aplicacion_descuentos_v29 y despues anulalo; si el valor se le quedo retenido, devuelvelo como ingreso en el rol.',
+      d.monto_aplicado;
+  end if;
+
+  update public.descuentos_programados
+  set estado = 'anulado', updated_at = now()
+  where id = d.id;
+
+  -- Las cuotas futuras dejan de existir: si quedaran pendientes, el proximo
+  -- cierre de nomina intentaria aplicarlas igual.
+  update public.descuento_programado_cuotas
+  set estado = 'anulada'
+  where descuento_programado_id = d.id
+    and estado in ('pendiente', 'parcial', 'diferida');
+  get diagnostics v_cuotas = row_count;
+
+  insert into public.nomina_eventos(
+    entidad, entidad_id, empleado_id, tipo, estado_anterior, estado_nuevo,
+    detalle, usuario_id, idempotency_key
+  ) values (
+    'descuento', d.id, d.empleado_id, 'anulado', d.estado, 'anulado',
+    btrim(p_motivo), auth.uid(), p_idempotency_key
+  );
+
+  -- Si venia de un anticipo, queda anotado en el expediente del anticipo: el
+  -- desembolso sigue registrado y ahora se sabe por que no se recupero.
+  if d.origen = 'anticipo' and d.origen_id is not null then
+    insert into public.nomina_eventos(
+      entidad, entidad_id, empleado_id, tipo, detalle, usuario_id, idempotency_key
+    ) values (
+      'anticipo', d.origen_id, d.empleado_id, 'recuperacion_anulada',
+      'Se anulo el descuento que recuperaba este anticipo: ' || btrim(p_motivo),
+      auth.uid(), gen_random_uuid()
+    );
+  end if;
+
+  return jsonb_build_object('id', d.id, 'duplicado', false, 'cuotas_anuladas', v_cuotas,
+    'mensaje', 'Descuento anulado; se cancelaron ' || v_cuotas || ' cuota(s) pendiente(s)');
+end;
+$fn$;
+
 -- La lista activa deja de mostrar lo archivado. Se reescribe entera y no con un
 -- parche textual porque la vista termina en GROUP BY: pegarle un AND al final
 -- seria un error de sintaxis. El historial completo sigue accesible
@@ -170,5 +259,9 @@ grant execute on function public.archivar_descuento_v56(uuid, text, uuid) to aut
 
 revoke all on public.vista_rol_beneficios_v56 from public, anon;
 grant select on public.vista_rol_beneficios_v56 to authenticated;
+
+alter function public.anular_descuento_v56(uuid, text, uuid) owner to postgres;
+revoke execute on function public.anular_descuento_v56(uuid, text, uuid) from public, anon;
+grant execute on function public.anular_descuento_v56(uuid, text, uuid) to authenticated;
 
 notify pgrst, 'reload schema';
