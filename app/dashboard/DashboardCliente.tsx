@@ -43,6 +43,17 @@ type Pendiente = {
   id: string; titulo: string; detalle: string; cantidad: number; href: string;
   nivel: "critico" | "atencion" | "normal";
 };
+type ResumenNotificaciones = { no_leidas: number; criticas: number; total: number };
+type ResumenMantenimiento = {
+  activos: number; detenidos: number; vencidos: number; proximos: number;
+  ordenes_abiertas: number; ordenes_atrasadas: number;
+};
+
+const NOTIFICACIONES_VACIO: ResumenNotificaciones = { no_leidas: 0, criticas: 0, total: 0 };
+const MANTENIMIENTO_VACIO: ResumenMantenimiento = {
+  activos: 0, detenidos: 0, vencidos: 0, proximos: 0,
+  ordenes_abiertas: 0, ordenes_atrasadas: 0,
+};
 
 const RESUMEN_VACIO: ResumenPanel = {
   generado_at: "", hoy: "", rol: "",
@@ -107,11 +118,18 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [notificaciones, setNotificaciones] = useState<ResumenNotificaciones>(NOTIFICACIONES_VACIO);
+  const [mantenimiento, setMantenimiento] = useState<ResumenMantenimiento>(MANTENIMIENTO_VACIO);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError(null);
-    const { data, error: errorCarga } = await supabase.rpc("resumen_panel_principal_v51");
+    const [panel, avisos, activos] = await Promise.all([
+      supabase.rpc("resumen_panel_principal_v51"),
+      supabase.rpc("resumen_notificaciones_v53"),
+      supabase.rpc("resumen_mantenimiento_v54"),
+    ]);
+    const { data, error: errorCarga } = panel;
     if (errorCarga) {
       setError(errorCarga.message.includes("resumen_panel_principal_v51")
         ? "Falta instalar la migración v51 para mostrar indicadores. Los accesos siguen disponibles."
@@ -119,6 +137,8 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     } else if (data) {
       setResumen(data as ResumenPanel);
     }
+    if (!avisos.error && avisos.data) setNotificaciones(avisos.data as ResumenNotificaciones);
+    if (!activos.error && activos.data) setMantenimiento(activos.data as ResumenMantenimiento);
     setCargando(false);
   }, [supabase]);
 
@@ -150,6 +170,13 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     const totalFranquicia = numero(resumen.franquicia.alertas) + numero(resumen.franquicia.cierres_pendientes_hoy);
 
     return [
+      {
+        id: "notificaciones", titulo: "Notificaciones", subtitulo: "Centro general de avisos",
+        descripcion: "Reúne pendientes, vencimientos y comunicados de todos tus módulos.",
+        href: "/notificaciones", icono: "AVI", tono: "rojo", visible: puede("notificaciones.acceder"),
+        pendiente: numero(notificaciones.no_leidas), pendienteTexto: "sin leer",
+        enlaces: [{ href: "/notificaciones", etiqueta: "Revisar notificaciones" }],
+      },
       {
         id: "inventario", titulo: "Inventario", subtitulo: "Existencias y catálogo",
         descripcion: "Consulta stock físico, disponible, reservado y en tránsito por almacén.",
@@ -203,6 +230,14 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         enlaces: [{ href: "/franquicia", etiqueta: esFranquicia ? "Ir a mi local" : "Ver franquicias" }],
       },
       {
+        id: "mantenimiento", titulo: "Mantenimiento", subtitulo: "Maquinaria y activos",
+        descripcion: "Control preventivo, órdenes de trabajo, paradas, responsables y costos.",
+        href: "/mantenimiento", icono: "MT", tono: "naranja", visible: puede("mantenimiento.acceder"),
+        pendiente: numero(mantenimiento.vencidos) + numero(mantenimiento.ordenes_atrasadas),
+        pendienteTexto: "vencidos o atrasados",
+        enlaces: [{ href: "/mantenimiento", etiqueta: puede("mantenimiento.editar") ? "Gestionar mantenimiento" : "Consultar activos" }],
+      },
+      {
         id: "nomina", titulo: "Nómina", subtitulo: "Personas y roles",
         descripcion: "Personal, expedientes, asistencia, vacaciones, novedades y roles de pago.",
         href: "/nomina", icono: "NOM", tono: "rosa", visible: puede("nomina.acceder"),
@@ -228,7 +263,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         ),
       },
     ];
-  }, [esFranquicia, perfil.rol, puede, resumen]);
+  }, [esFranquicia, perfil.rol, puede, resumen, notificaciones, mantenimiento]);
 
   const modulosVisibles = useMemo(() => {
     const consulta = busqueda.trim().toLocaleLowerCase("es");
@@ -239,6 +274,11 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
 
   const pendientes = useMemo<Pendiente[]>(() => {
     const items: Array<Pendiente | false> = [
+      puede("notificaciones.acceder") && numero(notificaciones.criticas) > 0 && {
+        id: "avisos-criticos", titulo: "Notificaciones críticas",
+        detalle: "Avisos sin leer que requieren atención inmediata",
+        cantidad: numero(notificaciones.criticas), href: "/notificaciones", nivel: "critico",
+      },
       puede("inventario.acceder") && numero(resumen.inventario.productos_bajo_minimo) > 0 && {
         id: "stock", titulo: "Productos bajo mínimo",
         detalle: `${ENTERO.format(numero(resumen.inventario.unidades_sugeridas))} unidades sugeridas para reponer`,
@@ -285,18 +325,29 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         cantidad: numero(resumen.nomina.ausencias_solicitadas), href: "/nomina", nivel: "atencion",
       },
       puede("franquicia.caja") && numero(resumen.franquicia.cierres_pendientes_hoy) > 0 && {
-        id: "cierre-caja", titulo: "Cierre de caja pendiente", detalle: "El efectivo del día todavía no fue conciliado",
+        id: "cierre-caja", titulo: "Cierre de caja pendiente",
+        detalle: "Días con movimiento de caja que quedaron sin conciliar",
         cantidad: numero(resumen.franquicia.cierres_pendientes_hoy), href: "/franquicia", nivel: "atencion",
       },
       puede("franquicia.acceder") && numero(resumen.franquicia.alertas) > 0 && {
         id: "franquicia-alertas", titulo: "Alertas de reposición", detalle: "Solicitudes aprobadas, despachadas o por recibir",
         cantidad: numero(resumen.franquicia.alertas), href: "/franquicia", nivel: "normal",
       },
+      puede("mantenimiento.acceder") && numero(mantenimiento.vencidos) > 0 && {
+        id: "mantenimiento-vencido", titulo: "Mantenimientos vencidos",
+        detalle: "Maquinaria o activos superaron su fecha o lectura objetivo",
+        cantidad: numero(mantenimiento.vencidos), href: "/mantenimiento", nivel: "critico",
+      },
+      puede("mantenimiento.acceder") && numero(mantenimiento.ordenes_atrasadas) > 0 && {
+        id: "mantenimiento-atrasado", titulo: "Órdenes de mantenimiento atrasadas",
+        detalle: "Trabajos programados que todavía no han iniciado",
+        cantidad: numero(mantenimiento.ordenes_atrasadas), href: "/mantenimiento", nivel: "atencion",
+      },
     ];
     const orden = { critico: 0, atencion: 1, normal: 2 };
     return items.filter((item): item is Pendiente => Boolean(item))
       .sort((a, b) => orden[a.nivel] - orden[b.nivel] || b.cantidad - a.cantidad);
-  }, [esFranquicia, puede, resumen]);
+  }, [esFranquicia, puede, resumen, notificaciones, mantenimiento]);
 
   const kpis = useMemo(() => {
     if (esFranquicia) return [
