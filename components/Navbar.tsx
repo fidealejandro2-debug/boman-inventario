@@ -2,10 +2,22 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
 import BomanLogo from "@/components/BomanLogo";
+
+type ModuloId =
+  | "notificaciones"
+  | "ventas"
+  | "compras"
+  | "produccion"
+  | "inventario"
+  | "mantenimiento"
+  | "franquicias"
+  | "reportes"
+  | "nomina"
+  | "administracion";
 
 type OpcionMenu = {
   href: string;
@@ -15,52 +27,73 @@ type OpcionMenu = {
 };
 
 type ModuloMenu = {
-  id: "ventas" | "compras" | "produccion" | "inventario" | "franquicias" | "reportes" | "nomina" | "administracion";
+  id: ModuloId;
   etiqueta: string;
-  icono: string;
   opciones: OpcionMenu[];
 };
+
+const ICONOS: Record<ModuloId | "inicio" | "buscar" | "salir", ReactNode> = {
+  inicio: <><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5M9 20v-6h6v6"/></>,
+  notificaciones: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
+  ventas: <><path d="M4 19V5h16v14H4Z"/><path d="M8 9h8M8 13h5"/><path d="M16 16h.01"/></>,
+  compras: <><path d="M3 5h2l2 10h10l2-7H6"/><circle cx="9" cy="19" r="1"/><circle cx="17" cy="19" r="1"/></>,
+  produccion: <><path d="m4 14 5-5 4 4 7-7"/><path d="M4 20h16M4 4v16"/></>,
+  inventario: <><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></>,
+  mantenimiento: <><path d="M14.7 6.3a4 4 0 0 0-5-5l2.1 2.1-3.4 3.4-2.1-2.1a4 4 0 0 0 5 5L19 17.4a2.1 2.1 0 0 1-3 3l-7.7-7.7"/></>,
+  franquicias: <><path d="M4 10h16l-2-6H6l-2 6Z"/><path d="M5 10v10h14V10M9 20v-6h6v6"/><path d="M4 10c0 2 4 2 4 0 0 2 4 2 4 0 0 2 4 2 4 0 0 2 4 2 4 0"/></>,
+  reportes: <><path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/></>,
+  nomina: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
+  administracion: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
+  buscar: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+  salir: <><path d="M10 17l5-5-5-5M15 12H3"/><path d="M14 3h6v18h-6"/></>,
+};
+
+function Icono({ nombre, size = 19 }: { nombre: keyof typeof ICONOS; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {ICONOS[nombre]}
+    </svg>
+  );
+}
 
 export default function Navbar({ perfil }: { perfil: Perfil }) {
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
-  const navRef = useRef<HTMLElement>(null);
-  const [abierto, setAbierto] = useState(false);
-  const [moduloAbierto, setModuloAbierto] = useState<string | null>(null);
+  const [movilAbierto, setMovilAbierto] = useState(false);
+  const [contraido, setContraido] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+
+  useEffect(() => {
+    setContraido(window.localStorage.getItem("boman-sidebar-contraido") === "1");
+  }, []);
+
+  useEffect(() => {
+    setMovilAbierto(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    function cerrarConEscape(evento: KeyboardEvent) {
+      if (evento.key === "Escape") setMovilAbierto(false);
+    }
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => document.removeEventListener("keydown", cerrarConEscape);
+  }, []);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    await createClient().auth.signOut();
     router.push("/login");
     router.refresh();
   }
 
-  function cerrarMenu() {
-    setAbierto(false);
-    setModuloAbierto(null);
+  function alternarContraido() {
+    setContraido((actual) => {
+      const siguiente = !actual;
+      window.localStorage.setItem("boman-sidebar-contraido", siguiente ? "1" : "0");
+      return siguiente;
+    });
   }
 
-  useEffect(() => {
-    cerrarMenu();
-  }, [pathname]);
-
-  useEffect(() => {
-    function cerrarDesdeFuera(evento: MouseEvent) {
-      if (navRef.current && !navRef.current.contains(evento.target as Node)) setModuloAbierto(null);
-    }
-    function cerrarConEscape(evento: KeyboardEvent) {
-      if (evento.key === "Escape") cerrarMenu();
-    }
-    document.addEventListener("mousedown", cerrarDesdeFuera);
-    document.addEventListener("keydown", cerrarConEscape);
-    return () => {
-      document.removeEventListener("mousedown", cerrarDesdeFuera);
-      document.removeEventListener("keydown", cerrarConEscape);
-    };
-  }, []);
-
   const puedeEditarProductos = perfil.rol === "admin";
-  const puedeVerReportes = tienePermiso(perfil, "reportes.acceder");
   const puedeAdministrar = perfil.rol === "admin";
   const puedeConfigurarStock = perfil.rol === "admin" || perfil.rol === "control";
   const puedeVerControl = tienePermiso(perfil, "control.acceder");
@@ -69,6 +102,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
   const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
   const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
+  const puedeVerNotificaciones = tienePermiso(perfil, "notificaciones.acceder");
+  const puedeVerMantenimiento = tienePermiso(perfil, "mantenimiento.acceder");
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -82,158 +117,121 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   } as Record<string, string>)[perfil.rol] ?? perfil.rol;
 
   const modulosBase: ModuloMenu[] = [
-    {
-      id: "ventas",
-      etiqueta: "Ventas",
-      icono: "$",
-      opciones: [
-        { href: "/ventas", etiqueta: "Facturas XML", descripcion: "Conciliación SRI y descuento de inventario", visible: puedeVerVentas },
-      ],
-    },
-    {
-      id: "compras",
-      etiqueta: "Compras",
-      icono: "OC",
-      opciones: [
-        { href: "/compras", etiqueta: "Órdenes y recepciones", descripcion: "Proveedores, aprobación, recepción parcial y costos", visible: puedeVerCompras },
-      ],
-    },
-    {
-      id: "produccion",
-      etiqueta: "Producción",
-      icono: "OP",
-      opciones: [
-        { href: "/produccion", etiqueta: "Órdenes, rutas, lotes y costos", descripcion: "Etapas, responsables, maquila, materiales, calidad y costo real por RUC", visible: puedeVerProduccion },
-      ],
-    },
-    {
-      id: "inventario",
-      etiqueta: "Inventario",
-      icono: "▦",
-      opciones: [
-        { href: "/inventario", etiqueta: "Stock por almacén", descripcion: "Físico, reservado, disponible y en tránsito", visible: tienePermiso(perfil, "inventario.acceder") },
-        { href: "/operaciones", etiqueta: "Solicitudes y transferencias", descripcion: "Reposición, preparación, despacho y recepción", visible: tienePermiso(perfil, "operaciones.acceder") },
-        { href: "/conteos", etiqueta: "Conteos físicos", descripcion: "Conteo, reconteo y diferencias", visible: tienePermiso(perfil, "conteos.acceder") },
-        { href: "/movimientos", etiqueta: "Movimientos", descripcion: "Entradas, salidas y trazabilidad", visible: tienePermiso(perfil, "movimientos.acceder") },
-        { href: "/control", etiqueta: "Centro de Control", descripcion: "Aprobaciones, incidencias y auditoría", visible: puedeVerControl },
-        { href: "/productos", etiqueta: "Catálogo de productos", descripcion: "Productos, categorías, precios e importación", visible: puedeEditarProductos },
-        { href: "/configuracion/inventario", etiqueta: "Políticas de stock", descripcion: "Mínimos, máximos y puntos de reposición", visible: puedeConfigurarStock },
-      ],
-    },
-    {
-      id: "franquicias",
-      etiqueta: "Franquicia",
-      icono: "FQ",
-      opciones: [
-        { href: "/franquicia", etiqueta: "Operación del local", descripcion: "Ventas, caja e inventario aislados por franquicia", visible: puedeVerFranquicia },
-      ],
-    },
-    {
-      id: "reportes",
-      etiqueta: "Reportes",
-      icono: "▥",
-      opciones: [
-        { href: "/reportes", etiqueta: "Reportes y análisis", descripcion: "Stock, valoración, reposición y cumplimiento", visible: puedeVerReportes },
-      ],
-    },
-    {
-      id: "nomina",
-      etiqueta: "Nómina",
-      icono: "☰",
-      opciones: [
-        { href: "/nomina", etiqueta: "Personal y roles", descripcion: "Empleados, expediente, roles de pago y costo por RUC", visible: puedeVerNomina },
-      ],
-    },
-    {
-      id: "administracion",
-      etiqueta: "Administración",
-      icono: "⚙",
-      opciones: [
-        { href: "/administracion/empresas", etiqueta: "Grupo y empresas", descripcion: "RUC, tiendas, bodegas y operadoras del grupo económico", visible: puedeAdministrar },
-        { href: "/administracion/usuarios", etiqueta: "Usuarios", descripcion: "Roles, almacenes, contraseñas y eliminación de accesos", visible: puedeAdministrar },
-        { href: "/administracion/permisos", etiqueta: "Permisos por rol", descripcion: "Matriz de acceso de cada rol a los módulos del ERP", visible: puedeAdministrar },
-        { href: "/administracion/franquicias", etiqueta: "Franquicias", descripcion: "Locales franquiciados, su empresa titular y su almacén", visible: puedeAdministrar },
-      ],
-    },
+    { id: "notificaciones", etiqueta: "Notificaciones", opciones: [
+      { href: "/notificaciones", etiqueta: "Centro de avisos", descripcion: "Pendientes, vencimientos y comunicados", visible: puedeVerNotificaciones },
+    ] },
+    { id: "ventas", etiqueta: "Ventas", opciones: [
+      { href: "/ventas", etiqueta: "Facturas XML", descripcion: "Conciliación SRI e inventario", visible: puedeVerVentas },
+    ] },
+    { id: "compras", etiqueta: "Compras", opciones: [
+      { href: "/compras", etiqueta: "Órdenes y recepciones", descripcion: "Proveedores, recepción y costos", visible: puedeVerCompras },
+    ] },
+    { id: "produccion", etiqueta: "Producción", opciones: [
+      { href: "/produccion", etiqueta: "Órdenes de producción", descripcion: "Rutas, etapas, lotes y costos", visible: puedeVerProduccion },
+    ] },
+    { id: "inventario", etiqueta: "Inventario", opciones: [
+      { href: "/inventario", etiqueta: "Existencias", descripcion: "Stock disponible por almacén", visible: tienePermiso(perfil, "inventario.acceder") },
+      { href: "/operaciones", etiqueta: "Operaciones", descripcion: "Solicitudes y transferencias", visible: tienePermiso(perfil, "operaciones.acceder") },
+      { href: "/conteos", etiqueta: "Conteos físicos", descripcion: "Conteo, reconteo y diferencias", visible: tienePermiso(perfil, "conteos.acceder") },
+      { href: "/movimientos", etiqueta: "Movimientos", descripcion: "Entradas, salidas y trazabilidad", visible: tienePermiso(perfil, "movimientos.acceder") },
+      { href: "/control", etiqueta: "Centro de control", descripcion: "Aprobaciones e incidencias", visible: puedeVerControl },
+      { href: "/productos", etiqueta: "Productos", descripcion: "Catálogo, categorías y precios", visible: puedeEditarProductos },
+      { href: "/configuracion/inventario", etiqueta: "Políticas de stock", descripcion: "Mínimos, máximos y reposición", visible: puedeConfigurarStock },
+    ] },
+    { id: "franquicias", etiqueta: "Franquicias", opciones: [
+      { href: "/franquicia", etiqueta: "Operación del local", descripcion: "Ventas, caja e inventario", visible: puedeVerFranquicia },
+    ] },
+    { id: "mantenimiento", etiqueta: "Mantenimiento", opciones: [
+      { href: "/mantenimiento", etiqueta: "Maquinaria y activos", descripcion: "Preventivos, órdenes y costos", visible: puedeVerMantenimiento },
+    ] },
+    { id: "reportes", etiqueta: "Análisis", opciones: [
+      { href: "/reportes", etiqueta: "Reportes", descripcion: "Indicadores y cumplimiento", visible: tienePermiso(perfil, "reportes.acceder") },
+    ] },
+    { id: "nomina", etiqueta: "Talento humano", opciones: [
+      { href: "/nomina", etiqueta: "Personal y nómina", descripcion: "Expedientes, novedades y roles", visible: puedeVerNomina },
+    ] },
+    { id: "administracion", etiqueta: "Administración", opciones: [
+      { href: "/administracion/empresas", etiqueta: "Empresas y locales", descripcion: "Grupo, RUC, tiendas y bodegas", visible: puedeAdministrar },
+      { href: "/administracion/usuarios", etiqueta: "Usuarios", descripcion: "Roles, almacenes y accesos", visible: puedeAdministrar },
+      { href: "/administracion/permisos", etiqueta: "Permisos por rol", descripcion: "Matriz de acceso del ERP", visible: puedeAdministrar },
+      { href: "/administracion/franquicias", etiqueta: "Configurar franquicias", descripcion: "Locales y empresas titulares", visible: puedeAdministrar },
+    ] },
   ];
+
+  const consulta = busqueda.trim().toLocaleLowerCase("es");
   const modulos = modulosBase
-    .map((modulo) => ({ ...modulo, opciones: modulo.opciones.filter((opcion) => opcion.visible) }))
+    .map((modulo) => ({
+      ...modulo,
+      opciones: modulo.opciones.filter((opcion) => opcion.visible && (
+        !consulta || `${modulo.etiqueta} ${opcion.etiqueta} ${opcion.descripcion}`.toLocaleLowerCase("es").includes(consulta)
+      )),
+    }))
     .filter((modulo) => modulo.opciones.length > 0);
 
   function rutaActiva(href: string) {
-    return pathname === href || pathname.startsWith(href + "/");
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
+  const opcionActiva = modulosBase.flatMap((modulo) => modulo.opciones).find((opcion) => rutaActiva(opcion.href));
+  const tituloActual = pathname === "/dashboard" ? "Panel principal" : opcionActiva?.etiqueta ?? "Boman ERP";
+
   return (
-    <nav className="navbar" ref={navRef} aria-label="Navegación principal">
-      <div className="nav-principal">
+    <>
+      <header className="nav-mobile-bar">
+        <button type="button" className="nav-mobile-trigger" onClick={() => setMovilAbierto(true)} aria-label="Abrir navegación" aria-controls="menu-principal" aria-expanded={movilAbierto}>
+          <span aria-hidden="true">☰</span>
+        </button>
+        <BomanLogo className="nav-mobile-logo" priority />
+        <strong>{tituloActual}</strong>
+      </header>
+
+      <nav id="menu-principal" className={`navbar ${contraido ? "nav-contraido" : ""} ${movilAbierto ? "nav-movil-abierto" : ""}`} aria-label="Navegación principal">
         <div className="nav-encabezado">
-          <Link href="/dashboard" className="brand" onClick={cerrarMenu}>
+          <Link href="/dashboard" className="brand" aria-label="Ir al panel principal">
             <BomanLogo className="brand-logo" priority />
-            <span className="brand-sistema">ERP DE INVENTARIO</span>
+            <span className="brand-sistema">GESTIÓN EMPRESARIAL</span>
           </Link>
-          <button
-            type="button"
-            className="nav-toggle"
-            onClick={() => {
-              setAbierto((valor) => !valor);
-              setModuloAbierto(null);
-            }}
-            aria-expanded={abierto}
-            aria-controls="menu-principal"
-            aria-label={abierto ? "Cerrar menú de navegación" : "Abrir menú de navegación"}
-          >
-            {abierto ? "×" : "☰"}
-          </button>
+          <button type="button" className="nav-cerrar-movil" onClick={() => setMovilAbierto(false)} aria-label="Cerrar navegación">×</button>
         </div>
 
-        <div id="menu-principal" className={`nav-modulos ${abierto ? "abierto" : ""}`}>
-          <Link href="/dashboard" className={`nav-inicio ${rutaActiva("/dashboard") ? "activo" : ""}`} onClick={cerrarMenu}>
-            Inicio
-          </Link>
-          {modulos.map((modulo) => {
-            const activo = modulo.opciones.some((opcion) => rutaActiva(opcion.href));
-            const expandido = moduloAbierto === modulo.id;
-            return (
-              <div className={`nav-modulo ${activo ? "activo" : ""}`} key={modulo.id}>
-                <button
-                  type="button"
-                  className="nav-modulo-trigger"
-                  onClick={() => setModuloAbierto(expandido ? null : modulo.id)}
-                  aria-expanded={expandido}
-                  aria-haspopup="true"
-                >
-                  <span className="nav-modulo-icono" aria-hidden="true">{modulo.icono}</span>
-                  {modulo.etiqueta}
-                  <span className="nav-chevron" aria-hidden="true">⌄</span>
-                </button>
-                <div className={`nav-submenu ${expandido ? "abierto" : ""}`}>
-                  <div className="nav-submenu-titulo">Módulo de {modulo.etiqueta}</div>
-                  {modulo.opciones.map((opcion) => (
-                    <Link
-                      key={opcion.href}
-                      href={opcion.href}
-                      className={rutaActiva(opcion.href) ? "activo" : ""}
-                      onClick={cerrarMenu}
-                    >
-                      <span>{opcion.etiqueta}</span>
-                      <small>{opcion.descripcion}</small>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        <div className="nav-busqueda">
+          <Icono nombre="buscar" size={17} />
+          <input value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} placeholder="Buscar módulo…" aria-label="Buscar módulo" />
         </div>
-      </div>
 
-      <div className={`nav-usuario ${abierto ? "abierto" : ""}`}>
-        <span className="nav-identidad">
-          <strong>{perfil.nombre_completo}</strong>
-          <small>{rolVisible}</small>
-        </span>
-        <button type="button" className="nav-salir" onClick={handleLogout}>Salir</button>
-      </div>
-    </nav>
+        <div className="nav-scroll">
+          <Link href="/dashboard" className={`nav-enlace nav-inicio ${rutaActiva("/dashboard") ? "activo" : ""}`} title="Panel principal">
+            <span className="nav-enlace-icono"><Icono nombre="inicio" /></span>
+            <span className="nav-enlace-texto"><strong>Panel principal</strong><small>Resumen de tu operación</small></span>
+          </Link>
+
+          {modulos.map((modulo) => (
+            <section className="nav-seccion" key={modulo.id} aria-label={modulo.etiqueta}>
+              <div className="nav-seccion-titulo">{modulo.etiqueta}</div>
+              {modulo.opciones.map((opcion) => (
+                <Link key={opcion.href} href={opcion.href} className={`nav-enlace ${rutaActiva(opcion.href) ? "activo" : ""}`} title={`${opcion.etiqueta} — ${opcion.descripcion}`}>
+                  <span className="nav-enlace-icono"><Icono nombre={modulo.id} /></span>
+                  <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
+                  <span className="nav-enlace-flecha" aria-hidden="true">›</span>
+                </Link>
+              ))}
+            </section>
+          ))}
+          {!modulos.length && <p className="nav-sin-resultados">No encontramos ese módulo.</p>}
+        </div>
+
+        <div className="nav-usuario">
+          <span className="nav-avatar" aria-hidden="true">{perfil.nombre_completo.trim().charAt(0).toUpperCase() || "U"}</span>
+          <span className="nav-identidad"><strong>{perfil.nombre_completo}</strong><small>{rolVisible}</small></span>
+          <button type="button" className="nav-salir" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión"><Icono nombre="salir" size={18} /></button>
+        </div>
+
+        <button type="button" className="nav-contraer" onClick={alternarContraido} aria-label={contraido ? "Expandir navegación" : "Contraer navegación"} title={contraido ? "Expandir" : "Contraer"}>
+          <span aria-hidden="true">{contraido ? "›" : "‹"}</span>
+        </button>
+      </nav>
+
+      {movilAbierto && <button type="button" className="nav-overlay" onClick={() => setMovilAbierto(false)} aria-label="Cerrar navegación" />}
+    </>
   );
 }
