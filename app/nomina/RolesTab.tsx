@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { exportarCSV } from "@/lib/utils";
-import { dinero, mensajeError, pedirMotivo, type Empresa } from "./lib";
+import { dinero, mensajeError, type Empresa } from "./lib";
 import RolImpresion from "./RolImpresion";
 import Aviso from "@/components/Aviso";
+import { pedirMotivoDialogo } from "@/components/Dialogo";
 
 type Periodo = {
   periodo_id: string;
@@ -186,10 +187,9 @@ export default function RolesTab({
   }
 
   async function cerrar() {
-    const { motivo, error: errMotivo } = pedirMotivo(
+    const motivo = await pedirMotivoDialogo(
       "Motivo del cierre (queda registrado y el período pasa a ser inmutable):"
     );
-    if (errMotivo) return setError(errMotivo);
     if (!motivo) return;
     setError(null);
     setOcupado(true);
@@ -205,8 +205,7 @@ export default function RolesTab({
   }
 
   async function reabrir() {
-    const { motivo, error: errMotivo } = pedirMotivo("Motivo para reabrir el período:");
-    if (errMotivo) return setError(errMotivo);
+    const motivo = await pedirMotivoDialogo("Motivo para reabrir el período:");
     if (!motivo) return;
     setError(null);
     setOcupado(true);

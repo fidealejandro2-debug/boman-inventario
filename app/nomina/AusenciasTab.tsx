@@ -9,13 +9,13 @@ import {
   soloFecha,
   hoyISO,
   mensajeError,
-  pedirMotivo,
   ETIQUETA_AUSENCIA,
   type Empleado,
 } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
 import CalendarioFeriados from "./CalendarioFeriados";
 import Aviso from "@/components/Aviso";
+import { pedirMotivoDialogo } from "@/components/Dialogo";
 
 type Ausencia = {
   id: string;
@@ -154,9 +154,7 @@ export default function AusenciasTab({
   }
 
   async function resolver(id: string, aprobar: boolean) {
-    const observacion = window.prompt(
-      aprobar ? "Observación de la aprobación (opcional):" : "Motivo del rechazo:"
-    );
+    const observacion = await pedirMotivoDialogo(aprobar ? "Observación de la aprobación (opcional):" : "Motivo del rechazo:");
     if (!aprobar && !observacion?.trim()) return;
     setGuardando(true);
     const { error } = await supabase.rpc("resolver_ausencia_v27", {
@@ -172,8 +170,7 @@ export default function AusenciasTab({
   }
 
   async function anular(id: string) {
-    const { motivo, error: errMotivo } = pedirMotivo("Motivo de la anulación:");
-    if (errMotivo) return setError(errMotivo);
+    const motivo = await pedirMotivoDialogo("Motivo de la anulación:");
     if (!motivo) return;
     setGuardando(true);
     const { error } = await supabase.rpc("anular_ausencia_v27", {

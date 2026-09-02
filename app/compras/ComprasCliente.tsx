@@ -9,6 +9,7 @@ import type { Perfil } from "@/lib/getPerfil";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { fecha } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
 
 type Empresa = { id: string; grupo_id: string; codigo: string; ruc: string; razon_social: string };
 type Almacen = { id: string; nombre: string };
@@ -216,7 +217,7 @@ export default function ComprasCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function resolverOrden(orden: Orden, aprobar: boolean) {
-    const texto = aprobar ? "Aprobación de compra verificada" : window.prompt("Motivo del rechazo:")?.trim();
+    const texto = aprobar ? "Aprobación de compra verificada" : (await pedirMotivoDialogo("Motivo del rechazo:"))?.trim();
     if (!aprobar && !texto) return;
     setProcesando(orden.id); setMsg(null);
     const { error } = await supabase.rpc("resolver_orden_compra_v21", {
@@ -229,11 +230,9 @@ export default function ComprasCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function cerrarSaldoOrden(orden: Orden) {
-    const motivo = window.prompt(
-      orden.estado === "parcial"
+    const motivo = (await pedirMotivoDialogo(orden.estado === "parcial"
         ? "Motivo para cerrar definitivamente las unidades pendientes:"
-        : "Motivo para anular esta orden aprobada sin recepción:"
-    )?.trim();
+        : "Motivo para anular esta orden aprobada sin recepción:"))?.trim();
     if (!motivo) return;
     setProcesando(orden.id); setMsg(null);
     const { error } = await supabase.rpc("cerrar_saldo_orden_compra_v21", {
@@ -290,11 +289,9 @@ export default function ComprasCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function rectificarRecepcion(orden: Orden, recepcionItem: Recepcion) {
-    const motivo = window.prompt(
-      `Rectificar ${recepcionItem.numero}. Describe el error y la evidencia (mínimo 10 caracteres):`
-    )?.trim();
+    const motivo = (await pedirMotivoDialogo(`Rectificar ${recepcionItem.numero}. Describe el error y la evidencia (mínimo 10 caracteres):`))?.trim();
     if (!motivo) return;
-    if (!window.confirm("Se retirará el stock conforme y la cuarentena de esta recepción mediante movimientos compensatorios. ¿Continuar?")) return;
+    if (!await confirmarDialogo("Se retirará el stock conforme y la cuarentena de esta recepción mediante movimientos compensatorios. ¿Continuar?")) return;
     setProcesando(recepcionItem.id); setMsg(null);
     const { error } = await supabase.rpc("admin_rectificar_recepcion_compra_v21", {
       p_recepcion_id: recepcionItem.id, p_motivo: motivo,
@@ -323,7 +320,7 @@ export default function ComprasCliente({ perfil }: { perfil: Perfil }) {
     if (detalleNoConforme.trim().length < 10) {
       setMsg({ tipo: "error", texto: "Registra al menos 10 caracteres de evidencia." }); return;
     }
-    if (accionNoConforme === "baja" && !window.confirm("La baja retirará definitivamente estas unidades de cuarentena. ¿Confirmas la evidencia y disposición final?")) return;
+    if (accionNoConforme === "baja" && !await confirmarDialogo("La baja retirará definitivamente estas unidades de cuarentena. ¿Confirmas la evidencia y disposición final?")) return;
     setProcesando(linea.id); setMsg(null);
     const { error } = await supabase.rpc("resolver_no_conformidad_compra_v21", {
       p_recepcion_linea_id: linea.id, p_accion: accionNoConforme,

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { fecha } from "@/lib/utils";
+import { confirmarDialogo } from "@/components/Dialogo";
 
 type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "nomina" | "franquiciado" | "vendedor_franquicia";
 type Almacen = { id: string; nombre: string; tipo: string; activo: boolean };
@@ -182,7 +183,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
   }
 
   async function enviarCambioClave(usuario: Usuario) {
-    if (!window.confirm(`Se enviará un enlace seguro para cambiar la contraseña a ${usuario.email}.\n\n¿Deseas continuar?`)) return;
+    if (!await confirmarDialogo(`Se enviará un enlace seguro para cambiar la contraseña a ${usuario.email}.\n\n¿Deseas continuar?`)) return;
     setMsg(null);
     setGuardando(true);
     try {
@@ -200,7 +201,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
   }
 
   async function reenviarInvitacion(usuario: Usuario) {
-    if (!window.confirm(`La invitación anterior dejará de utilizarse y se enviará un enlace nuevo a ${usuario.email}.\n\n¿Deseas continuar?`)) return;
+    if (!await confirmarDialogo(`La invitación anterior dejará de utilizarse y se enviará un enlace nuevo a ${usuario.email}.\n\n¿Deseas continuar?`)) return;
     setMsg(null);
     setGuardando(true);
     try {
@@ -220,9 +221,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
 
   async function generarEnlaceAcceso(usuario: Usuario) {
     const finalidad = usuario.confirmado ? "cambiar su contraseña" : "activar su cuenta";
-    if (!window.confirm(
-      `Se generará un enlace personal y temporal para que ${usuario.email} pueda ${finalidad}.\n\nPodrás copiarlo o preparar un correo desde otro proveedor. ¿Deseas continuar?`
-    )) return;
+    if (!await confirmarDialogo(`Se generará un enlace personal y temporal para que ${usuario.email} pueda ${finalidad}.\n\nPodrás copiarlo o preparar un correo desde otro proveedor. ¿Deseas continuar?`)) return;
 
     setMsg(null);
     setEnlaceAcceso(null);
@@ -263,9 +262,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
   }
 
   async function eliminarAcceso(usuario: Usuario) {
-    if (!window.confirm(
-      `Vas a eliminar el acceso de ${usuario.nombre_completo} (${usuario.email}).\n\nYa no podrá ingresar, pero sus movimientos y auditoría se conservarán. Podrás restaurarlo editando el usuario y marcándolo como activo.\n\n¿Confirmas la eliminación del acceso?`
-    )) return;
+    if (!await confirmarDialogo(`Vas a eliminar el acceso de ${usuario.nombre_completo} (${usuario.email}).\n\nYa no podrá ingresar, pero sus movimientos y auditoría se conservarán. Podrás restaurarlo editando el usuario y marcándolo como activo.\n\n¿Confirmas la eliminación del acceso?`)) return;
     setMsg(null);
     setGuardando(true);
     try {

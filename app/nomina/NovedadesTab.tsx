@@ -9,7 +9,6 @@ import {
   soloFecha,
   hoyISO,
   mensajeError,
-  pedirMotivo,
   ETIQUETA_NOVEDAD,
   type Empleado,
   type Empresa,
@@ -17,6 +16,7 @@ import {
 import NovedadImpresion from "./NovedadImpresion";
 import SelectorDocumento from "./SelectorDocumento";
 import Aviso from "@/components/Aviso";
+import { pedirMotivoDialogo, confirmarDialogo, pedirTextoDialogo } from "@/components/Dialogo";
 
 type Novedad = {
   novedad_id: string;
@@ -168,14 +168,11 @@ export default function NovedadesTab({
   }
 
   async function notificar(id: string) {
-    const forma = window.prompt(
-      "Forma de notificación: fisica, correo, testigos o negativa_recibir",
-      "fisica"
-    );
+    const forma = await pedirTextoDialogo("Forma de notificación: fisica, correo, testigos o negativa_recibir", "fisica");
     if (!forma) return;
     let observacion: string | null = null;
     if (forma === "testigos") {
-      observacion = window.prompt("¿Quiénes fueron los testigos?");
+      observacion = await pedirMotivoDialogo("¿Quiénes fueron los testigos?");
       if (!observacion?.trim()) return setError("La notificación con testigos exige constancia.");
     }
     setGuardando(true);
@@ -192,7 +189,7 @@ export default function NovedadesTab({
   }
 
   async function emitirBorrador(id: string) {
-    if (!window.confirm("Se asignará el correlativo y el contenido quedará congelado. ¿Emitir?"))
+    if (!await confirmarDialogo("Se asignará el correlativo y el contenido quedará congelado. ¿Emitir?"))
       return;
     setGuardando(true);
     setError(null);
@@ -238,7 +235,7 @@ export default function NovedadesTab({
   }
 
   async function descargo(id: string) {
-    const texto = window.prompt("Descargo del trabajador:");
+    const texto = await pedirMotivoDialogo("Descargo del trabajador:");
     if (!texto?.trim()) return;
     setGuardando(true);
     const { error } = await supabase.rpc("registrar_descargo_novedad_v28", {
@@ -252,7 +249,7 @@ export default function NovedadesTab({
   }
 
   async function resolver(id: string) {
-    const resolucion = window.prompt("Resolución del caso:");
+    const resolucion = await pedirMotivoDialogo("Resolución del caso:");
     if (!resolucion?.trim()) return;
     setGuardando(true);
     const { error } = await supabase.rpc("resolver_novedad_v28", {
@@ -271,8 +268,7 @@ export default function NovedadesTab({
   // obligatorio para anular: anular_novedad_v28 se niega mientras la novedad
   // tenga un descuento colgado.
   async function revertirMulta(id: string) {
-    const { motivo, error: errMotivo } = pedirMotivo("Motivo para revertir la multa:");
-    if (errMotivo) return setError(errMotivo);
+    const motivo = await pedirMotivoDialogo("Motivo para revertir la multa:");
     if (!motivo) return;
     setGuardando(true);
     setError(null);
@@ -288,7 +284,7 @@ export default function NovedadesTab({
   }
 
   async function anular(id: string) {
-    const motivo = window.prompt("Motivo de la anulación:");
+    const motivo = await pedirMotivoDialogo("Motivo de la anulación:");
     if (!motivo?.trim()) return;
     setGuardando(true);
     const { error } = await supabase.rpc("anular_novedad_v28", {

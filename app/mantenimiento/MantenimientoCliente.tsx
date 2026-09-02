@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
+import { pedirTextoDialogo } from "@/components/Dialogo";
 
 type Activo = {
   id: string; empresa_id: string; almacen_id: string | null; codigo: string; nombre: string;
@@ -48,7 +49,7 @@ function fecha(valor: string | null) {
   const [a, m, d] = valor.slice(0, 10).split("-");
   return `${d}/${m}/${a}`;
 }
-function etiqueta(valor: string) { return valor.replaceAll("_", " "); }
+async function etiqueta(valor: string) { return valor.replaceAll("_", " "); }
 
 export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
   const supabase = useMemo(() => createClient(), []);
@@ -134,11 +135,11 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
     });
     setEditando(a); setError(null);
   }
-  function cambiarActivo(cambio: Partial<typeof ACTIVO_VACIO>) { setFormActivo({ ...formActivo, ...cambio }); }
+  async function cambiarActivo(cambio: Partial<typeof ACTIVO_VACIO>) { setFormActivo({ ...formActivo, ...cambio }); }
 
   async function guardarActivo() {
     if (!formActivo.codigo.trim() || !formActivo.nombre.trim() || !formActivo.empresa_id) return setError("Código, nombre y empresa son obligatorios.");
-    const motivo = window.prompt("Motivo del registro o cambio:", editando ? "Actualización de ficha del activo" : "Alta inicial del activo");
+    const motivo = await pedirTextoDialogo("Motivo del registro o cambio:", editando ? "Actualización de ficha del activo" : "Alta inicial del activo");
     if (!motivo?.trim()) return;
     setProcesando(true); setError(null); setMensaje(null);
     const { error: guardarError } = await supabase.rpc("guardar_activo_mantenimiento_v54", {
@@ -178,23 +179,23 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
     const datos: Record<string, unknown> = {};
     let motivo = "";
     if (destino === "programada") {
-      const programada = window.prompt("Fecha programada (AAAA-MM-DD):", orden.fecha_programada ?? "");
+      const programada = await pedirTextoDialogo("Fecha programada (AAAA-MM-DD):", orden.fecha_programada ?? "");
       if (!programada) return; datos.fecha_programada = programada; motivo = "Programación de la orden";
     } else if (destino === "completada") {
-      const trabajo = window.prompt("Trabajo realizado:", ""); if (!trabajo?.trim()) return;
-      const costo = window.prompt("Costo real USD:", String(orden.costo_estimado ?? 0)); if (costo === null) return;
-      const minutos = window.prompt("Minutos fuera de servicio (opcional):", "");
-      const lectura = window.prompt("Lectura actual al cierre (opcional):", "");
-      const diagnostico = window.prompt("Diagnóstico / causa encontrada (opcional):", "");
+      const trabajo = await pedirTextoDialogo("Trabajo realizado:", ""); if (!trabajo?.trim()) return;
+      const costo = await pedirTextoDialogo("Costo real USD:", String(orden.costo_estimado ?? 0)); if (costo === null) return;
+      const minutos = await pedirTextoDialogo("Minutos fuera de servicio (opcional):", "");
+      const lectura = await pedirTextoDialogo("Lectura actual al cierre (opcional):", "");
+      const diagnostico = await pedirTextoDialogo("Diagnóstico / causa encontrada (opcional):", "");
       Object.assign(datos, { trabajo_realizado: trabajo.trim(), costo_real: Number(costo) || 0,
         minutos_fuera_servicio: minutos || null, lectura_cierre: lectura || null, diagnostico: diagnostico || null });
       motivo = "Trabajo verificado y completado";
     } else if (destino === "cancelada") {
-      const cancelacion = window.prompt("Justificación de la cancelación:", ""); if (!cancelacion?.trim()) return;
+      const cancelacion = await pedirTextoDialogo("Justificación de la cancelación:", ""); if (!cancelacion?.trim()) return;
       datos.cancelacion_motivo = cancelacion.trim(); motivo = cancelacion.trim();
     } else {
       const texto = destino === "en_proceso" ? "Inicio del trabajo" : "Trabajo puesto en espera";
-      motivo = window.prompt("Observación:", texto)?.trim() ?? ""; if (!motivo) return;
+      motivo = (await pedirTextoDialogo("Observación:", texto))?.trim() ?? ""; if (!motivo) return;
     }
     setProcesando(true); setError(null); setMensaje(null);
     const { error: cambioError } = await supabase.rpc("cambiar_estado_orden_mantenimiento_v54", {

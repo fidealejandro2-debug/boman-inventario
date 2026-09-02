@@ -13,6 +13,7 @@ import {
   hoyLocalISO,
   mensajeError,
 } from "./lib";
+import { pedirMotivoDialogo } from "@/components/Dialogo";
 
 type Movimiento = {
   id: string;
@@ -200,7 +201,7 @@ export default function CajaFranquicia({
         "Este movimiento viene de una venta. Se corrige anulando la venta, no la caja."
       );
     }
-    const motivo = window.prompt("Motivo de la reversión:");
+    const motivo = await pedirMotivoDialogo("Motivo de la reversión:");
     if (!motivo?.trim()) return;
     setGuardando(true);
     setError(null);
@@ -249,9 +250,7 @@ export default function CajaFranquicia({
   }
 
   async function reabrirCaja(cierre: Cierre) {
-    const motivo = window.prompt(
-      "Motivo de reapertura (minimo 10 caracteres). La accion queda auditada:"
-    )?.trim();
+    const motivo = (await pedirMotivoDialogo("Motivo de reapertura (minimo 10 caracteres). La accion queda auditada:"))?.trim();
     if (!motivo) return;
     if (motivo.length < 10) return setError("El motivo debe tener al menos 10 caracteres.");
     setGuardando(true);

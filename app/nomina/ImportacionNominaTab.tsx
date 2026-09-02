@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { mensajeError, type Empleado, type Empresa } from "./lib";
 import Aviso from "@/components/Aviso";
+import { confirmarDialogo } from "@/components/Dialogo";
 
 type TipoCarga = "atraso" | "ausencia" | "descuento" | "anticipo";
 type EstadoFila = "pendiente" | "guardada" | "error";
@@ -579,10 +580,8 @@ export default function ImportacionNominaTab({
 
   async function importar() {
     if (!puedeEscribir || procesando || !filas.length || resumen.errores) return;
-    if (!window.confirm(
-      `Se procesarán ${filas.length} filas.\n\n` +
-        "Los atrasos con valor quedarán como sanciones en borrador; no se descontarán automáticamente. ¿Continuar?"
-    )) return;
+    if (!await confirmarDialogo(`Se procesarán ${filas.length} filas.\n\n` +
+        "Los atrasos con valor quedarán como sanciones en borrador; no se descontarán automáticamente. ¿Continuar?")) return;
     setProcesando(true);
     setError(null);
     setAviso(null);

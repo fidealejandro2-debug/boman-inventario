@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
+import { pedirTextoDialogo } from "@/components/Dialogo";
 
 type FilaMatriz = {
   rol: string;
@@ -89,10 +90,7 @@ export default function PermisosCliente() {
   async function guardarRol(rol: string) {
     const cambios = cambiosRol(rol);
     if (!cambios) return;
-    const motivo = window.prompt(
-      `Motivo para cambiar ${cambios} permiso(s) de ${ETIQUETAS_ROL[rol]}:`,
-      "Ajuste de responsabilidades del rol"
-    );
+    const motivo = await pedirTextoDialogo(`Motivo para cambiar ${cambios} permiso(s) de ${ETIQUETAS_ROL[rol]}:`, "Ajuste de responsabilidades del rol");
     if (motivo === null) return;
     if (!motivo.trim()) return setError("El motivo del cambio es obligatorio.");
 

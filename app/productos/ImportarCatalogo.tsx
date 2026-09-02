@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV, fecha } from "@/lib/utils";
+import { confirmarDialogo } from "@/components/Dialogo";
 
 type ProductoActual = { sku: string; nombre: string };
 type ItemCatalogo = {
@@ -171,11 +172,9 @@ export default function ImportarCatalogo({
 
   async function importar() {
     if (!items.length || errores.length) return;
-    if (!window.confirm(
-      `Se procesarán ${items.length} productos.\n\n` +
+    if (!await confirmarDialogo(`Se procesarán ${items.length} productos.\n\n` +
       `• ${nuevos} productos nuevos\n• ${existentes} productos existentes\n\n` +
-      `No se modificará el stock de ningún almacén. ¿Continuar?`
-    )) return;
+      `No se modificará el stock de ningún almacén. ¿Continuar?`)) return;
 
     setProcesando(true);
     setMsg(null);

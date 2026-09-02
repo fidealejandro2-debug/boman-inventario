@@ -9,6 +9,7 @@ import {
   type Empleado,
 } from "./lib";
 import Aviso from "@/components/Aviso";
+import { pedirTextoDialogo } from "@/components/Dialogo";
 
 type Props = {
   puedeEscribir: boolean;
@@ -120,10 +121,7 @@ export default function DepartamentosTab({
     const nuevo = selecciones[empleado.empleado_id] ?? empleado.departamento_id ?? "";
     if (nuevo === (empleado.departamento_id ?? "")) return;
 
-    const motivo = window.prompt(
-      nuevo ? "Motivo de la asignación o cambio:" : "Motivo para dejarlo sin departamento:",
-      "Actualización de estructura organizacional"
-    );
+    const motivo = await pedirTextoDialogo(nuevo ? "Motivo de la asignación o cambio:" : "Motivo para dejarlo sin departamento:", "Actualización de estructura organizacional");
     if (motivo === null) return;
     if (!motivo.trim()) return setError("El motivo del cambio es obligatorio.");
 

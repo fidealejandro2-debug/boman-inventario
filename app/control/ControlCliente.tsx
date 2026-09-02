@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/getPerfil";
 import { fecha } from "@/lib/utils";
 import { ETIQUETAS_ESTADO } from "@/lib/erp";
+import { confirmarDialogo } from "@/components/Dialogo";
 
 type Linea = {
   id: string; producto_id: string; stock_sistema: number | null;
@@ -296,9 +297,7 @@ export default function ControlCliente({ perfil }: { perfil: Perfil }) {
         setMsg({ tipo: "error", texto: "Confirma que se realizó la búsqueda física antes de autorizar la baja." });
         return;
       }
-      if (!window.confirm(
-        `DOCUMENTO ${resolviendoIncidencia.documento?.numero ?? "SIN NÚMERO"}\n\nVas a dar de BAJA DEFINITIVA ${totalBaja} unidad(es). No ingresarán al stock de ningún almacén. Esta acción quedará identificada con tu usuario.\n\n¿Confirmas la baja?`
-      )) return;
+      if (!await confirmarDialogo(`DOCUMENTO ${resolviendoIncidencia.documento?.numero ?? "SIN NÚMERO"}\n\nVas a dar de BAJA DEFINITIVA ${totalBaja} unidad(es). No ingresarán al stock de ningún almacén. Esta acción quedará identificada con tu usuario.\n\n¿Confirmas la baja?`)) return;
     }
     if (!quedaraPendiente && (!causaRaiz.trim() || !accionCorrectiva.trim())) {
       setMsg({ tipo: "error", texto: "Para cerrar la no conformidad registra la causa raíz y la acción correctiva." });

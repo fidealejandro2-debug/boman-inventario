@@ -6,6 +6,7 @@ import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { hoyISO, mensajeError, soloFecha, type Empleado } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
 import Aviso from "@/components/Aviso";
+import { pedirMotivoDialogo, pedirTextoDialogo } from "@/components/Dialogo";
 
 type CargaFamiliar = {
   id: string;
@@ -200,14 +201,9 @@ export default function CargasFamiliaresTab({
   }
 
   async function cerrar(c: CargaFamiliar) {
-    const fecha = window.prompt(
-      "Fecha final de vigencia (AAAA-MM-DD):",
-      hoyISO()
-    );
+    const fecha = await pedirTextoDialogo("Fecha final de vigencia (AAAA-MM-DD):", hoyISO());
     if (!fecha) return;
-    const motivo = window.prompt(
-      "Motivo del cierre (divorcio, fin de unión, fallecimiento, corrección, etc.):"
-    );
+    const motivo = await pedirMotivoDialogo("Motivo del cierre (divorcio, fin de unión, fallecimiento, corrección, etc.):");
     if (!motivo?.trim()) return;
 
     setGuardando(true);

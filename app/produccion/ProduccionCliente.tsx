@@ -9,6 +9,7 @@ import type { Perfil } from "@/lib/getPerfil";
 import { createClient } from "@/lib/supabase/client";
 import OrdenesProduccionCliente from "./OrdenesProduccionCliente";
 import RutasProduccionCliente from "./RutasProduccionCliente";
+import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
 
 type Grupo = { id: string; codigo: string; nombre: string };
 type Empresa = { id: string; grupo_id: string; codigo: string; razon_social: string };
@@ -137,7 +138,7 @@ export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
     }).slice(0, 300);
   }, [busquedaMaestro, productos, tipoMaestro]);
 
-  function aplicarClasificacionMasiva() {
+  async function aplicarClasificacionMasiva() {
     if (!tipoMasivo && !unidadMasiva) {
       setMsg({ tipo: "error", texto: "Selecciona el tipo productivo o la unidad que deseas aplicar." });
       return;
@@ -150,7 +151,7 @@ export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
       setMsg({ tipo: "error", texto: "No hay productos visibles para clasificar." });
       return;
     }
-    if (!window.confirm(`Preparar el cambio para ${productosMaestro.length} producto(s) visibles?`)) return;
+    if (!await confirmarDialogo(`Preparar el cambio para ${productosMaestro.length} producto(s) visibles?`)) return;
     const cambios = { ...ediciones };
     productosMaestro.forEach((producto) => {
       const actual = valorEdicion(producto);
@@ -284,7 +285,7 @@ export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function resolverFormula(formula: Formula, activar: boolean) {
-    const nota = window.prompt(activar ? "Evidencia de revisión para activar la fórmula:" : "Motivo para inactivar la fórmula:")?.trim();
+    const nota = (await pedirMotivoDialogo(activar ? "Evidencia de revisión para activar la fórmula:" : "Motivo para inactivar la fórmula:"))?.trim();
     if (!nota) return;
     setProcesando(true); setMsg(null);
     const { error } = await supabase.rpc("resolver_formula_produccion_v23", {

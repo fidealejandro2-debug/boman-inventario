@@ -1715,3 +1715,60 @@ button.btn-mini {
   .aviso-tarjeta.es-ok { animation: none; }
   .aviso-check .check-trazo { animation: none; stroke-dashoffset: 0; }
 }
+
+/* ── Diálogos del sistema ────────────────────────────────────────────────
+   Reemplazan window.prompt y window.confirm, que muestran la URL del sitio,
+   no se pueden estilar y el navegador permite silenciarlos: una confirmación
+   crítica podría saltarse sola. */
+.dlg-fondo {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 18px;
+  animation: dlg-fondo-entra 0.14s ease-out;
+}
+.dlg-caja {
+  width: min(520px, 100%);
+  background: #fff; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+  animation: dlg-caja-entra 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.dlg-cabecera {
+  display: flex; align-items: center; gap: 10px;
+  background: #1f3864; color: #fff; padding: 11px 16px;
+}
+.dlg-marca {
+  background: #c00000; border-radius: 4px; padding: 2px 7px;
+  font-weight: 800; font-size: 11px; letter-spacing: 0.5px;
+}
+.dlg-titulo { font-weight: 700; font-size: 14px; }
+.dlg-cuerpo { padding: 16px; }
+.dlg-texto {
+  margin: 0 0 12px; font-size: 14px; line-height: 1.55;
+  white-space: pre-line; color: #1e293b;
+}
+.dlg-etiqueta { display: block; font-size: 12.5px; font-weight: 700; color: #334155; }
+.dlg-etiqueta textarea {
+  width: 100%; margin-top: 5px; padding: 9px 11px;
+  border: 1.5px solid #cbd5e1; border-radius: 8px;
+  font: inherit; font-size: 13.5px; resize: vertical;
+}
+.dlg-etiqueta textarea:focus {
+  outline: none; border-color: #1f3864;
+  box-shadow: 0 0 0 3px rgba(31, 56, 100, 0.14);
+}
+.dlg-contador { margin-top: 6px; font-size: 12px; color: #64748b; }
+.dlg-contador.corto { color: #b91c1c; font-weight: 700; }
+.dlg-acciones {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 16px; background: #f8fafc; border-top: 1px solid #e2e8f0;
+}
+@keyframes dlg-fondo-entra { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlg-caja-entra {
+  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dlg-fondo, .dlg-caja { animation: none; }
+}

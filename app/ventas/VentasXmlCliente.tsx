@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/getPerfil";
 import { fecha } from "@/lib/utils";
 import { calcularHashXml, parsearFacturaSri, type FacturaSri, type LineaFacturaSri } from "@/lib/xmlFacturaSri";
+import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
 
 type Almacen = { id: string; nombre: string; tipo: string };
 type Producto = { id: string; sku: string; nombre: string; talla: string | null; color: string | null };
@@ -371,7 +372,7 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     const avisoCodigo = validacionCodigo?.tipo === "oficial"
       ? ""
       : `\nNovedad confirmada: XML ${factura.establecimiento}-${factura.puntoEmision}.`;
-    if (!window.confirm(`Se descontarán ${unidades} unidades del inventario.\n\nFactura: ${factura.numeroDocumento}\nAlmacén: ${almacenes.find((a) => a.id === almacenId)?.nombre}${avisoCodigo}\n\n¿Confirmas la aplicación definitiva?`)) return;
+    if (!await confirmarDialogo(`Se descontarán ${unidades} unidades del inventario.\n\nFactura: ${factura.numeroDocumento}\nAlmacén: ${almacenes.find((a) => a.id === almacenId)?.nombre}${avisoCodigo}\n\n¿Confirmas la aplicación definitiva?`)) return;
     setProcesando(true); setMsg(null);
     const documento = {
       clave_acceso: factura.claveAcceso,
@@ -423,15 +424,11 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function anularFactura(documento: DocumentoVenta) {
-    const motivo = window.prompt(
-      `Motivo obligatorio para registrar la anulación fiscal de ${documento.numero_documento}:\n\n` +
-      "Esta acción NO modifica el inventario. Si la mercadería regresó, deberás registrar también su devolución física."
-    )?.trim();
+    const motivo = (await pedirMotivoDialogo(`Motivo obligatorio para registrar la anulación fiscal de ${documento.numero_documento}:\n\n` +
+      "Esta acción NO modifica el inventario. Si la mercadería regresó, deberás registrar también su devolución física."))?.trim();
     if (!motivo) return;
-    if (!window.confirm(
-      "Se marcará el documento como anulado para trazabilidad, sin sumar stock.\n\n" +
-      "La anulación real ante el SRI o facturador debe realizarse por separado. ¿Deseas continuar?"
-    )) return;
+    if (!await confirmarDialogo("Se marcará el documento como anulado para trazabilidad, sin sumar stock.\n\n" +
+      "La anulación real ante el SRI o facturador debe realizarse por separado. ¿Deseas continuar?")) return;
 
     setProcesando(true); setMsg(null);
     const { data, error } = await supabase.rpc("admin_anular_factura_venta_xml", {
@@ -491,10 +488,8 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     }
     const disponibles = items.filter((item) => item.destino_estado === "disponible").reduce((s, item) => s + item.cantidad, 0);
     const cuarentena = items.filter((item) => item.destino_estado === "cuarentena").reduce((s, item) => s + item.cantidad, 0);
-    if (!window.confirm(
-      `Factura ${devolviendo.numero_documento}\nDisponible: ${disponibles} unidad(es)\nCuarentena: ${cuarentena} unidad(es)\n\n` +
-      "Confirma solamente mercadería recibida y verificada físicamente."
-    )) return;
+    if (!await confirmarDialogo(`Factura ${devolviendo.numero_documento}\nDisponible: ${disponibles} unidad(es)\nCuarentena: ${cuarentena} unidad(es)\n\n` +
+      "Confirma solamente mercadería recibida y verificada físicamente.")) return;
 
     setProcesando(true); setMsg(null);
     const { data, error } = await supabase.rpc("registrar_devolucion_venta_xml", {
@@ -512,15 +507,11 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function revertirImportacion(documento: DocumentoVenta) {
-    const motivo = window.prompt(
-      `Motivo de la reversión técnica de ${documento.numero_documento}:\n\n` +
-      "Úsala solo si el XML se importó por error. El sistema bloqueará la operación si existen movimientos posteriores o devoluciones."
-    )?.trim();
+    const motivo = (await pedirMotivoDialogo(`Motivo de la reversión técnica de ${documento.numero_documento}:\n\n` +
+      "Úsala solo si el XML se importó por error. El sistema bloqueará la operación si existen movimientos posteriores o devoluciones."))?.trim();
     if (!motivo) return;
-    if (!window.confirm(
-      `Se creará una reversa compensatoria de ${documento.unidades_inventario} unidades.\n\n` +
-      "No reemplaza una devolución de cliente ni una anulación ante el SRI. ¿Confirmas?"
-    )) return;
+    if (!await confirmarDialogo(`Se creará una reversa compensatoria de ${documento.unidades_inventario} unidades.\n\n` +
+      "No reemplaza una devolución de cliente ni una anulación ante el SRI. ¿Confirmas?")) return;
     setProcesando(true); setMsg(null);
     const { data, error } = await supabase.rpc("admin_revertir_importacion_venta_xml", {
       p_documento_id: documento.id,

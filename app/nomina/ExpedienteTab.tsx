@@ -13,6 +13,7 @@ import {
   type DocumentoEmpleado,
 } from "./documentos";
 import Aviso from "@/components/Aviso";
+import { pedirMotivoDialogo } from "@/components/Dialogo";
 
 export default function ExpedienteTab({
   puedeEscribir,
@@ -113,7 +114,7 @@ export default function ExpedienteTab({
   }
 
   async function archivarDoc(id: string) {
-    const motivo = window.prompt("Motivo para archivar el documento:");
+    const motivo = await pedirMotivoDialogo("Motivo para archivar el documento:");
     if (!motivo?.trim()) return;
     const { error } = await supabase.rpc("archivar_documento_empleado_v26", {
       p_documento_id: id,

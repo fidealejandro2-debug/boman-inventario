@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import ConexionEstado from "@/components/ConexionEstado";
+import DialogoAnfitrion from "@/components/Dialogo";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://boman-inventario.vercel.app"),
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className={GeistSans.className}><ConexionEstado />{children}</body>
+      <body className={GeistSans.className}><ConexionEstado /><DialogoAnfitrion />{children}</body>
     </html>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
+import { pedirTextoDialogo } from "@/components/Dialogo";
 
 type Fila = {
   producto_id: string; almacen_id: string; sku: string; producto: string;
@@ -65,10 +66,10 @@ export default function ConfiguracionInventarioCliente() {
     setCambios({ ...cambios, [clave(fila)]: { ...valor(fila), ...cambio } });
   }
 
-  function aplicarMasivo() {
-    const minimo = Number(window.prompt("Stock mínimo para los resultados visibles:", "0"));
+  async function aplicarMasivo() {
+    const minimo = Number(await pedirTextoDialogo("Stock mínimo para los resultados visibles:", "0"));
     if (!Number.isInteger(minimo) || minimo < 0) return;
-    const punto = Number(window.prompt("Punto de reposición:", String(minimo)));
+    const punto = Number(await pedirTextoDialogo("Punto de reposición:", String(minimo)));
     if (!Number.isInteger(punto) || punto < 0) return;
     const siguiente = { ...cambios };
     filtradas.forEach((f) => { siguiente[clave(f)] = { ...valor(f), stock_minimo: minimo, punto_reposicion: punto }; });

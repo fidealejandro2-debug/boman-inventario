@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV, fecha, ETIQUETA_TIPO } from "@/lib/utils";
 import type { Perfil } from "@/lib/getPerfil";
+import { pedirMotivoDialogo } from "@/components/Dialogo";
 
 type Producto = {
   id: string; sku: string; nombre: string;
@@ -69,12 +70,10 @@ export default function MovimientosCliente({ perfil }: { perfil: Perfil }) {
 
   async function anular(m: Movimiento) {
     const etiqueta = ETIQUETA_TIPO[m.tipo] ?? m.tipo;
-    const motivo = window.prompt(
-      `Anular: ${etiqueta} de ${m.cantidad} × ${m.productos?.nombre} (${m.almacenes?.nombre})\n\n` +
+    const motivo = await pedirMotivoDialogo(`Anular: ${etiqueta} de ${m.cantidad} × ${m.productos?.nombre} (${m.almacenes?.nombre})\n\n` +
       `Se creará una reversa compensatoria y el movimiento original quedará ANULADO.\n` +
       `Los movimientos de documentos se corrigen desde Ventas, Operaciones o Control.\n\n` +
-      `Indica el motivo de la anulación:`
-    );
+      `Indica el motivo de la anulación:`);
     if (motivo === null) return;
     if (!motivo.trim()) { setMsg({ tipo: "error", texto: "Debes indicar el motivo de la anulación." }); return; }
 

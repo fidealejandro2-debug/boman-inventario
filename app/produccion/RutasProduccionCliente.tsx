@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Perfil } from "@/lib/getPerfil";
 import { createClient } from "@/lib/supabase/client";
+import { pedirMotivoDialogo } from "@/components/Dialogo";
 
 type Grupo = { id: string; codigo: string; nombre: string };
 type Formula = {
@@ -184,9 +185,9 @@ export default function RutasProduccionCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function resolver(ruta: Ruta, activar: boolean) {
-    const nota = window.prompt(activar
+    const nota = (await pedirMotivoDialogo(activar
       ? "Evidencia de revisión para activar la ruta:"
-      : "Motivo para inactivar la ruta:")?.trim();
+      : "Motivo para inactivar la ruta:"))?.trim();
     if (!nota) return;
     setProcesando(true); setMsg(null);
     const { error } = await supabase.rpc("resolver_ruta_produccion_v25", {

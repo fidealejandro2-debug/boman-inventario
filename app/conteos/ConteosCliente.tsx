@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/getPerfil";
 import { fecha } from "@/lib/utils";
 import { ETIQUETAS_ESTADO, imprimirDocumento, nuevaClaveIdempotencia } from "@/lib/erp";
+import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
 
 type Almacen = { id: string; nombre: string; tipo: string };
 type Producto = { id: string; sku: string; nombre: string; talla: string | null; categoria: string | null };
@@ -162,9 +163,7 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
   async function abrirConteo(conteo: Conteo, forzar = false) {
     let motivo: string | null = null;
     if (forzar) {
-      motivo = window.prompt(
-        `Este conteo esta asignado a ${conteo.responsable?.nombre_completo ?? conteo.creador?.nombre_completo ?? "otro usuario"}.\n\nIndica el motivo para tomar el control:`
-      );
+      motivo = await pedirMotivoDialogo(`Este conteo esta asignado a ${conteo.responsable?.nombre_completo ?? conteo.creador?.nombre_completo ?? "otro usuario"}.\n\nIndica el motivo para tomar el control:`);
       if (!motivo?.trim()) return;
     }
     setProcesando(true); setMsg(null);
@@ -192,10 +191,8 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
     if (!activo) return;
     const vacios = activo.lineas.filter((l) => (valores[l.producto_id] ?? "") === "");
     if (enviar && vacios.length > 0) {
-      const confirmar = window.confirm(
-        `${vacios.length} producto(s) están vacíos y se registrarán con cantidad 0.\n\n` +
-        "Esto significa que físicamente no encontraste existencias de esos productos. ¿Deseas continuar?"
-      );
+      const confirmar = await confirmarDialogo(`${vacios.length} producto(s) están vacíos y se registrarán con cantidad 0.\n\n` +
+        "Esto significa que físicamente no encontraste existencias de esos productos. ¿Deseas continuar?");
       if (!confirmar) return;
     }
     const valoresFinales = { ...valores };

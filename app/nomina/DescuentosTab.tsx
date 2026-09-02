@@ -9,7 +9,6 @@ import {
   soloFecha,
   hoyISO,
   mensajeError,
-  pedirMotivo,
   ETIQUETA_ORIGEN_DESCUENTO,
   type Empleado,
   type Empresa,
@@ -17,6 +16,7 @@ import {
 import SelectorDocumento from "./SelectorDocumento";
 import ActaDescuento, { type DatosActa } from "./ActaDescuento";
 import Aviso from "@/components/Aviso";
+import { pedirMotivoDialogo, confirmarDialogo, pedirTextoDialogo } from "@/components/Dialogo";
 
 type Anticipo = {
   id: string;
@@ -170,13 +170,11 @@ export default function DescuentosTab({
     // empujaba a adjuntar cualquier archivo con tal de avanzar. Se avisa una
     // vez y queda como respaldo pendiente hasta que se suba.
     if (!form.documento_respaldo_id) {
-      const seguir = window.confirm(
-        `Vas a registrar el anticipo SIN la solicitud firmada.
+      const seguir = await confirmarDialogo(`Vas a registrar el anticipo SIN la solicitud firmada.
 
 Queda marcado como respaldo pendiente y aparecerá en la lista de documentos por subir hasta que lo adjuntes. Sin ese papel el descuento no tiene sustento documental frente a una inspección.
 
-¿Continuar?`
-      );
+¿Continuar?`);
       if (!seguir) return;
     }
     setGuardando(true);
@@ -211,14 +209,13 @@ Queda marcado como respaldo pendiente y aparecerá en la lista de documentos por
   }
 
   async function anularDescuento(d: Descuento) {
-    const { motivo, error: errMotivo } = pedirMotivo(
+    const motivo = await pedirMotivoDialogo(
       `Vas a ANULAR el descuento de ${d.apellidos} ${d.nombres} por ${dinero(d.monto_total)}.
 
 Se usa cuando el descuento nunca debio existir: por ejemplo, la persona devolvió el anticipo antes de que corriera el rol. Se cancelan las cuotas pendientes para que el próximo cierre no las aplique.
 
 Motivo de la anulación:`
     );
-    if (errMotivo) return setError(errMotivo);
     if (!motivo) return;
     setGuardando(true);
     setError(null);
@@ -232,14 +229,13 @@ Motivo de la anulación:`
   }
 
   async function archivarDescuento(id: string, estado: string) {
-    const { motivo, error: errMotivo } = pedirMotivo(
+    const motivo = await pedirMotivoDialogo(
       `Vas a archivar un descuento en estado "${estado}".
 
 No se borra: queda en el historial como prueba de lo que se le retuvo a la persona, pero deja de aparecer en la lista activa.
 
 Motivo del archivo:`
     );
-    if (errMotivo) return setError(errMotivo);
     if (!motivo) return;
     setGuardando(true);
     setError(null);
@@ -301,9 +297,7 @@ Motivo del archivo:`
   }
 
   async function resolverAnticipo(id: string, aprobar: boolean) {
-    const motivo = window.prompt(
-      aprobar ? "Observación de la aprobación:" : "Motivo del rechazo:"
-    );
+    const motivo = await pedirMotivoDialogo(aprobar ? "Observación de la aprobación:" : "Motivo del rechazo:");
     if (!aprobar && !motivo?.trim()) return;
     setGuardando(true);
     const { error } = await supabase.rpc("resolver_anticipo_v29", {
@@ -319,9 +313,9 @@ Motivo del archivo:`
   }
 
   async function desembolsar(id: string) {
-    const forma = window.prompt("Forma de desembolso (transferencia, efectivo, cheque):", "transferencia");
+    const forma = await pedirTextoDialogo("Forma de desembolso (transferencia, efectivo, cheque):", "transferencia");
     if (!forma) return;
-    const referencia = window.prompt("Referencia del pago (opcional):");
+    const referencia = await pedirMotivoDialogo("Referencia del pago (opcional):");
     setGuardando(true);
     const { error } = await supabase.rpc("desembolsar_anticipo_v29", {
       p_anticipo_id: id,
@@ -336,8 +330,7 @@ Motivo del archivo:`
   }
 
   async function anularAnticipo(id: string) {
-    const { motivo, error: errMotivo } = pedirMotivo("Motivo de la anulación:");
-    if (errMotivo) return setError(errMotivo);
+    const motivo = await pedirMotivoDialogo("Motivo de la anulación:");
     if (!motivo) return;
     setGuardando(true);
     const { error } = await supabase.rpc("anular_anticipo_v29", {
@@ -352,8 +345,7 @@ Motivo del archivo:`
   }
 
   async function accionDescuento(id: string, accion: string) {
-    const { motivo, error: errMotivo } = pedirMotivo(`Motivo para ${accion} este descuento:`);
-    if (errMotivo) return setError(errMotivo);
+    const motivo = await pedirMotivoDialogo(`Motivo para ${accion} este descuento:`);
     if (!motivo) return;
     setGuardando(true);
     const { error } = await supabase.rpc("resolver_descuento_programado_v29", {

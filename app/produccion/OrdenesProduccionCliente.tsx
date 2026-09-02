@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Perfil } from "@/lib/getPerfil";
 import { createClient } from "@/lib/supabase/client";
+import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
 
 type Formula = {
   id: string; grupo_id: string; codigo: string; version: number;
@@ -249,8 +250,8 @@ export default function OrdenesProduccionCliente({ perfil }: { perfil: Perfil })
   }
 
   async function resolver(orden: Orden, aprobar: boolean) {
-    const nota = window.prompt(aprobar
-      ? "Evidencia de revisión y aprobación:" : "Motivo del rechazo:")?.trim();
+    const nota = (await pedirMotivoDialogo(aprobar
+      ? "Evidencia de revisión y aprobación:" : "Motivo del rechazo:"))?.trim();
     if (!nota) return;
     setProcesando(true); setMsg(null);
     const { error } = await supabase.rpc("resolver_orden_produccion_v24", {
@@ -332,7 +333,7 @@ export default function OrdenesProduccionCliente({ perfil }: { perfil: Perfil })
   }
 
   async function omitirEtapa(etapa: EtapaOrden) {
-    const motivo = window.prompt("Justificación administrativa para omitir esta etapa (mínimo 10 caracteres):")?.trim();
+    const motivo = (await pedirMotivoDialogo("Justificación administrativa para omitir esta etapa (mínimo 10 caracteres):"))?.trim();
     if (!motivo) return;
     setProcesando(true); setMsg(null);
     const { error } = await supabase.rpc("omitir_etapa_produccion_v25", {
@@ -390,10 +391,10 @@ export default function OrdenesProduccionCliente({ perfil }: { perfil: Perfil })
   }
 
   async function cancelar(orden: Orden) {
-    const motivo = window.prompt("Motivo auditado de la cancelación:")?.trim();
+    const motivo = (await pedirMotivoDialogo("Motivo auditado de la cancelación:"))?.trim();
     if (!motivo) return;
     const confirmar = orden.estado === "en_proceso"
-      ? window.confirm("Confirma que TODO el material entregado regresó físicamente al almacén. Esta acción reintegrará ese stock.")
+      ? await confirmarDialogo("Confirma que TODO el material entregado regresó físicamente al almacén. Esta acción reintegrará ese stock.")
       : false;
     if (orden.estado === "en_proceso" && !confirmar) return;
     setProcesando(true); setMsg(null);

@@ -7,6 +7,7 @@ import { exportarCSV, fecha as fmtFecha } from "@/lib/utils";
 import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, hoyLocalISO, MEDIOS_PAGO, mensajeError } from "./lib";
+import { pedirMotivoDialogo } from "@/components/Dialogo";
 
 type Disponible = {
   producto_id: string;
@@ -265,11 +266,9 @@ export default function VentasFranquicia({
   }
 
   async function anular(v: Venta) {
-    const motivo = window.prompt(
-      `Motivo de la anulación de la venta #${v.numero} (mínimo 10 caracteres).
+    const motivo = (await pedirMotivoDialogo(`Motivo de la anulación de la venta #${v.numero} (mínimo 10 caracteres).
 
-El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada como anulada.`
-    )?.trim();
+El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada como anulada.`))?.trim();
     if (!motivo) return;
     if (motivo.length < 10) return setError("El motivo debe tener al menos 10 caracteres.");
     setGuardando(true);

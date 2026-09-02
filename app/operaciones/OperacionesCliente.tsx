@@ -9,6 +9,7 @@ import LineasDocumentoEditor, {
   type LineaDocumentoEdicion,
   type ProductoDocumento,
 } from "@/components/LineasDocumentoEditor";
+import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
 
 type Almacen = { id: string; nombre: string; tipo: string };
 type Linea = {
@@ -178,7 +179,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
       return;
     }
     if (aprobar && !origen) { setMsg({ tipo: "error", texto: "Selecciona la bodega que atenderá la solicitud." }); return; }
-    const motivo = aprobar ? "Solicitud aprobada para preparación" : window.prompt("Motivo del rechazo:")?.trim();
+    const motivo = aprobar ? "Solicitud aprobada para preparación" : (await pedirMotivoDialogo("Motivo del rechazo:"))?.trim();
     if (!aprobar && !motivo) return;
     setProcesando(documento.id); setMsg(null);
     const { error } = await supabase.rpc("resolver_solicitud_reposicion", {
@@ -205,7 +206,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   }
 
   async function despachar(documento: Documento) {
-    if (!window.confirm(`¿Confirmas el despacho de ${documento.numero}? El stock saldrá de ${documento.origen?.nombre}.`)) return;
+    if (!await confirmarDialogo(`¿Confirmas el despacho de ${documento.numero}? El stock saldrá de ${documento.origen?.nombre}.`)) return;
     setProcesando(documento.id); setMsg(null);
     const { error } = await supabase.rpc("despachar_transferencia", {
       p_documento_id: documento.id, p_nota: "Despacho físico confirmado",

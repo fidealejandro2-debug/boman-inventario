@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import ImportarCatalogo from "./ImportarCatalogo";
+import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
 
 type Producto = {
   id: string;
@@ -168,7 +169,7 @@ export default function ProductosCliente() {
       return;
     }
     const destino = `${categoriaSeleccionada.nombre}${subcategoriaSeleccionada ? ` / ${subcategoriaSeleccionada.nombre}` : " / Sin subcategoría"}`;
-    if (!window.confirm(`Se asignará “${destino}” a ${ids.length} producto(s).\n\n¿Continuar?`)) return;
+    if (!await confirmarDialogo(`Se asignará “${destino}” a ${ids.length} producto(s).\n\n¿Continuar?`)) return;
 
     setAplicandoMasivo(true);
     let actualizados = 0;
@@ -277,13 +278,11 @@ export default function ProductosCliente() {
     // El SKU no viaja en el update: v8 revoco esa columna porque es la identidad
     // de la prenda. Va por su RPC, que exige motivo y deja rastro en la auditoria.
     if (sku !== skuAnterior) {
-      const motivo = window.prompt(
-        `Vas a cambiar el código de ${skuAnterior} a ${sku}.
+      const motivo = (await pedirMotivoDialogo(`Vas a cambiar el código de ${skuAnterior} a ${sku}.
 
 El histórico de movimientos, transferencias y ventas sigue apuntando a la misma prenda, pero las etiquetas físicas y los archivos exportados con el código anterior quedan desactualizados.
 
-Motivo del cambio (mínimo 10 caracteres):`
-      )?.trim();
+Motivo del cambio (mínimo 10 caracteres):`))?.trim();
       if (!motivo) return;
       const { error: skuError } = await supabase.rpc("admin_cambiar_sku_producto_v48", {
         p_producto_id: id, p_sku: sku, p_motivo: motivo,
@@ -374,13 +373,11 @@ Motivo del cambio (mínimo 10 caracteres):`
 
   async function alternarActivo(p: Producto) {
     const accion = p.activo ? "desactivar" : "reactivar";
-    const motivo = window.prompt(
-      `${p.activo ? "Desactivar" : "Reactivar"}: ${p.nombre} (${p.sku})\n\n` +
+    const motivo = await pedirMotivoDialogo(`${p.activo ? "Desactivar" : "Reactivar"}: ${p.nombre} (${p.sku})\n\n` +
       (p.activo
         ? "Solo se permitirá si su stock total es cero. El historial de movimientos se conservará.\n\n"
         : "El producto volverá a estar disponible para movimientos e importaciones.\n\n") +
-      `Indica el motivo para ${accion} el producto:`
-    );
+      `Indica el motivo para ${accion} el producto:`);
 
     if (motivo === null) return;
     if (!motivo.trim()) {
