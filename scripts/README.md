@@ -27,6 +27,17 @@ Cada uno nació de un error real que llegó a producción:
   comparaba contra `vigente` (el estado de caja) y la tabla usa `registrada`.
   Nunca falla en ejecución: simplemente muestra cero para siempre.
 
-Los dos últimos marcan candidatos, no culpables: revisa cada señalado a mano.
-Un `estado` local de la interfaz o un `entidad_id` que solo aparece dentro del
-nombre de una clave foránea son falsos positivos normales.
+## Cómo leer el reporte
+
+Las cuatro primeras secciones son binarias: o salen limpias, o hay algo que
+arreglar. La quinta tiene dos niveles:
+
+- **CONSULTAS**: filtra la base por un estado que el esquema no admite. Siempre
+  devuelve vacío. Es un bug.
+- **MEMORIA**: comparaciones en JavaScript. Muchas son estados propios de la
+  interfaz — una fila de importación `guardada`, un año `sin_calendario` — y no
+  tienen por qué existir en el esquema. Revisa solo las que deberían venir de
+  la base.
+
+Cada falso positivo que aparece por diseño está silenciado en el script, no en
+esta nota: un reporte con ruido fijo deja de leerse.

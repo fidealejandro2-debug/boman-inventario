@@ -1,6 +1,13 @@
 // Busca el bug de "las ventas validas salian anuladas": la interfaz compara
 // contra un valor de estado que esa tabla no admite. Nunca falla en ejecucion,
 // simplemente muestra siempre cero.
+//
+// Separa dos niveles, porque no tienen el mismo riesgo:
+//   CONSULTA  -> .eq("estado", "x") contra la base. Si el valor no existe, la
+//                consulta devuelve vacio para siempre. Esto hay que revisarlo.
+//   MEMORIA   -> comparaciones en JavaScript. Muchas son estados propios de la
+//                interfaz (una fila de importacion "guardada", un año "sin
+//                calendario") y no tienen por que estar en el esquema.
 const fs = require('fs'), path = require('path');
 
 function walk(dir, out = []) {
@@ -16,49 +23,69 @@ function walk(dir, out = []) {
 const todoSql = fs.readdirSync('sql').filter(f => f.endsWith('.sql'))
   .map(f => fs.readFileSync(path.join('sql', f), 'utf8')).join('\n');
 
-// Todos los valores que alguna columna 'estado' admite en algun check del esquema.
+// Cualquier check sobre una columna cuyo nombre contenga "estado", venga en la
+// definicion de la tabla o en un alter table posterior. La segunda forma es la
+// de anulacion_stock_estado, que antes se escapaba.
 const permitidos = new Set();
-for (const m of todoSql.matchAll(/estado[a-z_]*\s+text[^,]*?check\s*\([^)]*?in\s*\(([^)]*)\)/gi)) {
-  for (const v of m[1].matchAll(/'([a-z_]+)'/g)) permitidos.add(v[1]);
+const RE_CHECKS = [
+  /[a-z_]*estado[a-z_]*\s+text[^,;]*?check\s*\(([^;]*?)\)\s*[,)]/gi,
+  /check\s*\(\s*[a-z_]*estado[a-z_]*\s+in\s*\(([\s\S]{0,600}?)\)/gi,
+  /constraint\s+[a-z_]*estado[a-z_]*_check\s+check\s*\(([\s\S]{0,600}?)\)\s*;/gi,
+  /[a-z_]*estado[a-z_]*\s+in\s*\(([\s\S]{0,400}?)\)/gi,
+];
+for (const re of RE_CHECKS) {
+  for (const m of todoSql.matchAll(re)) {
+    for (const v of m[1].matchAll(/'([a-z_]+)'/g)) permitidos.add(v[1]);
+  }
 }
-for (const m of todoSql.matchAll(/check\s*\(\s*estado[a-z_]*\s+in\s*\(([^)]*)\)/gi)) {
-  for (const v of m[1].matchAll(/'([a-z_]+)'/g)) permitidos.add(v[1]);
-}
-// Los estados de documentos_inventario van en una lista multilinea aparte.
-for (const m of todoSql.matchAll(/estado\s+text\s+not\s+null\s+check\s*\(estado\s+in\s*\(([\s\S]{0,400}?)\)/gi)) {
-  for (const v of m[1].matchAll(/'([a-z_]+)'/g)) permitidos.add(v[1]);
+// Los defaults tambien son valores validos aunque no aparezcan en el check.
+for (const m of todoSql.matchAll(/[a-z_]*estado[a-z_]*\s+text[^,;]*?default\s+'([a-z_]+)'/gi)) {
+  permitidos.add(m[1]);
 }
 
-const sospechosos = [];
+const consultas = [], memoria = [];
+const vistos = new Set();
+
 for (const f of walk('app')) {
-  const t = fs.readFileSync(f, 'utf8');
-  const lineas = t.split('\n');
-  lineas.forEach((linea, i) => {
-    const patrones = [
-      /\.eq\(\s*["']estado["']\s*,\s*["']([a-z_]+)["']/g,
-      /estado\s*[!=]==\s*["']([a-z_]+)["']/g,
-      /estado\s*===\s*["']([a-z_]+)["']/g,
-    ];
-    for (const p of patrones) {
-      for (const m of linea.matchAll(p)) {
-        const valor = m[1];
-        if (!permitidos.has(valor)) {
-          sospechosos.push({ f: f.replace(/\\/g, '/'), n: i + 1, valor, linea: linea.trim().slice(0, 110) });
-        }
-      }
+  const rel = f.split(path.sep).join('/');
+  fs.readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+    const registrar = (valor, destino) => {
+      if (permitidos.has(valor)) return;
+      const clave = rel + ':' + (i + 1) + ':' + valor;
+      if (vistos.has(clave)) return;
+      vistos.add(clave);
+      destino.push({ f: rel, n: i + 1, valor, linea: linea.trim().slice(0, 100) });
+    };
+    // Consulta contra la base.
+    for (const m of linea.matchAll(/\.(eq|neq)\(\s*["'][a-z_]*estado[a-z_]*["']\s*,\s*["']([a-z_]+)["']/g)) {
+      registrar(m[2], consultas);
+    }
+    for (const m of linea.matchAll(/\.in\(\s*["'][a-z_]*estado[a-z_]*["']\s*,\s*\[([^\]]*)\]/g)) {
+      for (const v of m[1].matchAll(/["']([a-z_]+)["']/g)) registrar(v[1], consultas);
+    }
+    // Comparacion en memoria.
+    for (const m of linea.matchAll(/\bestado\s*(?:===|!==|==|!=)\s*["']([a-z_]+)["']/g)) {
+      registrar(m[1], memoria);
     }
   });
 }
 
-console.log('Estados que el esquema admite (' + permitidos.size + '):');
-console.log('  ' + [...permitidos].sort().join(', '));
+console.log('Valores de estado que el esquema admite: ' + permitidos.size);
 console.log('');
-if (!sospechosos.length) {
-  console.log('Ninguna comparacion de estado en la interfaz usa un valor inexistente.');
+
+if (!consultas.length) {
+  console.log('CONSULTAS: ninguna filtra por un estado que el esquema no admita.');
 } else {
-  console.log('COMPARACIONES SOSPECHOSAS:');
-  for (const s of sospechosos) {
-    console.log(`  ${s.f}:${s.n}  ->  "${s.valor}"`);
-    console.log(`      ${s.linea}`);
-  }
+  console.log('CONSULTAS CON ESTADO INEXISTENTE (devuelven vacio siempre):');
+  for (const s of consultas) console.log('  ' + s.f + ':' + s.n + '  -> "' + s.valor + '"\n      ' + s.linea);
+}
+
+console.log('');
+if (!memoria.length) {
+  console.log('MEMORIA: sin comparaciones contra valores desconocidos.');
+} else {
+  console.log('COMPARACIONES EN MEMORIA con valores que no son del esquema');
+  console.log('(normal si son estados propios de la interfaz; revisa solo los que');
+  console.log('deberian venir de la base):');
+  for (const s of memoria) console.log('  ' + s.f + ':' + s.n + '  -> "' + s.valor + '"');
 }

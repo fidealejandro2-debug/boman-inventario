@@ -40,7 +40,14 @@ for (const pag of paginas('app')) {
     .map(f => path.join(dir, f));
   if (!clientes.length) continue;
 
-  const cuerpo = clientes.map(c => fs.readFileSync(c, 'utf8')).join('\n');
+  // Los nombres de claves foraneas de PostgREST contienen 'entidad_id'
+  // (almacenes!movimientos_entidad_id_fkey) sin que la pantalla dependa de la
+  // asignacion del perfil. Se descartan antes de buscar senales, o reportes y
+  // dashboard salen marcados para siempre y el reporte pierde credibilidad.
+  const cuerpo = clientes
+    .map(c => fs.readFileSync(c, 'utf8'))
+    .join('\n')
+    .replace(/[a-z_]*_fkey/g, '');
   const dependencias = SENALES.filter(s => s.re.test(cuerpo)).map(s => s.nombre);
   if (!dependencias.length) continue;
 
