@@ -42,6 +42,18 @@ export const CATEGORIAS_CAJA = [
 
 export function mensajeError(e: { message?: string } | null): string {
   const raw = e?.message ?? "Error desconocido";
+  // PostgREST responde "Could not find the function ... in the schema cache"
+  // cuando falta ejecutar la migración que la crea. El mensaje crudo hace
+  // pensar en un fallo de la interfaz y no en un paso de instalación pendiente.
+  const falta = raw.match(/Could not find the function public\.([a-z0-9_]+)/i);
+  if (falta) {
+    const version = falta[1].match(/_v(\d+)$/);
+    return (
+      `Falta instalar en la base la función ${falta[1]}` +
+      (version ? `, que viene en la migración v${version[1]}.` : ".") +
+      " Ejecuta los archivos pendientes de sql/ en orden y vuelve a intentar."
+    );
+  }
   return raw.replace(
     /^.*?violates row-level security.*$/i,
     "No tienes permiso para esta acción en este local."

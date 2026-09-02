@@ -111,6 +111,21 @@ function enlacesValidos(...items: Array<EnlaceModulo | false>): EnlaceModulo[] {
   return items.filter((item): item is EnlaceModulo => Boolean(item));
 }
 
+// El nombre se guarda como lo pide el IESS: APELLIDOS y luego NOMBRES. Tomar
+// la primera palabra saludaba por el apellido ("Hola, BONILLA"). Con la
+// convencion ecuatoriana de cuatro palabras -dos apellidos y dos nombres- el
+// nombre de pila es la tercera y el primer apellido la primera.
+//
+// Con otra cantidad de palabras no se adivina: se prefiere devolver el nombre
+// tal cual antes que inventar un orden y llamar mal a alguien.
+function nombreParaSaludo(completo: string) {
+  const p = (completo || "").trim().split(/s+/).filter(Boolean);
+  if (p.length !== 4) return completo;
+  const capital = (t: string) =>
+    t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  return `${capital(p[2])} ${capital(p[0])}`;
+}
+
 export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const supabase = useMemo(() => createClient(), []);
   const buscadorRef = useRef<HTMLInputElement>(null);
@@ -377,8 +392,13 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     <main className="panel-principal">
       <section className="panel-portada">
         <div>
-          <span className="panel-saludo">CENTRO DE TRABAJO · {ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}</span>
-          <h1>Hola, {perfil.nombre_completo.split(" ")[0]}</h1>
+          <span className="panel-saludo">
+            {resumen.ambito.almacenes.length === 1
+              ? resumen.ambito.almacenes[0]
+              : "CENTRO DE TRABAJO"}{" "}
+            · {ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}
+          </span>
+          <h1>Hola, {nombreParaSaludo(perfil.nombre_completo)}</h1>
           <p>{fechaLarga()}. Aquí tienes tus accesos y pendientes en un solo lugar.</p>
         </div>
         <div className="panel-portada-acciones">
