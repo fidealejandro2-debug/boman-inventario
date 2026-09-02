@@ -295,16 +295,19 @@ export default function CajaFranquicia({
         </div>
       </div>
 
-      <div className="card-interna">
-        <h4>Cierre diario de efectivo</h4>
+      <div className={`card-interna fq-caja-cierre ${soloLectura ? "fq-caja-supervision" : ""}`}>
+        <div className="fq-caja-cabecera">
+          <h4>Cierre diario de efectivo</h4>
+          {soloLectura && <span className="badge fq-badge-supervision">Vista de supervisión</span>}
+        </div>
         <p className="ayuda">
           El sistema toma solamente los cobros y pagos en efectivo para calcular lo
           esperado. Transferencias y tarjetas quedan en el total del dia, pero no en
           el dinero que debe estar fisicamente en caja.
         </p>
-        <div className="form-grid">
+        <div className={`form-grid ${soloLectura ? "fq-fecha-revision" : ""}`}>
           <label>
-            Fecha
+            {soloLectura ? "Fecha consultada" : "Fecha"}
             <input
               type="date"
               value={fechaCierre}
@@ -316,45 +319,49 @@ export default function CajaFranquicia({
               }}
             />
           </label>
-          <label>
-            Saldo inicial en efectivo
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={saldoInicial}
-              readOnly={saldoDerivado !== null}
-              disabled={cierreSeleccionado?.estado === "cerrado"}
-              onChange={(e) => setSaldoInicial(e.target.value)}
-            />
-            <small className="ayuda">
-              {saldoDerivado !== null
-                ? "Viene del último cierre del local más el efectivo de los días sin cerrar. No se edita."
-                : "Primer cierre del local: indica con cuánto efectivo arranca la caja."}
-            </small>
-          </label>
-          <label>
-            Efectivo contado
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={efectivoContado}
-              disabled={cierreSeleccionado?.estado === "cerrado"}
-              onChange={(e) => setEfectivoContado(e.target.value)}
-            />
-          </label>
-          <label className="ancho-total">
-            Nota del cierre
-            <input
-              type="text"
-              value={notaCierre}
-              disabled={cierreSeleccionado?.estado === "cerrado"}
-              onChange={(e) => setNotaCierre(e.target.value)}
-            />
-          </label>
+          {!soloLectura && (
+            <>
+              <label>
+                Saldo inicial en efectivo
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={saldoInicial}
+                  readOnly={saldoDerivado !== null}
+                  disabled={cierreSeleccionado?.estado === "cerrado"}
+                  onChange={(e) => setSaldoInicial(e.target.value)}
+                />
+                <small className="ayuda">
+                  {saldoDerivado !== null
+                    ? "Viene del último cierre del local más el efectivo de los días sin cerrar. No se edita."
+                    : "Primer cierre del local: indica con cuánto efectivo arranca la caja."}
+                </small>
+              </label>
+              <label>
+                Efectivo contado
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={efectivoContado}
+                  disabled={cierreSeleccionado?.estado === "cerrado"}
+                  onChange={(e) => setEfectivoContado(e.target.value)}
+                />
+              </label>
+              <label className="ancho-total">
+                Nota del cierre
+                <input
+                  type="text"
+                  value={notaCierre}
+                  disabled={cierreSeleccionado?.estado === "cerrado"}
+                  onChange={(e) => setNotaCierre(e.target.value)}
+                />
+              </label>
+            </>
+          )}
         </div>
-        <div className="kpis">
+        <div className="kpis compactos fq-caja-kpis">
           <div className="kpi">
             <span className="valor">{dinero(resumenDia.ingresos_efectivo)}</span>
             <span className="label">Ingresos en efectivo</span>
@@ -375,9 +382,10 @@ export default function CajaFranquicia({
           </div>
         </div>
         {soloLectura ? (
-          <p className="ayuda">
-            Estás revisando este local. El cierre lo confirma el titular.
-          </p>
+          <div className="info-box fq-aviso-supervision">
+            Estás consultando la caja de este local. El titular registra movimientos y
+            confirma el cierre; como administrador puedes revisar sus totales e historial.
+          </div>
         ) : cierreSeleccionado?.estado === "cerrado" ? (
           <div className="filtros">
             <span className="badge ok">Dia cerrado</span>
@@ -400,7 +408,7 @@ export default function CajaFranquicia({
         )}
       </div>
 
-      <div className="card-interna">
+      {!soloLectura && <div className="card-interna">
         <h4>Registrar movimiento</h4>
         <div className="form-grid">
           <label>
@@ -483,7 +491,7 @@ export default function CajaFranquicia({
         <button onClick={registrar} disabled={guardando || soloLectura}>
           {guardando ? "Registrando…" : "Registrar movimiento"}
         </button>
-      </div>
+      </div>}
 
       <div className="card-interna">
         <h4>Historial de cierres</h4>

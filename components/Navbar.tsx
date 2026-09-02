@@ -56,12 +56,34 @@ function Icono({ nombre, size = 19 }: { nombre: keyof typeof ICONOS; size?: numb
   );
 }
 
+function nombreParaMenu(nombreCompleto: string) {
+  const limpio = nombreCompleto.trim().replace(/\s+/g, " ");
+  if (!limpio) return "Usuario";
+
+  // Los perfiles importados desde Nómina usan el orden legal ecuatoriano:
+  // APELLIDO APELLIDO NOMBRE NOMBRE. Esto afecta solo la presentación del
+  // menú; el nombre completo se conserva intacto para documentos y auditoría.
+  const partesComa = limpio.split(",").map((parte) => parte.trim()).filter(Boolean);
+  const partes = limpio.split(" ");
+  let nombre = partesComa.length > 1
+    ? partesComa[1].split(" ")[0]
+    : partes.length >= 4
+      ? partes[2]
+      : partes.length === 3
+        ? partes[2]
+        : partes[0];
+
+  nombre = nombre.toLocaleLowerCase("es");
+  return nombre.charAt(0).toLocaleUpperCase("es") + nombre.slice(1);
+}
+
 export default function Navbar({ perfil }: { perfil: Perfil }) {
   const router = useRouter();
   const pathname = usePathname();
   const [movilAbierto, setMovilAbierto] = useState(false);
   const [contraido, setContraido] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  const [moduloAbierto, setModuloAbierto] = useState<ModuloId | null>(null);
 
   useEffect(() => {
     setContraido(window.localStorage.getItem("boman-sidebar-contraido") === "1");
@@ -93,6 +115,16 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     });
   }
 
+  function alternarModulo(id: ModuloId) {
+    if (contraido) {
+      setContraido(false);
+      window.localStorage.setItem("boman-sidebar-contraido", "0");
+      setModuloAbierto(id);
+      return;
+    }
+    setModuloAbierto((actual) => (actual === id ? null : id));
+  }
+
   const puedeEditarProductos = perfil.rol === "admin";
   const puedeAdministrar = perfil.rol === "admin";
   const puedeConfigurarStock = perfil.rol === "admin" || perfil.rol === "control";
@@ -104,6 +136,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
   const puedeVerNotificaciones = tienePermiso(perfil, "notificaciones.acceder");
   const puedeVerMantenimiento = tienePermiso(perfil, "mantenimiento.acceder");
+  const nombreMenu = nombreParaMenu(perfil.nombre_completo);
   const rolVisible = ({
     admin: "Administrador",
     bodega: "Bodega",
@@ -172,8 +205,15 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
-  const opcionActiva = modulosBase.flatMap((modulo) => modulo.opciones).find((opcion) => rutaActiva(opcion.href));
+  const moduloActivo = modulosBase.find((modulo) =>
+    modulo.opciones.some((opcion) => opcion.visible && rutaActiva(opcion.href))
+  );
+  const opcionActiva = moduloActivo?.opciones.find((opcion) => opcion.visible && rutaActiva(opcion.href));
   const tituloActual = pathname === "/dashboard" ? "Panel principal" : opcionActiva?.etiqueta ?? "Boman ERP";
+
+  useEffect(() => {
+    setModuloAbierto(pathname === "/dashboard" ? null : moduloActivo?.id ?? null);
+  }, [pathname, moduloActivo?.id]);
 
   return (
     <>
@@ -205,24 +245,48 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
             <span className="nav-enlace-texto"><strong>Panel principal</strong><small>Resumen de tu operación</small></span>
           </Link>
 
-          {modulos.map((modulo) => (
-            <section className="nav-seccion" key={modulo.id} aria-label={modulo.etiqueta}>
-              <div className="nav-seccion-titulo">{modulo.etiqueta}</div>
-              {modulo.opciones.map((opcion) => (
-                <Link key={opcion.href} href={opcion.href} className={`nav-enlace ${rutaActiva(opcion.href) ? "activo" : ""}`} title={`${opcion.etiqueta} — ${opcion.descripcion}`}>
+          {modulos.map((modulo) => {
+            const expandido = Boolean(consulta) || moduloAbierto === modulo.id;
+            const activo = moduloActivo?.id === modulo.id;
+            return (
+              <section className={`nav-seccion ${expandido ? "abierta" : ""}`} key={modulo.id} aria-label={modulo.etiqueta}>
+                <button
+                  type="button"
+                  className={`nav-modulo ${activo ? "activo" : ""}`}
+                  onClick={() => alternarModulo(modulo.id)}
+                  aria-expanded={expandido}
+                  aria-controls={`nav-submenu-${modulo.id}`}
+                  title={modulo.etiqueta}
+                >
                   <span className="nav-enlace-icono"><Icono nombre={modulo.id} /></span>
-                  <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
-                  <span className="nav-enlace-flecha" aria-hidden="true">›</span>
-                </Link>
-              ))}
-            </section>
-          ))}
+                  <span className="nav-modulo-texto">{modulo.etiqueta}</span>
+                  <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
+                </button>
+                {expandido && !contraido && (
+                  <div className="nav-submenu" id={`nav-submenu-${modulo.id}`}>
+                    {modulo.opciones.map((opcion) => (
+                      <Link
+                        key={opcion.href}
+                        href={opcion.href}
+                        className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
+                        title={`${opcion.etiqueta} — ${opcion.descripcion}`}
+                      >
+                        <span className="nav-subenlace-marca" aria-hidden="true" />
+                        <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
+                        <span className="nav-enlace-flecha" aria-hidden="true">›</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
           {!modulos.length && <p className="nav-sin-resultados">No encontramos ese módulo.</p>}
         </div>
 
         <div className="nav-usuario">
-          <span className="nav-avatar" aria-hidden="true">{perfil.nombre_completo.trim().charAt(0).toUpperCase() || "U"}</span>
-          <span className="nav-identidad"><strong>{perfil.nombre_completo}</strong><small>{rolVisible}</small></span>
+          <span className="nav-avatar" aria-hidden="true">{nombreMenu.charAt(0).toUpperCase()}</span>
+          <span className="nav-identidad" title={perfil.nombre_completo}><strong>{nombreMenu}</strong><small>{rolVisible}</small></span>
           <button type="button" className="nav-salir" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión"><Icono nombre="salir" size={18} /></button>
         </div>
 
