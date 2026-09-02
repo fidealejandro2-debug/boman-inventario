@@ -32,8 +32,10 @@ for (const a of archivos) {
 const problemas = [];
 
 for (const [nombre, usos] of rpcs) {
+  // El prefijo public. es opcional: el esquema original (v5 a v7) declara sus
+  // funciones sin el, y exigirlo las marcaba a todas como inexistentes.
   const definida =
-    new RegExp('create\\s+(or\\s+replace\\s+)?function\\s+public\\.' + nombre + '\\s*\\(', 'i').test(todoSql);
+    new RegExp('create\\s+(or\\s+replace\\s+)?function\\s+(public\\.)?' + nombre + '\\s*\\(', 'i').test(todoSql);
   if (!definida) { problemas.push(['RPC INEXISTENTE', nombre, [...new Set(usos)].join(', ')]); continue; }
 
   let ultimoGrant = -1, ultimoRevoke = -1;
