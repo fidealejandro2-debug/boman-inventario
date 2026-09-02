@@ -469,6 +469,7 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
 .panel-modulo.azul { --panel-modulo: #2563a6; }
 .panel-modulo.celeste { --panel-modulo: #0284c7; }
 .panel-modulo.verde { --panel-modulo: #15803d; }
+.panel-modulo.rojo { --panel-modulo: #c53030; }
 .panel-modulo.naranja { --panel-modulo: #c05b12; }
 .panel-modulo.morado { --panel-modulo: #6d47b8; }
 .panel-modulo.turquesa { --panel-modulo: #087f78; }
@@ -802,6 +803,112 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
   body { background: #fff; }
   .container { max-width: none; padding: 0; }
   .card { box-shadow: none; break-inside: avoid; }
+}
+
+/* ===== Centro general de notificaciones v53 ===== */
+.modulo-kicker {
+  display: block; margin-bottom: 4px; color: #2e75b6; font-size: 11px;
+  font-weight: 800; letter-spacing: .12em;
+}
+.notificaciones-centro h1, .mantenimiento-centro h1 {
+  margin: 0 0 3px; color: #172b4d; font-size: clamp(25px, 3vw, 34px);
+}
+.notificaciones-acciones, .mantenimiento-acciones, .acciones-en-fila,
+.modal-acciones { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.notificacion-publicar { margin-bottom: 18px; border-top: 4px solid #2e75b6; }
+.notificacion-publicar input, .notificacion-publicar select,
+.notificacion-publicar textarea, .mantenimiento-centro .modal-contenido input,
+.mantenimiento-centro .modal-contenido select,
+.mantenimiento-centro .modal-contenido textarea { width: 100%; }
+.notificaciones-filtros {
+  display: grid; grid-template-columns: auto minmax(240px, 1fr) auto;
+  gap: 14px; align-items: end; margin-bottom: 12px;
+}
+.notificaciones-filtros .tabs, .notificaciones-filtros .field { margin: 0; }
+.notificaciones-lista { display: grid; gap: 8px; }
+.notificacion-item {
+  display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; gap: 12px;
+  align-items: center; padding: 13px 14px; border: 1px solid #dbe3ee;
+  border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.03);
+}
+.notificacion-item.leida { background: #f8fafc; opacity: .78; }
+.notificacion-indicador { width: 5px; height: 100%; min-height: 48px; border-radius: 9px; background: #60a5fa; }
+.notificacion-item.accion .notificacion-indicador { background: #8b5cf6; }
+.notificacion-item.alerta .notificacion-indicador { background: #f59e0b; }
+.notificacion-item.critica .notificacion-indicador { background: #dc2626; }
+.notificacion-cuerpo { min-width: 0; }
+.notificacion-cuerpo h3 { margin: 3px 0 4px; color: #172b4d; font-size: 15px; }
+.notificacion-cuerpo p { margin: 0; color: #475569; line-height: 1.42; }
+.notificacion-meta { display: flex; gap: 8px; align-items: center; color: #64748b; font-size: 11px; }
+.notificacion-meta b { padding: 2px 7px; border-radius: 999px; background: #f1f5f9; color: #475569; }
+.notificacion-botones { display: grid; justify-items: stretch; gap: 5px; min-width: 132px; }
+.notificacion-botones a, .notificacion-botones button {
+  display: inline-flex; justify-content: center; padding: 6px 9px; border-radius: 6px;
+  text-decoration: none; font-size: 11px; font-weight: 700;
+}
+.notificacion-botones a { background: #1f3864; color: #fff; }
+.notificacion-botones button { background: #fff; color: #1f3864; border: 1px solid #bfd1e5; }
+.notificacion-botones button.notificacion-archivar { border-color: transparent; color: #64748b; }
+.notificacion-botones a:hover, .notificacion-botones button:hover { filter: brightness(.96); }
+.notificaciones-vacio {
+  padding: 42px 20px; text-align: center; border: 1px dashed #cbd5e1;
+  border-radius: 10px; color: #64748b;
+}
+.notificaciones-vacio span { display: grid; place-items: center; width: 45px; height: 45px; margin: 0 auto 9px; border-radius: 50%; background: #dcfce7; color: #15803d; font-size: 24px; font-weight: 900; }
+.notificaciones-vacio strong { display: block; }
+.notificaciones-vacio strong { color: #334155; font-size: 16px; }
+
+/* ===== Mantenimiento de maquinaria y activos v54 ===== */
+.mantenimiento-cabecera { margin-bottom: 18px; }
+.mantenimiento-kpis { grid-template-columns: repeat(6, minmax(130px, 1fr)); }
+.mantenimiento-resumen-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .7fr); gap: 16px; }
+.mantenimiento-lista { display: grid; gap: 6px; }
+.mantenimiento-pendiente {
+  display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; align-items: center;
+  gap: 10px; width: 100%; padding: 10px; color: #172033; text-align: left;
+  background: #fff; border: 1px solid #e2e8f0;
+}
+.mantenimiento-pendiente:hover { background: #f8fafc; border-color: #93c5fd; }
+.mantenimiento-pendiente span:nth-child(2) { min-width: 0; }
+.mantenimiento-pendiente strong, .mantenimiento-pendiente small { display: block; }
+.mantenimiento-pendiente small { margin-top: 3px; overflow: hidden; color: #64748b; text-overflow: ellipsis; white-space: nowrap; }
+.mantenimiento-pendiente > b { color: #475569; font-size: 12px; white-space: nowrap; }
+.mant-prioridad { width: 5px; height: 42px; border-radius: 8px; background: #60a5fa; }
+.mant-prioridad.baja { background: #94a3b8; }
+.mant-prioridad.alta { background: #f59e0b; }
+.mant-prioridad.urgente { background: #dc2626; }
+.mantenimiento-metricas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.mantenimiento-metricas > div { display: grid; gap: 3px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fafc; }
+.mantenimiento-metricas span { color: #64748b; font-size: 11px; text-transform: uppercase; }
+.mantenimiento-metricas strong { color: #1f3864; font-size: 21px; }
+.mantenimiento-centro td small { color: #64748b; }
+.acciones-en-fila { justify-content: flex-start; min-width: 150px; }
+.acciones-en-fila button { padding: 5px 8px; font-size: 11px; white-space: nowrap; }
+.peligro-inline { background: #fff; border: 1px solid #fecaca; color: #b91c1c; }
+.peligro-inline:hover { background: #fef2f2; }
+.texto-rojo { color: #b91c1c !important; }
+.badge.criticidad-baja, .badge.prioridad-baja { background: #f1f5f9; color: #475569; }
+.badge.criticidad-media, .badge.prioridad-normal { background: #dbeafe; color: #1e40af; }
+.badge.criticidad-alta, .badge.prioridad-alta { background: #fef3c7; color: #92400e; }
+.badge.criticidad-critica, .badge.prioridad-urgente { background: #fee2e2; color: #991b1b; }
+.badge.mant-operativo, .badge.mant-completada { background: #dcfce7; color: #166534; }
+.badge.mant-detenido, .badge.mant-fuera_servicio, .badge.mant-cancelada { background: #fee2e2; color: #991b1b; }
+.badge.mant-mantenimiento, .badge.mant-en_proceso { background: #ede9fe; color: #6d28d9; }
+.badge.mant-solicitada, .badge.mant-programada { background: #dbeafe; color: #1e40af; }
+.badge.mant-en_espera { background: #fef3c7; color: #92400e; }
+
+@media (max-width: 980px) {
+  .mantenimiento-kpis { grid-template-columns: repeat(3, 1fr); }
+  .mantenimiento-resumen-grid { grid-template-columns: 1fr; }
+  .notificaciones-filtros { grid-template-columns: 1fr; align-items: stretch; }
+}
+@media (max-width: 640px) {
+  .notificaciones-acciones, .mantenimiento-acciones { width: 100%; }
+  .notificaciones-acciones button, .mantenimiento-acciones button { flex: 1; }
+  .mantenimiento-kpis { grid-template-columns: 1fr 1fr; }
+  .notificacion-item { grid-template-columns: 4px minmax(0, 1fr); }
+  .notificacion-botones { grid-column: 2; grid-template-columns: repeat(3, auto); justify-content: start; }
+  .mantenimiento-metricas { grid-template-columns: 1fr; }
 }
 
 /* ---------- Nómina (v31) ---------- */
@@ -1209,3 +1316,35 @@ button.btn-mini {
   .rol-detalle { break-inside: auto; }
   .rol-tabla { break-inside: avoid; }
 }
+
+/* Actas y comprobantes de Talento Humano: bloques que faltaban del formato */
+.doc-th-datos { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.doc-th-datos th, .doc-th-datos td {
+  border: 1px solid #b8cce4; padding: 4px 7px; font-size: 12px;
+}
+.doc-th-datos th { background: #eef4fb; text-align: left; font-weight: 700; width: 15%; }
+.doc-th-parrafo { font-size: 12.5px; line-height: 1.7; text-align: justify; margin: 10px 0; }
+.doc-th-parrafo.pequena { font-size: 11px; color: #444; font-style: italic; }
+.doc-th-tabla { width: 100%; border-collapse: collapse; margin: 10px 0; }
+.doc-th-tabla th, .doc-th-tabla td {
+  border: 1px solid #b8cce4; padding: 4px 7px; font-size: 12px;
+}
+.doc-th-tabla thead th { background: #1f3864; color: #fff; text-align: left; }
+.doc-th-tabla td.num, .doc-th-tabla th.num { text-align: right; }
+.doc-th-tabla small { display: block; color: #666; }
+.doc-th-neto { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.doc-th-neto td {
+  background: #1f3864; color: #fff; font-weight: 800; font-size: 13px;
+  border: 1px solid #1f3864; padding: 6px 7px;
+}
+.doc-th-neto td.num { text-align: right; }
+.doc-th-declaracion { font-size: 12px; line-height: 1.6; text-align: justify; margin: 12px 0; }
+.doc-th-firmas { width: 100%; border-collapse: collapse; margin-top: 26px; }
+.doc-th-firmas td {
+  width: 50%; padding: 0 14px; font-size: 11.5px; text-align: center; vertical-align: top;
+}
+.doc-th-firmas small { display: block; color: #555; margin-top: 2px; }
+.rol-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media print { .rol-columnas { grid-template-columns: 1fr 1fr; } }
+
+.rol-tabla small { display: block; color: #555; font-size: 10px; font-style: italic; }

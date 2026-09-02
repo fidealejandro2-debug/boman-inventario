@@ -15,6 +15,7 @@ import {
   type Empresa,
 } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
+import ActaDescuento, { type DatosActa } from "./ActaDescuento";
 
 type Anticipo = {
   id: string;
@@ -66,6 +67,10 @@ export default function DescuentosTab({
   const supabase = createClient();
   const [vista, setVista] = useState<"anticipos" | "descuentos">("anticipos");
   const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
+  const [pendientes, setPendientes] = useState<
+    { anticipo_id: string; empleado: string; monto: number; dias_pendiente: number; antiguedad: string }[]
+  >([]);
+  const [acta, setActa] = useState<DatosActa | null>(null);
   const [descuentos, setDescuentos] = useState<Descuento[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,17 +103,24 @@ export default function DescuentosTab({
 
   async function cargar() {
     setCargando(true);
-    const [a, d] = await Promise.all([
+    const [a, d, p] = await Promise.all([
       supabase.from("vista_anticipos_v29").select("*").order("fecha", { ascending: false }),
       supabase
         .from("vista_descuentos_programados_v29")
         .select("*")
         .order("prioridad")
         .order("fecha_inicio", { ascending: false }),
+      supabase
+        .from("vista_anticipos_respaldo_pendiente_v55")
+        .select("anticipo_id, empleado, monto, dias_pendiente, antiguedad")
+        .order("dias_pendiente", { ascending: false }),
     ]);
     if (a.error) setError(a.error.message);
     else setAnticipos((a.data as Anticipo[]) ?? []);
     if (!d.error) setDescuentos((d.data as Descuento[]) ?? []);
+    // Si v55 aun no esta instalada la vista no existe: el aviso simplemente no
+    // aparece, en vez de romper toda la pestana.
+    if (!p.error) setPendientes((p.data as typeof pendientes) ?? []);
     setCargando(false);
   }
 
@@ -153,8 +165,19 @@ export default function DescuentosTab({
       return setError("El número de cuotas no es válido.");
     if (!form.fecha_primera_cuota)
       return setError("Elige el mes de la primera cuota.");
-    if (!form.documento_respaldo_id)
-      return setError("Adjunta la solicitud o autorización firmada.");
+    // El papel se firma despues, asi que exigirlo aqui trababa el anticipo o
+    // empujaba a adjuntar cualquier archivo con tal de avanzar. Se avisa una
+    // vez y queda como respaldo pendiente hasta que se suba.
+    if (!form.documento_respaldo_id) {
+      const seguir = window.confirm(
+        `Vas a registrar el anticipo SIN la solicitud firmada.
+
+Queda marcado como respaldo pendiente y aparecerá en la lista de documentos por subir hasta que lo adjuntes. Sin ese papel el descuento no tiene sustento documental frente a una inspección.
+
+¿Continuar?`
+      );
+      if (!seguir) return;
+    }
     setGuardando(true);
     setError(null);
     const { error } = await supabase.rpc("solicitar_anticipo_v29", {
@@ -170,7 +193,11 @@ export default function DescuentosTab({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Anticipo solicitado.");
+    setAviso(
+      form.documento_respaldo_id
+        ? "Anticipo solicitado."
+        : "Anticipo solicitado SIN respaldo. Sube la solicitud firmada en cuanto la tengas: queda pendiente en el expediente."
+    );
     setMostrarForm(false);
     setForm({
       ...form,
@@ -179,6 +206,27 @@ export default function DescuentosTab({
       cuotas: "1",
       documento_respaldo_id: null,
     });
+    cargar();
+  }
+
+  async function archivarDescuento(id: string, estado: string) {
+    const { motivo, error: errMotivo } = pedirMotivo(
+      `Vas a archivar un descuento en estado "${estado}".
+
+No se borra: queda en el historial como prueba de lo que se le retuvo a la persona, pero deja de aparecer en la lista activa.
+
+Motivo del archivo:`
+    );
+    if (errMotivo) return setError(errMotivo);
+    if (!motivo) return;
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("archivar_descuento_v56", {
+      p_descuento_id: id, p_motivo: motivo, p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    setAviso("Descuento archivado. Sigue disponible en el historial.");
     cargar();
   }
 
@@ -322,12 +370,35 @@ export default function DescuentosTab({
     .filter((d) => d.estado === "vigente")
     .reduce((s, d) => s + Number(d.saldo), 0);
 
+  // El acta ocupa la pantalla: al imprimir, globals.css oculta lo demas.
+  if (acta) return <ActaDescuento datos={acta} onCerrar={() => setActa(null)} />;
+
   if (cargando) return <p className="ayuda">Cargando anticipos y descuentos…</p>;
 
   return (
     <>
       {error && <p className="error">{error}</p>}
       {aviso && <p className="aviso">{aviso}</p>}
+
+      {pendientes.length > 0 && (
+        <div className="aviso">
+          <strong>
+            {pendientes.length} anticipo(s) sin respaldo documental.
+          </strong>{" "}
+          Sube la solicitud firmada al expediente: sin ese papel el descuento no
+          tiene sustento frente a una inspección.
+          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+            {pendientes.slice(0, 5).map((p) => (
+              <li key={p.anticipo_id}>
+                {p.empleado} · {dinero(p.monto)} ·{" "}
+                <strong>{p.dias_pendiente} día(s)</strong>
+                {p.antiguedad === "vencido" ? " — vencido" : ""}
+              </li>
+            ))}
+            {pendientes.length > 5 && <li>y {pendientes.length - 5} más…</li>}
+          </ul>
+        </div>
+      )}
 
       <div className="kpis">
         <div className="kpi">
@@ -484,9 +555,13 @@ export default function DescuentosTab({
                 valor={form.documento_respaldo_id}
                 onCambio={(id) => setForm({ ...form, documento_respaldo_id: id })}
                 tipoSugerido="otro"
-                etiqueta="Solicitud o autorización firmada"
-                requerido
+                etiqueta="Solicitud o autorización firmada (recomendado)"
               />
+              <p className="ayuda">
+                Si todavía no la tienes, puedes continuar: el anticipo queda con{" "}
+                <strong>respaldo pendiente</strong> y figura en la lista de documentos
+                por subir hasta que la adjuntes.
+              </p>
             </div>
           </div>
           <button onClick={solicitar} disabled={guardando}>
@@ -703,6 +778,25 @@ export default function DescuentosTab({
                           Anular
                         </button>
                       )}
+                      <button
+                        className="btn-mini secondary"
+                        onClick={() =>
+                          setActa({
+                            clase: "anticipo",
+                            empleado: `${a.apellidos} ${a.nombres}`,
+                            identificacion: a.identificacion,
+                            empresa: a.empresa_pagadora,
+                            fecha: a.fecha,
+                            monto: Number(a.monto),
+                            cuotas: a.cuotas,
+                            montoCuota: Math.round((Number(a.monto) / a.cuotas) * 100) / 100,
+                            fechaPrimeraCuota: a.fecha_primera_cuota,
+                            concepto: a.motivo,
+                          })
+                        }
+                      >
+                        Acta
+                      </button>
                     </td>
                   )}
                 </tr>
@@ -794,6 +888,37 @@ export default function DescuentosTab({
                           Reactivar
                         </button>
                       )}
+                      {/* Un descuento saldado se archiva, nunca se borra: es la
+                          prueba de un valor que ya se le retuvo a la persona. */}
+                      {["pagado", "condonado", "anulado"].includes(d.estado) && (
+                        <button
+                          className="btn-mini secondary"
+                          disabled={guardando}
+                          onClick={() => archivarDescuento(d.id, d.estado)}
+                        >
+                          Archivar
+                        </button>
+                      )}
+                      <button
+                        className="btn-mini secondary"
+                        onClick={() =>
+                          setActa({
+                            clase: "descuento",
+                            empleado: `${d.apellidos} ${d.nombres}`,
+                            identificacion: d.identificacion,
+                            empresa: d.empresa_acreedora ?? "",
+                            fecha: d.fecha_inicio,
+                            monto: Number(d.monto_total),
+                            cuotas: d.cuotas_total,
+                            montoCuota: Number(d.monto_cuota),
+                            fechaPrimeraCuota: d.fecha_inicio,
+                            concepto: d.descripcion,
+                            origen: d.origen,
+                          })
+                        }
+                      >
+                        Acta
+                      </button>
                     </td>
                   )}
                 </tr>

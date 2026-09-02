@@ -60,6 +60,16 @@ type Declarado = {
   ruc_afiliador: string;
 };
 
+type Beneficios = {
+  mensualiza_decimo_tercero: boolean;
+  mensualiza_decimo_cuarto: boolean;
+  region: string;
+  detalle_decimo_tercero: string;
+  detalle_decimo_cuarto: string;
+  acumulado_decimo_tercero: number;
+  acumulado_decimo_cuarto: number;
+};
+
 type Novedad = {
   rol_linea_id: string;
   grupo: "ingreso" | "descuento" | "informativo";
@@ -98,17 +108,19 @@ export default function RolImpresion({
   const [real, setReal] = useState<Real | null>(null);
   const [declarado, setDeclarado] = useState<Declarado | null>(null);
   const [novedades, setNovedades] = useState<Novedad[]>([]);
+  const [beneficios, setBeneficios] = useState<Beneficios | null>(null);
   const [version, setVersion] = useState<"real" | "declarado">("real");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const [r, d, n] = await Promise.all([
+      const [r, d, n, b] = await Promise.all([
         supabase.from("vista_rol_impresion_v31").select("*").eq("rol_linea_id", rolLineaId).maybeSingle(),
         supabase.from("vista_rol_declarado_v31").select("*").eq("rol_linea_id", rolLineaId).maybeSingle(),
         supabase.from("vista_rol_novedades_v52").select("*").eq("rol_linea_id", rolLineaId)
           .order("orden").order("fecha"),
+        supabase.from("vista_rol_beneficios_v56").select("*").eq("rol_linea_id", rolLineaId).maybeSingle(),
       ]);
       if (!vivo) return;
       if (r.error) return setError(r.error.message);
@@ -116,6 +128,9 @@ export default function RolImpresion({
       setReal(r.data as Real);
       setDeclarado((d.data as Declarado) ?? null);
       setNovedades((n.data as Novedad[]) ?? []);
+      // Si v56 aun no esta instalada, el bloque de beneficios no sale y el
+      // resto del comprobante se imprime igual.
+      setBeneficios((b.data as Beneficios) ?? null);
     })();
     return () => { vivo = false; };
   }, [supabase, rolLineaId]);
@@ -294,6 +309,41 @@ export default function RolImpresion({
             </tr>
           </tbody>
         </table>
+
+        {beneficios && (
+          <table className="rol-tabla">
+            <thead>
+              <tr className="rol-verde">
+                <th colSpan={2}>BENEFICIOS DE LEY</th>
+                <th className="col-valor">ACUMULADO {real.anio}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={2}>
+                  Décimo tercera remuneración
+                  <small>{beneficios.detalle_decimo_tercero}</small>
+                </td>
+                <td className="num">
+                  {beneficios.mensualiza_decimo_tercero
+                    ? "—"
+                    : dinero(beneficios.acumulado_decimo_tercero)}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={2}>
+                  Décimo cuarta remuneración
+                  <small>{beneficios.detalle_decimo_cuarto}</small>
+                </td>
+                <td className="num">
+                  {beneficios.mensualiza_decimo_cuarto
+                    ? "—"
+                    : dinero(beneficios.acumulado_decimo_cuarto)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
 
         <div className="rol-obs-titulo">OBSERVACIONES:</div>
         <div className="rol-obs">
