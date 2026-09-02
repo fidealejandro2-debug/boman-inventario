@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   return (
     <>
       <Navbar perfil={perfil} />
-      <div className="container">
+      <div className="container panel-container">
         <DashboardCliente perfil={perfil} />
       </div>
     </>

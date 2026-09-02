@@ -1,185 +1,440 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { fecha, ETIQUETA_TIPO } from "@/lib/utils";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
 
+type ResumenPanel = {
+  generado_at: string;
+  hoy: string;
+  rol: string;
+  ambito: { almacenes_total: number; almacenes: string[]; empresas_total: number; empresas: string[] };
+  inventario: {
+    stock_fisico: number; stock_disponible: number; transito_entrada: number;
+    productos_bajo_minimo: number; unidades_sugeridas: number; movimientos_hoy: number;
+  };
+  operaciones: {
+    solicitudes_pendientes: number; transferencias_preparar: number;
+    transferencias_recibir: number; conteos_revision: number;
+  };
+  ventas: { documentos_hoy: number; importe_hoy: number };
+  compras: { pendientes_aprobacion: number; pendientes_recepcion: number };
+  produccion: { pendientes_aprobacion: number; ordenes_activas: number; ordenes_atrasadas: number };
+  nomina: {
+    empleados_activos: number; ausencias_solicitadas: number; documentos_por_vencer: number;
+    documentos_vencidos: number; periodos_pendientes: number;
+  };
+  franquicia: {
+    locales: number; ventas_hoy: number; total_ventas_hoy: number;
+    alertas: number; cierres_pendientes_hoy: number;
+  };
+  administracion: { usuarios_activos: number; usuarios_inactivos: number };
+  actividad: Array<{ fecha: string; tipo: string; titulo: string; detalle: string; href: string }>;
+};
+
+type EnlaceModulo = { href: string; etiqueta: string };
+type ModuloPanel = {
+  id: string; titulo: string; subtitulo: string; descripcion: string; href: string;
+  icono: string; tono: string; visible: boolean; pendiente: number;
+  pendienteTexto: string; enlaces: EnlaceModulo[];
+};
+type Pendiente = {
+  id: string; titulo: string; detalle: string; cantidad: number; href: string;
+  nivel: "critico" | "atencion" | "normal";
+};
+
+const RESUMEN_VACIO: ResumenPanel = {
+  generado_at: "", hoy: "", rol: "",
+  ambito: { almacenes_total: 0, almacenes: [], empresas_total: 0, empresas: [] },
+  inventario: {
+    stock_fisico: 0, stock_disponible: 0, transito_entrada: 0,
+    productos_bajo_minimo: 0, unidades_sugeridas: 0, movimientos_hoy: 0,
+  },
+  operaciones: {
+    solicitudes_pendientes: 0, transferencias_preparar: 0,
+    transferencias_recibir: 0, conteos_revision: 0,
+  },
+  ventas: { documentos_hoy: 0, importe_hoy: 0 },
+  compras: { pendientes_aprobacion: 0, pendientes_recepcion: 0 },
+  produccion: { pendientes_aprobacion: 0, ordenes_activas: 0, ordenes_atrasadas: 0 },
+  nomina: {
+    empleados_activos: 0, ausencias_solicitadas: 0, documentos_por_vencer: 0,
+    documentos_vencidos: 0, periodos_pendientes: 0,
+  },
+  franquicia: {
+    locales: 0, ventas_hoy: 0, total_ventas_hoy: 0, alertas: 0, cierres_pendientes_hoy: 0,
+  },
+  administracion: { usuarios_activos: 0, usuarios_inactivos: 0 }, actividad: [],
+};
+
+const ETIQUETAS_ROL: Record<string, string> = {
+  admin: "Administración", bodega: "Bodega", logistica: "Logística", gerencia: "Gerencia",
+  tienda: "Tienda", control: "Control", nomina: "Nómina", franquiciado: "Franquiciado",
+  vendedor_franquicia: "Vendedor de franquicia",
+};
+const ENTERO = new Intl.NumberFormat("es-EC", { maximumFractionDigits: 0 });
+const DINERO = new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" });
+
+function numero(valor: unknown) {
+  const convertido = Number(valor);
+  return Number.isFinite(convertido) ? convertido : 0;
+}
+
+function fechaLarga() {
+  return new Intl.DateTimeFormat("es-EC", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    timeZone: "America/Guayaquil",
+  }).format(new Date());
+}
+
+function horaEcuador(valor: string) {
+  if (!valor) return "";
+  return new Intl.DateTimeFormat("es-EC", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+    timeZone: "America/Guayaquil",
+  }).format(new Date(valor));
+}
+
+function enlacesValidos(...items: Array<EnlaceModulo | false>): EnlaceModulo[] {
+  return items.filter((item): item is EnlaceModulo => Boolean(item));
+}
+
 export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
-  const supabase = createClient();
-  const [filas, setFilas] = useState<any[]>([]);
-  const [movs, setMovs] = useState<any[]>([]);
-  const [movimientosHoy, setMovimientosHoy] = useState(0);
+  const supabase = useMemo(() => createClient(), []);
+  const buscadorRef = useRef<HTMLInputElement>(null);
+  const [resumen, setResumen] = useState<ResumenPanel>(RESUMEN_VACIO);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [empresas, setEmpresas] = useState<{ id: string; razon_social: string }[]>([]);
-  const [empresaId, setEmpresaId] = useState("");
+  const [busqueda, setBusqueda] = useState("");
 
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    const { data, error: errorCarga } = await supabase.rpc("resumen_panel_principal_v51");
+    if (errorCarga) {
+      setError(errorCarga.message.includes("resumen_panel_principal_v51")
+        ? "Falta instalar la migración v51 para mostrar indicadores. Los accesos siguen disponibles."
+        : errorCarga.message);
+    } else if (data) {
+      setResumen(data as ResumenPanel);
+    }
+    setCargando(false);
+  }, [supabase]);
+
+  useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
-    (async () => {
-      const [s, e] = await Promise.all([
-        supabase.from("vista_stock_operativo").select("producto_id, stock_fisico, stock_disponible, transito_entrada, bajo_minimo, sugerido_reponer, almacen, producto, sku, categoria, subcategoria, talla, stock_minimo"),
-        supabase.from("empresas").select("id, razon_social").eq("activo", true).order("razon_social"),
-      ]);
-      if (s.error) setError(s.error.message);
-      if (s.data) setFilas(s.data);
-      if (e.data) setEmpresas(e.data);
-    })();
+    function enfocarBuscador(evento: KeyboardEvent) {
+      const objetivo = evento.target as HTMLElement | null;
+      if (evento.key === "/" && objetivo?.tagName !== "INPUT" && objetivo?.tagName !== "TEXTAREA") {
+        evento.preventDefault();
+        buscadorRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", enfocarBuscador);
+    return () => document.removeEventListener("keydown", enfocarBuscador);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      setCargando(true);
-      const inicioHoy = new Date();
-      inicioHoy.setHours(0, 0, 0, 0);
-      const finHoy = new Date(inicioHoy);
-      finHoy.setDate(finHoy.getDate() + 1);
+  const puede = useCallback((permiso: Parameters<typeof tienePermiso>[1]) =>
+    tienePermiso(perfil, permiso), [perfil]);
+  const esFranquicia = perfil.rol === "franquiciado" || perfil.rol === "vendedor_franquicia";
 
-      let movsQuery = supabase.from("movimientos")
-        .select("id, tipo, cantidad, created_at, anulado, productos(nombre, sku, categoria, subcategoria), almacenes!movimientos_entidad_id_fkey(nombre), almacen_destino:almacenes!movimientos_entidad_destino_id_fkey(nombre), perfiles!movimientos_usuario_id_fkey(nombre_completo)");
-      let hoyQuery = supabase.from("movimientos")
-        .select("id", { count: "exact", head: true })
-        .eq("anulado", false)
-        .gte("created_at", inicioHoy.toISOString())
-        .lt("created_at", finHoy.toISOString());
-      if (empresaId) {
-        movsQuery = movsQuery.eq("empresa_id", empresaId);
-        hoyQuery = hoyQuery.eq("empresa_id", empresaId);
-      }
+  const modulos = useMemo<ModuloPanel[]>(() => {
+    const op = resumen.operaciones;
+    const totalOperaciones = numero(op.solicitudes_pendientes) + numero(op.transferencias_preparar)
+      + numero(op.transferencias_recibir) + numero(op.conteos_revision);
+    const totalCompras = numero(resumen.compras.pendientes_aprobacion) + numero(resumen.compras.pendientes_recepcion);
+    const totalProduccion = numero(resumen.produccion.pendientes_aprobacion) + numero(resumen.produccion.ordenes_atrasadas);
+    const totalNomina = numero(resumen.nomina.ausencias_solicitadas) + numero(resumen.nomina.documentos_por_vencer)
+      + numero(resumen.nomina.documentos_vencidos) + numero(resumen.nomina.periodos_pendientes);
+    const totalFranquicia = numero(resumen.franquicia.alertas) + numero(resumen.franquicia.cierres_pendientes_hoy);
 
-      const [m, h] = await Promise.all([
-        movsQuery.order("created_at", { ascending: false }).limit(10),
-        hoyQuery,
-      ]);
-      if (m.error || h.error) setError(m.error?.message ?? h.error?.message ?? null);
-      if (m.data) setMovs(m.data);
-      setMovimientosHoy(h.count ?? 0);
-      setCargando(false);
-    })();
-  }, [empresaId]);
+    return [
+      {
+        id: "inventario", titulo: "Inventario", subtitulo: "Existencias y catálogo",
+        descripcion: "Consulta stock físico, disponible, reservado y en tránsito por almacén.",
+        href: "/inventario", icono: "INV", tono: "azul", visible: puede("inventario.acceder"),
+        pendiente: numero(resumen.inventario.productos_bajo_minimo), pendienteTexto: "bajo mínimo",
+        enlaces: enlacesValidos(
+          { href: "/inventario", etiqueta: "Ver existencias" },
+          puede("movimientos.acceder") && { href: "/movimientos", etiqueta: "Movimientos" },
+          perfil.rol === "admin" && { href: "/productos", etiqueta: "Productos" },
+          ["admin", "control"].includes(perfil.rol) && { href: "/configuracion/inventario", etiqueta: "Políticas de stock" }
+        ),
+      },
+      {
+        id: "operaciones", titulo: "Operaciones", subtitulo: "Reposición y control",
+        descripcion: "Solicitudes, transferencias, despachos, recepciones y conteos físicos.",
+        href: puede("operaciones.acceder") ? "/operaciones" : "/conteos", icono: "OPS", tono: "celeste",
+        visible: puede("operaciones.acceder") || puede("conteos.acceder"), pendiente: totalOperaciones,
+        pendienteTexto: "por atender",
+        enlaces: enlacesValidos(
+          puede("operaciones.acceder") && { href: "/operaciones", etiqueta: "Solicitudes y transferencias" },
+          puede("conteos.acceder") && { href: "/conteos", etiqueta: "Conteos físicos" },
+          puede("control.acceder") && { href: "/control", etiqueta: "Centro de Control" }
+        ),
+      },
+      {
+        id: "ventas", titulo: "Ventas", subtitulo: "Facturación e inventario",
+        descripcion: "Importa facturas autorizadas, concilia códigos y descuenta las existencias.",
+        href: "/ventas", icono: "VTA", tono: "verde", visible: puede("ventas.acceder") && !esFranquicia,
+        pendiente: numero(resumen.ventas.documentos_hoy), pendienteTexto: "facturas hoy",
+        enlaces: [{ href: "/ventas", etiqueta: "Facturas XML" }],
+      },
+      {
+        id: "compras", titulo: "Compras", subtitulo: "Abastecimiento",
+        descripcion: "Gestiona proveedores, aprobaciones, recepciones parciales y no conformidades.",
+        href: "/compras", icono: "OC", tono: "naranja", visible: puede("compras.acceder"),
+        pendiente: totalCompras, pendienteTexto: "órdenes pendientes",
+        enlaces: [{ href: "/compras", etiqueta: "Órdenes y recepciones" }],
+      },
+      {
+        id: "produccion", titulo: "Producción", subtitulo: "Planificación y planta",
+        descripcion: "Fórmulas, materiales, órdenes, rutas, etapas, lotes, calidad y costos.",
+        href: "/produccion", icono: "OP", tono: "morado", visible: puede("produccion.acceder"),
+        pendiente: totalProduccion, pendienteTexto: "requieren atención",
+        enlaces: [{ href: "/produccion", etiqueta: "Abrir producción" }],
+      },
+      {
+        id: "franquicia", titulo: "Franquicia", subtitulo: "Operación del local",
+        descripcion: "Ventas, caja diaria, inventario, reposición y alertas del establecimiento.",
+        href: "/franquicia", icono: "FQ", tono: "turquesa", visible: puede("franquicia.acceder"),
+        pendiente: totalFranquicia, pendienteTexto: "alertas del local",
+        enlaces: [{ href: "/franquicia", etiqueta: esFranquicia ? "Ir a mi local" : "Ver franquicias" }],
+      },
+      {
+        id: "nomina", titulo: "Nómina", subtitulo: "Personas y roles",
+        descripcion: "Personal, expedientes, asistencia, vacaciones, novedades y roles de pago.",
+        href: "/nomina", icono: "NOM", tono: "rosa", visible: puede("nomina.acceder"),
+        pendiente: totalNomina, pendienteTexto: "pendientes",
+        enlaces: [{ href: "/nomina", etiqueta: puede("nomina.editar") ? "Gestionar nómina" : "Consultar nómina" }],
+      },
+      {
+        id: "reportes", titulo: "Reportes", subtitulo: "Información para decidir",
+        descripcion: "Analiza stock, valoración, reposición, cumplimiento y trazabilidad.",
+        href: "/reportes", icono: "REP", tono: "gris", visible: puede("reportes.acceder"),
+        pendiente: 0, pendienteTexto: "", enlaces: [{ href: "/reportes", etiqueta: "Abrir reportes" }],
+      },
+      {
+        id: "administracion", titulo: "Administración", subtitulo: "Configuración del ERP",
+        descripcion: "Empresas, almacenes, usuarios, permisos por rol y locales franquiciados.",
+        href: "/administracion/usuarios", icono: "ADM", tono: "oscuro", visible: perfil.rol === "admin",
+        pendiente: numero(resumen.administracion.usuarios_inactivos), pendienteTexto: "usuarios inactivos",
+        enlaces: enlacesValidos(
+          { href: "/administracion/empresas", etiqueta: "Empresas" },
+          { href: "/administracion/usuarios", etiqueta: "Usuarios" },
+          { href: "/administracion/permisos", etiqueta: "Permisos" },
+          { href: "/administracion/franquicias", etiqueta: "Franquicias" }
+        ),
+      },
+    ];
+  }, [esFranquicia, perfil.rol, puede, resumen]);
 
-  const totalUnidades = filas.reduce((a, f) => a + f.stock_fisico, 0);
-  const totalDisponible = filas.reduce((a, f) => a + f.stock_disponible, 0);
-  const totalTransito = filas.reduce((a, f) => a + f.transito_entrada, 0);
-  const alertas = useMemo(() => filas.filter((f) => f.bajo_minimo).sort((a, b) => a.stock_disponible - b.stock_disponible), [filas]);
-  const puedeVerReportes = tienePermiso(perfil, "reportes.acceder");
+  const modulosVisibles = useMemo(() => {
+    const consulta = busqueda.trim().toLocaleLowerCase("es");
+    return modulos.filter((modulo) => modulo.visible && (!consulta
+      || [modulo.titulo, modulo.subtitulo, modulo.descripcion, ...modulo.enlaces.map((e) => e.etiqueta)]
+        .some((texto) => texto.toLocaleLowerCase("es").includes(consulta))));
+  }, [busqueda, modulos]);
+
+  const pendientes = useMemo<Pendiente[]>(() => {
+    const items: Array<Pendiente | false> = [
+      puede("inventario.acceder") && numero(resumen.inventario.productos_bajo_minimo) > 0 && {
+        id: "stock", titulo: "Productos bajo mínimo",
+        detalle: `${ENTERO.format(numero(resumen.inventario.unidades_sugeridas))} unidades sugeridas para reponer`,
+        cantidad: numero(resumen.inventario.productos_bajo_minimo), href: "/inventario", nivel: "critico",
+      },
+      puede("operaciones.acceder") && numero(resumen.operaciones.transferencias_recibir) > 0 && {
+        id: "recibir", titulo: "Transferencias por recibir", detalle: "Mercadería despachada o en tránsito",
+        cantidad: numero(resumen.operaciones.transferencias_recibir), href: esFranquicia ? "/franquicia" : "/operaciones", nivel: "atencion",
+      },
+      puede("operaciones.acceder") && numero(resumen.operaciones.transferencias_preparar) > 0 && {
+        id: "preparar", titulo: "Transferencias por preparar", detalle: "Aprobadas y listas para despacho",
+        cantidad: numero(resumen.operaciones.transferencias_preparar), href: "/operaciones", nivel: "normal",
+      },
+      puede("control.acceder") && numero(resumen.operaciones.solicitudes_pendientes) > 0 && {
+        id: "solicitudes", titulo: "Solicitudes esperando aprobación", detalle: "Reposiciones enviadas por los almacenes",
+        cantidad: numero(resumen.operaciones.solicitudes_pendientes), href: "/control", nivel: "atencion",
+      },
+      puede("control.acceder") && numero(resumen.operaciones.conteos_revision) > 0 && {
+        id: "conteos", titulo: "Conteos esperando revisión", detalle: "Segundo conteo o resolución de diferencias",
+        cantidad: numero(resumen.operaciones.conteos_revision), href: "/control", nivel: "atencion",
+      },
+      puede("compras.acceder") && numero(resumen.compras.pendientes_aprobacion) > 0 && {
+        id: "compras-aprobar", titulo: "Compras por aprobar", detalle: "Órdenes pendientes de resolución",
+        cantidad: numero(resumen.compras.pendientes_aprobacion), href: "/compras", nivel: "atencion",
+      },
+      puede("compras.acceder") && numero(resumen.compras.pendientes_recepcion) > 0 && {
+        id: "compras-recibir", titulo: "Compras por recibir", detalle: "Órdenes aprobadas o parcialmente recibidas",
+        cantidad: numero(resumen.compras.pendientes_recepcion), href: "/compras", nivel: "normal",
+      },
+      puede("produccion.acceder") && numero(resumen.produccion.ordenes_atrasadas) > 0 && {
+        id: "produccion-atrasada", titulo: "Producción atrasada", detalle: "Órdenes abiertas después de su fecha planificada",
+        cantidad: numero(resumen.produccion.ordenes_atrasadas), href: "/produccion", nivel: "critico",
+      },
+      puede("produccion.acceder") && numero(resumen.produccion.pendientes_aprobacion) > 0 && {
+        id: "produccion-aprobar", titulo: "Producción por aprobar", detalle: "Órdenes esperando autorización",
+        cantidad: numero(resumen.produccion.pendientes_aprobacion), href: "/produccion", nivel: "atencion",
+      },
+      puede("nomina.acceder") && numero(resumen.nomina.documentos_vencidos) > 0 && {
+        id: "documentos-vencidos", titulo: "Documentos vencidos", detalle: "Expedientes de personal que requieren actualización",
+        cantidad: numero(resumen.nomina.documentos_vencidos), href: "/nomina", nivel: "critico",
+      },
+      puede("nomina.acceder") && numero(resumen.nomina.ausencias_solicitadas) > 0 && {
+        id: "ausencias", titulo: "Ausencias por resolver", detalle: "Solicitudes pendientes de aprobación",
+        cantidad: numero(resumen.nomina.ausencias_solicitadas), href: "/nomina", nivel: "atencion",
+      },
+      puede("franquicia.caja") && numero(resumen.franquicia.cierres_pendientes_hoy) > 0 && {
+        id: "cierre-caja", titulo: "Cierre de caja pendiente", detalle: "El efectivo del día todavía no fue conciliado",
+        cantidad: numero(resumen.franquicia.cierres_pendientes_hoy), href: "/franquicia", nivel: "atencion",
+      },
+      puede("franquicia.acceder") && numero(resumen.franquicia.alertas) > 0 && {
+        id: "franquicia-alertas", titulo: "Alertas de reposición", detalle: "Solicitudes aprobadas, despachadas o por recibir",
+        cantidad: numero(resumen.franquicia.alertas), href: "/franquicia", nivel: "normal",
+      },
+    ];
+    const orden = { critico: 0, atencion: 1, normal: 2 };
+    return items.filter((item): item is Pendiente => Boolean(item))
+      .sort((a, b) => orden[a.nivel] - orden[b.nivel] || b.cantidad - a.cantidad);
+  }, [esFranquicia, puede, resumen]);
+
+  const kpis = useMemo(() => {
+    if (esFranquicia) return [
+      { etiqueta: "Ventas de hoy", valor: ENTERO.format(numero(resumen.franquicia.ventas_hoy)), nota: DINERO.format(numero(resumen.franquicia.total_ventas_hoy)), tono: "verde" },
+      { etiqueta: "Stock disponible", valor: ENTERO.format(numero(resumen.inventario.stock_disponible)), nota: "unidades del local", tono: "azul" },
+      { etiqueta: "Bajo mínimo", valor: ENTERO.format(numero(resumen.inventario.productos_bajo_minimo)), nota: "productos", tono: resumen.inventario.productos_bajo_minimo ? "rojo" : "verde" },
+      { etiqueta: "Por recibir", valor: ENTERO.format(numero(resumen.operaciones.transferencias_recibir)), nota: "transferencias", tono: "naranja" },
+    ];
+    if (perfil.rol === "nomina") return [
+      { etiqueta: "Personal activo", valor: ENTERO.format(numero(resumen.nomina.empleados_activos)), nota: "empleados", tono: "azul" },
+      { etiqueta: "Ausencias", valor: ENTERO.format(numero(resumen.nomina.ausencias_solicitadas)), nota: "por resolver", tono: "naranja" },
+      { etiqueta: "Documentos", valor: ENTERO.format(numero(resumen.nomina.documentos_por_vencer) + numero(resumen.nomina.documentos_vencidos)), nota: "vencidos o por vencer", tono: "rojo" },
+      { etiqueta: "Roles", valor: ENTERO.format(numero(resumen.nomina.periodos_pendientes)), nota: "períodos abiertos", tono: "morado" },
+    ];
+    return [
+      { etiqueta: "Stock físico", valor: ENTERO.format(numero(resumen.inventario.stock_fisico)), nota: "unidades", tono: "azul" },
+      { etiqueta: "Disponible", valor: ENTERO.format(numero(resumen.inventario.stock_disponible)), nota: "después de reservas", tono: "verde" },
+      { etiqueta: "Bajo mínimo", valor: ENTERO.format(numero(resumen.inventario.productos_bajo_minimo)), nota: "productos", tono: resumen.inventario.productos_bajo_minimo ? "rojo" : "verde" },
+      { etiqueta: "Actividad de hoy", valor: ENTERO.format(numero(resumen.inventario.movimientos_hoy)), nota: `${ENTERO.format(numero(resumen.inventario.transito_entrada))} un. en tránsito`, tono: "morado" },
+    ];
+  }, [esFranquicia, perfil.rol, resumen]);
+
+  const alcanceAlmacenes = resumen.ambito.almacenes.length ? resumen.ambito.almacenes.join(", ") : "Sin almacenes asignados";
+  const alcanceEmpresas = resumen.ambito.empresas.length ? resumen.ambito.empresas.join(", ") : "Sin empresas visibles";
 
   return (
-    <>
-      <h2 style={{ color: "#1f3864" }}>Hola, {perfil.nombre_completo.split(" ")[0]}</h2>
-
-      {error && <div className="error">No se pudieron cargar los datos: {error}</div>}
-      {cargando ? <div className="card"><div className="vacio">Cargando...</div></div> : (
-        <>
-          <div className="kpis">
-            <div className="kpi"><div className="label">Unidades en stock</div><div className="valor">{totalUnidades.toLocaleString("es-EC")}</div></div>
-            <div className="kpi"><div className="label">Stock disponible</div><div className="valor">{totalDisponible.toLocaleString("es-EC")}</div></div>
-            <div className={`kpi ${alertas.length ? "alerta" : "ok"}`}><div className="label">Alertas de stock</div><div className="valor">{alertas.length}</div></div>
-            <div className="kpi"><div className="label">En tránsito / movimientos hoy</div><div className="valor">{totalTransito.toLocaleString("es-EC")} <small>/ {movimientosHoy}</small></div></div>
+    <main className="panel-principal">
+      <section className="panel-portada">
+        <div>
+          <span className="panel-saludo">CENTRO DE TRABAJO · {ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}</span>
+          <h1>Hola, {perfil.nombre_completo.split(" ")[0]}</h1>
+          <p>{fechaLarga()}. Aquí tienes tus accesos y pendientes en un solo lugar.</p>
+        </div>
+        <div className="panel-portada-acciones">
+          <div className="panel-actualizado">
+            <span className={cargando ? "panel-pulso cargando" : "panel-pulso"} />
+            {resumen.generado_at ? `Actualizado ${horaEcuador(resumen.generado_at)}` : "Preparando resumen"}
           </div>
+          <button type="button" className="panel-refrescar" onClick={cargar} disabled={cargando}>
+            {cargando ? "Actualizando…" : "Actualizar"}
+          </button>
+        </div>
+      </section>
 
-          <div className="acciones-rapidas" aria-label="Acciones rápidas">
-            {tienePermiso(perfil, "movimientos.acceder") && ['admin', 'bodega'].includes(perfil.rol) && (
-              <Link href="/movimientos" className="accion-rapida">
-                <span>↕</span><div><strong>Entrada o salida manual</strong><small>Con referencia obligatoria y trazabilidad</small></div>
-              </Link>
-            )}
-            {tienePermiso(perfil, "operaciones.acceder") && (
-              <Link href="/operaciones" className="accion-rapida">
-                <span>⇄</span><div><strong>Solicitudes y transferencias</strong><small>Solicitar, preparar, despachar o recibir</small></div>
-              </Link>
-            )}
-            {tienePermiso(perfil, "conteos.acceder") && (
-              <Link href="/conteos" className="accion-rapida">
-                <span>✓</span><div><strong>Conteos físicos</strong><small>Conteo ciego y aprobación de diferencias</small></div>
-              </Link>
-            )}
-            {perfil.rol === 'admin' && (
-              <Link href="/productos" className="accion-rapida">
-                <span>＋</span><div><strong>Gestionar productos</strong><small>Catálogo, precios y categorías</small></div>
-              </Link>
-            )}
-            {puedeVerReportes && (
-              <Link href="/reportes" className="accion-rapida">
-                <span>▥</span><div><strong>Ver reportes</strong><small>Stock, valor, alertas y kardex</small></div>
-              </Link>
-            )}
-            {tienePermiso(perfil, "control.acceder") && (
-              <Link href="/control" className="accion-rapida">
-                <span>⚑</span><div><strong>Centro de Control</strong><small>Aprobaciones, diferencias e incidencias</small></div>
-              </Link>
-            )}
+      <section className="panel-ambito" aria-label="Ámbito de información">
+        <div title={alcanceAlmacenes}>
+          <span>ALMACENES</span><strong>{resumen.ambito.almacenes_total || "—"}</strong><small>{alcanceAlmacenes}</small>
+        </div>
+        <div title={alcanceEmpresas}>
+          <span>EMPRESAS</span><strong>{resumen.ambito.empresas_total || "—"}</strong><small>{alcanceEmpresas}</small>
+        </div>
+        <label className="panel-buscador">
+          <span>Buscar un módulo o acción</span>
+          <div>
+            <input ref={buscadorRef} value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)}
+              placeholder="Ej.: conteo, compras, empleados…" />
+            {busqueda
+              ? <button type="button" onClick={() => setBusqueda("")} aria-label="Limpiar búsqueda">×</button>
+              : <kbd>/</kbd>}
           </div>
+        </label>
+      </section>
 
-          {alertas.length > 0 && (
-            <div className="card">
-              <div className="header-row">
-                <h3>⚠ Requieren reposición</h3>
-                {puedeVerReportes && <Link href="/reportes" style={{ fontSize: 13, color: "#2e75b6" }}>Ver reporte completo →</Link>}
-              </div>
-              <table>
-                <thead><tr><th>Producto</th><th>Talla</th><th>Almacén</th><th className="num">Actual</th><th className="num">Mínimo</th></tr></thead>
-                <tbody>
-                  {alertas.slice(0, 8).map((f, i) => (
-                    <tr key={i} className="fila-alerta">
-                      <td>
-                        {f.producto}
-                        <div style={{ fontSize: 12, color: "#991b1b" }}>{f.sku}</div>
-                        <div style={{ fontSize: 11, color: "#6b7280" }}>
-                          {f.categoria ?? "Sin categoría"}{f.subcategoria ? ` / ${f.subcategoria}` : ""}
-                        </div>
-                      </td>
-                      <td>{f.talla ?? "-"}</td><td>{f.almacen}</td>
-                      <td className="num">{f.stock_disponible}</td><td className="num">{f.stock_minimo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {alertas.length > 8 && <p style={{ fontSize: 13, color: "#6b7280" }}>y {alertas.length - 8} más...</p>}
+      {error && <div className="error-box panel-error">{error}</div>}
+
+      <section className="panel-kpis" aria-label="Resumen de hoy">
+        {kpis.map((kpi) => (
+          <article className={`panel-kpi ${kpi.tono}`} key={kpi.etiqueta}>
+            <span>{kpi.etiqueta}</span><strong>{cargando ? "···" : kpi.valor}</strong><small>{kpi.nota}</small>
+          </article>
+        ))}
+      </section>
+
+      <div className="panel-contenido">
+        <section className="panel-modulos-seccion">
+          <div className="panel-seccion-titulo">
+            <div><span>ACCESOS</span><h2>Mis módulos</h2></div>
+            <small>{modulosVisibles.length} disponibles según tu rol</small>
+          </div>
+          <div className="panel-modulos-grid">
+            {modulosVisibles.map((modulo) => (
+              <article className={`panel-modulo ${modulo.tono}`} key={modulo.id}>
+                <div className="panel-modulo-cabecera">
+                  <span className="panel-modulo-icono">{modulo.icono}</span>
+                  {modulo.pendiente > 0 && <span className="panel-modulo-contador">
+                    {ENTERO.format(modulo.pendiente)} {modulo.pendienteTexto}
+                  </span>}
+                </div>
+                <span className="panel-modulo-subtitulo">{modulo.subtitulo}</span>
+                <h3>{modulo.titulo}</h3><p>{modulo.descripcion}</p>
+                <div className="panel-modulo-enlaces">
+                  {modulo.enlaces.map((enlace) => <Link href={enlace.href} key={`${modulo.id}-${enlace.href}`}>{enlace.etiqueta}</Link>)}
+                </div>
+                <Link href={modulo.href} className="panel-modulo-abrir" aria-label={`Abrir ${modulo.titulo}`}>
+                  Abrir <span aria-hidden="true">→</span>
+                </Link>
+              </article>
+            ))}
+            {!modulosVisibles.length && <div className="panel-sin-resultados">
+              <strong>No encontramos ese acceso</strong><span>Prueba con otro nombre o limpia la búsqueda.</span>
+              <button type="button" onClick={() => setBusqueda("")}>Ver todos mis módulos</button>
+            </div>}
+          </div>
+        </section>
+
+        <aside className="panel-lateral">
+          <section className="panel-pendientes">
+            <div className="panel-seccion-titulo compacto">
+              <div><span>PRIORIDAD</span><h2>Por atender</h2></div>
+              <strong>{pendientes.reduce((total, item) => total + item.cantidad, 0)}</strong>
             </div>
-          )}
-
-          <div className="card">
-            <div className="header-row">
-              <h3>Actividad reciente</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
-                  <option value="">Todas las empresas</option>
-                  {empresas.map((e) => <option key={e.id} value={e.id}>{e.razon_social}</option>)}
-                </select>
-                <Link href="/movimientos" style={{ fontSize: 13, color: "#2e75b6" }}>Ver todo →</Link>
-              </div>
+            <div className="panel-pendientes-lista">
+              {pendientes.slice(0, 8).map((item) => <Link href={item.href} className={`panel-pendiente ${item.nivel}`} key={item.id}>
+                <span className="panel-pendiente-marca" />
+                <span className="panel-pendiente-texto"><strong>{item.titulo}</strong><small>{item.detalle}</small></span>
+                <b>{ENTERO.format(item.cantidad)}</b>
+              </Link>)}
+              {!cargando && pendientes.length === 0 && <div className="panel-al-dia">
+                <span>✓</span><strong>Todo al día</strong><small>No tienes pendientes críticos en este momento.</small>
+              </div>}
+              {cargando && <div className="panel-cargando-lineas"><i /><i /><i /></div>}
             </div>
-            <table>
-              <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th className="num">Cant.</th><th>Usuario</th></tr></thead>
-              <tbody>
-                {movs.map((m) => (
-                  <tr key={m.id} className={m.anulado ? "fila-anulada" : ""}>
-                    <td style={{ whiteSpace: "nowrap" }}>{fecha(m.created_at)}</td>
-                    <td>
-                      <span className={`badge ${m.tipo}`}>{ETIQUETA_TIPO[m.tipo] ?? m.tipo}</span>
-                      {m.anulado && <span className="badge anulado" style={{ marginLeft: 4 }}>ANULADO</span>}
-                    </td>
-                    <td>
-                      {m.productos?.nombre}
-                      {(m.productos?.categoria || m.productos?.subcategoria) && (
-                        <div style={{ fontSize: 11, color: "#6b7280" }}>
-                          {m.productos?.categoria ?? "Sin categoría"}{m.productos?.subcategoria ? ` / ${m.productos.subcategoria}` : ""}
-                        </div>
-                      )}
-                    </td>
-                    <td>{m.almacenes?.nombre}{m.almacen_destino ? ` → ${m.almacen_destino.nombre}` : ""}</td>
-                    <td className="num">{m.cantidad}</td>
-                    <td>{m.perfiles?.nombre_completo}</td>
-                  </tr>
-                ))}
-                {!movs.length && <tr><td colSpan={6} className="vacio">Sin movimientos registrados aún.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </>
+          </section>
+
+          <section className="panel-actividad">
+            <div className="panel-seccion-titulo compacto"><div><span>TRAZABILIDAD</span><h2>Actividad reciente</h2></div></div>
+            <div className="panel-actividad-lista">
+              {resumen.actividad.slice(0, 6).map((item, indice) => <Link href={item.href} className="panel-actividad-item" key={`${item.fecha}-${indice}`}>
+                <span className="panel-actividad-icono">{item.tipo === "venta" ? "$" : "↕"}</span>
+                <span><strong>{item.titulo}</strong><small>{item.detalle}</small><time>{horaEcuador(item.fecha)}</time></span>
+              </Link>)}
+              {!cargando && !resumen.actividad.length && <div className="panel-actividad-vacia">
+                Todavía no existe actividad visible para tu ámbito.
+              </div>}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
   );
 }
