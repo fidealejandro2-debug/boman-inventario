@@ -76,6 +76,13 @@ export default function CajaFranquicia({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [tituloAviso, setTituloAviso] = useState("Listo");
+
+  /** El encabezado dice QUE paso; el detalle, que significa. */
+  function confirmar(titulo: string, texto: string) {
+    setTituloAviso(titulo);
+    setAviso(texto);
+  }
 
   const primerDia = `${hoyLocalISO().slice(0, 7)}-01`;
   const [desde, setDesde] = useState(primerDia);
@@ -181,7 +188,7 @@ export default function CajaFranquicia({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Movimiento registrado en la caja.");
+    confirmar("Movimiento registrado", "Ya consta en el diario de caja del local.");
     setForm({ ...form, concepto: "", monto: "", referencia: "" });
     cargar();
   }
@@ -204,7 +211,7 @@ export default function CajaFranquicia({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Movimiento revertido; queda su contrapartida en el diario.");
+    confirmar("Movimiento revertido", "Queda su contrapartida en el diario como evidencia.");
     cargar();
   }
 
@@ -236,7 +243,7 @@ export default function CajaFranquicia({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Caja cerrada. El dia queda bloqueado hasta una reapertura justificada.");
+    confirmar("Caja cerrada", "El día queda bloqueado hasta una reapertura justificada.");
     setNotaCierre("");
     cargar();
   }
@@ -255,7 +262,7 @@ export default function CajaFranquicia({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Caja reabierta. Ya puedes corregir los movimientos y volver a cerrarla.");
+    confirmar("Caja reabierta", "Ya puedes corregir los movimientos y volver a cerrarla.");
     cargar();
   }
 
@@ -275,6 +282,7 @@ export default function CajaFranquicia({
       <Aviso
         error={error}
         aviso={aviso}
+        titulo={tituloAviso}
         onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
       />
 

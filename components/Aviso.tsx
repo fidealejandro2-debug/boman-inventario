@@ -18,12 +18,15 @@ export default function Aviso({
   aviso,
   onCerrar,
   segundos = 6,
+  titulo = "Listo",
 }: {
   error?: string | null;
   aviso?: string | null;
   /** Limpia el estado en el componente padre. */
   onCerrar: (cual: "error" | "aviso") => void;
   segundos?: number;
+  /** Encabezado de la confirmación: "Venta registrada", "Caja cerrada"… */
+  titulo?: string;
 }) {
   useEffect(() => {
     if (!aviso) return;
@@ -49,7 +52,10 @@ export default function Aviso({
       {error && (
         <div className="aviso-tarjeta es-error" role="alert">
           <span className="aviso-icono" aria-hidden="true">!</span>
-          <p>{error}</p>
+          <div className="aviso-cuerpo">
+            <strong>No se pudo completar</strong>
+            <p>{error}</p>
+          </div>
           <button
             type="button"
             aria-label="Cerrar mensaje"
@@ -61,8 +67,18 @@ export default function Aviso({
       )}
       {aviso && (
         <div className="aviso-tarjeta es-ok" role="status">
-          <span className="aviso-icono" aria-hidden="true">✓</span>
-          <p>{aviso}</p>
+          {/* El check se dibuja, no es un carácter: así se anima el trazo y la
+              confirmación se nota de verdad sin tapar la pantalla. */}
+          <span className="aviso-check" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="30" height="30">
+              <circle className="check-fondo" cx="16" cy="16" r="14" />
+              <path className="check-trazo" d="M9 16.5l4.8 4.8L23 12" />
+            </svg>
+          </span>
+          <div className="aviso-cuerpo">
+            <strong>{titulo}</strong>
+            <p>{aviso}</p>
+          </div>
           <button
             type="button"
             aria-label="Cerrar mensaje"

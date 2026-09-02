@@ -72,6 +72,13 @@ export default function VentasFranquicia({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [tituloAviso, setTituloAviso] = useState("Listo");
+
+  /** El encabezado dice QUE paso; el detalle, que significa. */
+  function confirmar(titulo: string, texto: string) {
+    setTituloAviso(titulo);
+    setAviso(texto);
+  }
 
   const [busqueda, setBusqueda] = useState("");
   const [lineas, setLineas] = useState<Linea[]>([]);
@@ -244,7 +251,7 @@ export default function VentasFranquicia({
     setGuardando(false);
     if (error) return setError(mensajeError(error));
 
-    setAviso(`Venta registrada por ${dinero(total)}. El stock del local ya se descontó.`);
+    confirmar("Venta registrada", `Por ${dinero(total)}. El stock del local ya se descontó.`);
     setLineas([]);
     setDescuentoGeneral("0");
     setReferencia("");
@@ -272,7 +279,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso((data as { mensaje?: string } | null)?.mensaje ?? "Venta anulada.");
+    confirmar("Venta anulada", (data as { mensaje?: string } | null)?.mensaje ?? "El stock volvió al local.");
     cargar();
   }
 
@@ -286,6 +293,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
       <Aviso
         error={error}
         aviso={aviso}
+        titulo={tituloAviso}
         onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
       />
 

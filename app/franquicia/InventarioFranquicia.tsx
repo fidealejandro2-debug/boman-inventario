@@ -48,6 +48,13 @@ export default function InventarioFranquicia({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [tituloAviso, setTituloAviso] = useState("Listo");
+
+  /** El encabezado dice QUE paso; el detalle, que significa. */
+  function confirmar(titulo: string, texto: string) {
+    setTituloAviso(titulo);
+    setAviso(texto);
+  }
   const [busqueda, setBusqueda] = useState("");
   // El local ve el catalogo completo porque producto_almacen_config se siembra
   // para todas las prendas al crear el almacen. Para vender, lo unico que
@@ -151,10 +158,11 @@ export default function InventarioFranquicia({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso(
+    confirmar(
+      tipo === "entrada" ? "Entrada registrada" : "Salida registrada",
       tipo === "entrada"
-        ? "Entrada registrada; el stock del local subió."
-        : "Salida registrada; el stock del local bajó."
+        ? "El stock del local subió."
+        : "El stock del local bajó."
     );
     setLineas([]);
     setMotivo("");
@@ -197,7 +205,7 @@ export default function InventarioFranquicia({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso(`${items.length} limites de reposicion guardados.`);
+    confirmar("Límites guardados", `${items.length} producto(s) actualizados.`);
     setMinimos({});
     setEditandoMinimos(false);
     cargar();
@@ -213,7 +221,7 @@ export default function InventarioFranquicia({
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
-    setAviso("Solicitud de reposicion creada. Puedes seguirla en Operaciones.");
+    confirmar("Solicitud creada", "Puedes seguirla en Operaciones.");
     cargar();
   }
 
@@ -233,6 +241,7 @@ export default function InventarioFranquicia({
       <Aviso
         error={error}
         aviso={aviso}
+        titulo={tituloAviso}
         onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
       />
 

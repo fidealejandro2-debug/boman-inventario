@@ -310,6 +310,7 @@ export default function FacturaXmlFranquicia({
       <Aviso
         error={error}
         aviso={aviso}
+        titulo="Factura aplicada"
         onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
       />
 
