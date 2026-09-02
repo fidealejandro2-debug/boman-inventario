@@ -15,6 +15,7 @@ import {
 } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
 import CalendarioFeriados from "./CalendarioFeriados";
+import Aviso from "@/components/Aviso";
 
 type Ausencia = {
   id: string;
@@ -220,9 +221,7 @@ export default function AusenciasTab({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       <CalendarioFeriados grupoId={grupoId} puedeEscribir={puedeEscribir} />
 
       {conAlerta.length > 0 && (

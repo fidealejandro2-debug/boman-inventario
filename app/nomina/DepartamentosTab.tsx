@@ -8,6 +8,7 @@ import {
   type Departamento,
   type Empleado,
 } from "./lib";
+import Aviso from "@/components/Aviso";
 
 type Props = {
   puedeEscribir: boolean;
@@ -151,8 +152,7 @@ export default function DepartamentosTab({
         Los departamentos pertenecen al grupo económico completo, no a un RUC. Cambiar
         el RUC que afilia o paga a una persona no cambia su departamento.
       </p>
-
-      {error && <p className="error">{error}</p>}
+      <Aviso error={error} onCerrar={() => setError(null)} />
       {mensaje && <p className="ok">{mensaje}</p>}
 
       {puedeEscribir && (

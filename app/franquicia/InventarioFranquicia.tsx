@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { exportarCSV } from "@/lib/utils";
+import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, hoyLocalISO, mensajeError } from "./lib";
 
@@ -229,8 +230,11 @@ export default function InventarioFranquicia({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
+      <Aviso
+        error={error}
+        aviso={aviso}
+        onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
+      />
 
       <div className="kpis">
         <div className="kpi">

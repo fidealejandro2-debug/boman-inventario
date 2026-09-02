@@ -12,6 +12,7 @@ import {
   type Empresa,
 } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
+import Aviso from "@/components/Aviso";
 
 /** Cambio de sueldo real o de afiliación sobre una persona ya registrada. */
 export default function CambioSueldoForm({
@@ -167,7 +168,7 @@ export default function CambioSueldoForm({
   return (
     <div className="card-interna">
       <h4>Cambio en {nombre}</h4>
-      {error && <p className="error">{error}</p>}
+      <Aviso error={error} onCerrar={() => setError(null)} />
 
       <div className="tabs">
         <button

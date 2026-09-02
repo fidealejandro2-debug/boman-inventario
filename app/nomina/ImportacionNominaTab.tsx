@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { mensajeError, type Empleado, type Empresa } from "./lib";
+import Aviso from "@/components/Aviso";
 
 type TipoCarga = "atraso" | "ausencia" | "descuento" | "anticipo";
 type EstadoFila = "pendiente" | "guardada" | "error";
@@ -634,10 +635,7 @@ export default function ImportacionNominaTab({
         revisarse, emitirse y notificarse en Novedades antes de poder llegar al rol. Así no se
         mezcla con el descuento automático por horas de una ausencia ni se cobra dos veces.
       </div>
-
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       <div className="filtros">
         <input
           type="file"

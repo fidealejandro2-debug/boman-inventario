@@ -11,6 +11,7 @@ import {
   type EmpleadoEdicion,
   type Empresa,
 } from "./lib";
+import Aviso from "@/components/Aviso";
 
 type Props = {
   empresas: Empresa[];
@@ -220,7 +221,7 @@ export default function EmpleadoForm({
   return (
     <div className="card-interna">
       <h4>{editando ? "Editar datos personales" : "Nueva persona"}</h4>
-      {error && <p className="error">{error}</p>}
+      <Aviso error={error} onCerrar={() => setError(null)} />
 
       <h5>Datos personales</h5>
       <div className="form-grid">

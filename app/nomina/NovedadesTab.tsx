@@ -16,6 +16,7 @@ import {
 } from "./lib";
 import NovedadImpresion from "./NovedadImpresion";
 import SelectorDocumento from "./SelectorDocumento";
+import Aviso from "@/components/Aviso";
 
 type Novedad = {
   novedad_id: string;
@@ -344,9 +345,7 @@ export default function NovedadesTab({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       {reincidentes.length > 0 && (
         <p className="aviso">
           <strong>{reincidentes.length}</strong> persona(s) acumulan tres o más novedades

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { exportarCSV } from "@/lib/utils";
+import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import {
   CATEGORIAS_CAJA,
@@ -271,8 +272,11 @@ export default function CajaFranquicia({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
+      <Aviso
+        error={error}
+        aviso={aviso}
+        onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
+      />
 
       <p className="ayuda">
         Diario operativo del local para saber cuánto entra y cuánto sale. Es control

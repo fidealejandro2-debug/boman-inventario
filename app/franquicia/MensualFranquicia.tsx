@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, mensajeError } from "./lib";
 
@@ -183,7 +184,7 @@ export default function MensualFranquicia({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
+      <Aviso error={error} onCerrar={() => setError(null)} />
 
       {!meses.length ? (
         <p className="ayuda">

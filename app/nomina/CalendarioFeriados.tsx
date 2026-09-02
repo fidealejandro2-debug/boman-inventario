@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { hoyISO, mensajeError, soloFecha } from "./lib";
+import Aviso from "@/components/Aviso";
 
 type Feriado = {
   fecha: string;
@@ -177,7 +178,7 @@ export default function CalendarioFeriados({
         Las ausencias solo se calculan con un calendario confirmado. Revisa los días
         nacionales y agrega los feriados locales de cada tienda o bodega.
       </p>
-      {error && <p className="error">{error}</p>}
+      <Aviso error={error} onCerrar={() => setError(null)} />
       {mensaje && <p className="ok">{mensaje}</p>}
 
       <div className="filtros">

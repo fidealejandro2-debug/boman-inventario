@@ -12,6 +12,7 @@ import {
   ETIQUETA_DOCUMENTO,
   type DocumentoEmpleado,
 } from "./documentos";
+import Aviso from "@/components/Aviso";
 
 export default function ExpedienteTab({
   puedeEscribir,
@@ -135,9 +136,7 @@ export default function ExpedienteTab({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       <div className="filtros">
         <select value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)}>
           <option value="">Elige a la persona…</option>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { dinero, mensajeError } from "./lib";
+import Aviso from "@/components/Aviso";
 
 type Parametros = {
   anio: number;
@@ -99,9 +100,7 @@ export default function ParametrosTab({ esAdmin }: { esAdmin: boolean }) {
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       {faltaAnioActual && (
         <p className="aviso">
           No hay parámetros cargados para {anioActual}. Sin ellos no se puede calcular

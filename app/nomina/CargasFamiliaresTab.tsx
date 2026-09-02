@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { hoyISO, mensajeError, soloFecha, type Empleado } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
+import Aviso from "@/components/Aviso";
 
 type CargaFamiliar = {
   id: string;
@@ -232,8 +233,7 @@ export default function CargasFamiliaresTab({
         o conviviente, los hijos menores de 18 años al cierre del ejercicio y los hijos
         con discapacidad de cualquier edad. El sistema conserva cada vigencia.
       </p>
-
-      {error && <p className="error">{error}</p>}
+      <Aviso error={error} onCerrar={() => setError(null)} />
       {mensaje && <p className="ok">{mensaje}</p>}
 
       <div className="kpis compactos">

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { exportarCSV, fecha as fmtFecha } from "@/lib/utils";
+import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, hoyLocalISO, MEDIOS_PAGO, mensajeError } from "./lib";
 
@@ -282,8 +283,11 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
+      <Aviso
+        error={error}
+        aviso={aviso}
+        onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
+      />
 
       <div className="kpis">
         <div className="kpi">

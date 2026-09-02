@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import { ETIQUETA_SALIDA, soloFecha, hoyISO, mensajeError } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
+import Aviso from "@/components/Aviso";
 
 type Reingresable = {
   empleado_id: string;
@@ -215,9 +216,7 @@ export default function VinculosTab({ puedeEscribir }: { puedeEscribir: boolean 
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       <p className="ayuda">
         Cuando alguien deja de venir y vuelve hay dos casos distintos. Si{" "}
         <strong>nunca se liquidó</strong>, no es un reingreso: es una ausencia, y se

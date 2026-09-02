@@ -7,6 +7,7 @@ import {
   TIPOS_DOCUMENTO,
   type DocumentoEmpleado,
 } from "./documentos";
+import Aviso from "@/components/Aviso";
 
 /**
  * Elige un documento de respaldo del expediente, o sube uno en el momento.
@@ -110,8 +111,7 @@ export default function SelectorDocumento({
           {modo === "elegir" ? "Subir uno nuevo" : "Elegir del expediente"}
         </button>
       </div>
-
-      {error && <p className="error">{error}</p>}
+      <Aviso error={error} onCerrar={() => setError(null)} />
 
       {modo === "elegir" ? (
         <select value={valor ?? ""} onChange={(e) => onCambio(e.target.value || null)}>

@@ -7,6 +7,7 @@ import {
   calcularHashXml,
   type FacturaSri,
 } from "@/lib/xmlFacturaSri";
+import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, MEDIOS_PAGO, mensajeError } from "./lib";
 
@@ -306,8 +307,11 @@ export default function FacturaXmlFranquicia({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
+      <Aviso
+        error={error}
+        aviso={aviso}
+        onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
+      />
 
       <p className="ayuda">
         Sube el XML de la factura que emitió tu facturador. Cada línea se relaciona con

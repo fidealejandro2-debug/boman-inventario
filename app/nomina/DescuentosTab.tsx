@@ -16,6 +16,7 @@ import {
 } from "./lib";
 import SelectorDocumento from "./SelectorDocumento";
 import ActaDescuento, { type DatosActa } from "./ActaDescuento";
+import Aviso from "@/components/Aviso";
 
 type Anticipo = {
   id: string;
@@ -398,9 +399,7 @@ Motivo del archivo:`
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       {pendientes.length > 0 && (
         <div className="aviso">
           <strong>

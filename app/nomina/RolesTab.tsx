@@ -6,6 +6,7 @@ import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { exportarCSV } from "@/lib/utils";
 import { dinero, mensajeError, pedirMotivo, type Empresa } from "./lib";
 import RolImpresion from "./RolImpresion";
+import Aviso from "@/components/Aviso";
 
 type Periodo = {
   periodo_id: string;
@@ -277,9 +278,7 @@ export default function RolesTab({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
-
+      <Aviso error={error} aviso={aviso} onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))} />
       {puedeEscribir && (
         <div className="form-inline">
           <strong>Abrir período:</strong>
