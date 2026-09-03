@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import EmpleadoForm from "./EmpleadoForm";
 import CambioSueldoForm from "./CambioSueldoForm";
+import BeneficiosForm from "./BeneficiosForm";
 import {
   dinero,
   mensajeError,
@@ -38,6 +39,9 @@ type Personal = {
   brecha_sueldo: number | null;
   dias_entre_ingreso_y_afiliacion: number | null;
   paga_otro_ruc: boolean | null;
+  mensualiza_decimo_tercero: boolean | null;
+  mensualiza_decimo_cuarto: boolean | null;
+  paga_fondos_reserva_mensual: boolean | null;
 };
 
 type DocPorVencer = {
@@ -66,6 +70,7 @@ export default function PersonalTab({
   const supabase = createClient();
   const [mostrarForm, setMostrarForm] = useState(false);
   const [cambiando, setCambiando] = useState<Personal | null>(null);
+  const [beneficios, setBeneficios] = useState<Personal | null>(null);
   const [editando, setEditando] = useState<EmpleadoEdicion | null>(null);
   const [cargandoEdicion, setCargandoEdicion] = useState(false);
   const [filas, setFilas] = useState<Personal[]>([]);
@@ -238,6 +243,23 @@ export default function PersonalTab({
           onCancelar={() => setCambiando(null)}
           onListo={() => {
             setCambiando(null);
+            cargar();
+            onCambio();
+          }}
+        />
+      )}
+
+      {beneficios && puedeEscribir && (
+        <BeneficiosForm
+          empleadoId={beneficios.empleado_id}
+          nombre={beneficios.nombre_completo}
+          afiliado={beneficios.afiliado}
+          decimoTerceroActual={beneficios.mensualiza_decimo_tercero}
+          decimoCuartoActual={beneficios.mensualiza_decimo_cuarto}
+          fondosMensualActual={beneficios.paga_fondos_reserva_mensual}
+          onCancelar={() => setBeneficios(null)}
+          onListo={() => {
+            setBeneficios(null);
             cargar();
             onCambio();
           }}
@@ -417,16 +439,30 @@ export default function PersonalTab({
                       Datos
                     </button>
                     {f.estado === "activo" && (
+                      <>
                         <button
                           className="btn-mini secondary"
                           onClick={() => {
                             setEditando(null);
                             setMostrarForm(false);
+                            setBeneficios(null);
                             setCambiando(f);
                           }}
                         >
                           Sueldo / IESS
                         </button>
+                        <button
+                          className="btn-mini secondary"
+                          onClick={() => {
+                            setEditando(null);
+                            setMostrarForm(false);
+                            setCambiando(null);
+                            setBeneficios(f);
+                          }}
+                        >
+                          Décimos
+                        </button>
+                      </>
                     )}
                   </td>
                 )}

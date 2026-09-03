@@ -529,6 +529,10 @@ tr.fila-alerta td { color: #991b1b; }
   top: 10px;
   z-index: 18;
   display: flex;
+  /* Con muchas pestanas (Nomina tiene 13) la fila se desbordaba y, como la
+     barra de scroll esta oculta, se veia cortada sin ninguna pista de que
+     habia mas. Bajan de linea en vez de esconderse. */
+  flex-wrap: wrap;
   gap: 4px;
   width: fit-content;
   max-width: 100%;
@@ -543,6 +547,11 @@ tr.fila-alerta td { color: #991b1b; }
   scrollbar-width: none;
 }
 .tabs::-webkit-scrollbar { display: none; }
+/* En pantalla chica envolver daria una barra pegajosa de cuatro filas que se
+   come el alto util: ahi si conviene la fila unica que se desplaza. */
+@media (max-width: 900px) {
+  .tabs { flex-wrap: nowrap; }
+}
 .tab {
   flex: 0 0 auto;
   padding: 7px 13px; border-radius: 8px; cursor: pointer;

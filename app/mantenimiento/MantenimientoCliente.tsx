@@ -49,7 +49,9 @@ function fecha(valor: string | null) {
   const [a, m, d] = valor.slice(0, 10).split("-");
   return `${d}/${m}/${a}`;
 }
-async function etiqueta(valor: string) { return valor.replaceAll("_", " "); }
+// Sin async: se usa dentro del JSX y una promesa como hijo de React revienta
+// la pantalla ("Objects are not valid as a React child").
+function etiqueta(valor: string) { return valor.replaceAll("_", " "); }
 
 export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
   const supabase = useMemo(() => createClient(), []);
