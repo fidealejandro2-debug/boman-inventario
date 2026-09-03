@@ -1896,3 +1896,29 @@ button.btn-mini {
   .import-resultado { grid-template-columns: 1fr 1fr; }
   .import-resultado .btn-enlace { grid-column: 1 / -1; justify-content: center; }
 }
+
+/* Selector del consolidado entre franquicias y tiendas propias */
+.consolidado-tabs {
+  display: inline-flex; width: fit-content; gap: 4px; padding: 4px;
+  border: 1px solid #d8e2ec; border-radius: 12px; background: #edf2f7;
+}
+.consolidado-tabs button {
+  padding: 9px 18px; border: 0; border-radius: 9px; background: transparent;
+  color: #53657a; box-shadow: none; font-size: 13px;
+}
+.consolidado-tabs button:hover { background: #fff; color: #174d79; }
+.consolidado-tabs button.activo {
+  background: #174d79; color: #fff; box-shadow: 0 4px 12px rgba(23, 77, 121, .2);
+}
+.consolidado-contenido { display: grid; gap: 16px; }
+.tienda-aclaracion {
+  display: flex; align-items: center; gap: 12px; padding: 12px 15px;
+  border-left: 4px solid #2e75b6; color: #53657a; font-size: 12.5px;
+}
+.tienda-aclaracion strong { color: #173f66; white-space: nowrap; }
+
+@media (max-width: 600px) {
+  .consolidado-tabs { width: 100%; }
+  .consolidado-tabs button { flex: 1; padding-inline: 10px; }
+  .tienda-aclaracion { align-items: flex-start; flex-direction: column; gap: 4px; }
+}

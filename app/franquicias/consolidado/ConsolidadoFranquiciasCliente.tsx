@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { hoyLocalISO, mensajeError } from "@/app/franquicia/lib";
+import ConsolidadoTiendasCliente from "./ConsolidadoTiendasCliente";
 
 type FilaConsolidado = {
   franquicia_id: string;
@@ -64,6 +65,7 @@ function numero(valor: unknown) {
 
 export default function ConsolidadoFranquiciasCliente() {
   const supabase = useMemo(() => createClient(), []);
+  const [tipoLocal, setTipoLocal] = useState<"franquicias" | "tiendas">("franquicias");
   const [desde, setDesde] = useState(inicioMesLocal);
   const [hasta, setHasta] = useState(hoyLocalISO);
   const [rango, setRango] = useState({ desde: inicioMesLocal(), hasta: hoyLocalISO() });
@@ -186,12 +188,19 @@ export default function ConsolidadoFranquiciasCliente() {
     <>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">Franquicias · v62</span>
-          <h1>Panel consolidado</h1>
-          <p>Compara la operación, caja e inventario de todos los locales desde una sola vista.</p>
+          <span className="eyebrow">LOCALES · v62–v64</span>
+          <h1>Panel consolidado de locales</h1>
+          <p>Compara franquicias y tiendas propias sin mezclar sus modelos de operación.</p>
         </div>
-        <button onClick={exportar} disabled={cargando || !visibles.length}>Descargar Excel</button>
+        {tipoLocal === "franquicias" && <button onClick={exportar} disabled={cargando || !visibles.length}>Descargar Excel</button>}
       </div>
+
+      <div className="consolidado-tabs" role="tablist" aria-label="Tipo de local">
+        <button type="button" role="tab" aria-selected={tipoLocal === "franquicias"} className={tipoLocal === "franquicias" ? "activo" : ""} onClick={() => setTipoLocal("franquicias")}>Franquicias</button>
+        <button type="button" role="tab" aria-selected={tipoLocal === "tiendas"} className={tipoLocal === "tiendas" ? "activo" : ""} onClick={() => setTipoLocal("tiendas")}>Tiendas propias</button>
+      </div>
+
+      {tipoLocal === "tiendas" ? <ConsolidadoTiendasCliente /> : <>
 
       <div className="filtros fq-consolidado-filtros">
         <label>Desde<input type="date" value={desde} max={hasta} onChange={(e) => setDesde(e.target.value)} /></label>
@@ -252,6 +261,7 @@ export default function ConsolidadoFranquiciasCliente() {
           </div>
         )}
       </div>
+      </>}
     </>
   );
 }
