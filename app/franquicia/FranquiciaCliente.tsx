@@ -26,9 +26,11 @@ type Pestana = "ventas" | "factura" | "caja" | "inventario" | "alertas" | "mensu
 export default function FranquiciaCliente({
   rol,
   permisos,
+  franquiciaInicialId,
 }: {
   rol: RolUsuario;
   permisos: PermisoCodigo[];
+  franquiciaInicialId?: string;
 }) {
   const perfil = { rol, permisos };
   const supabase = createClient();
@@ -62,7 +64,9 @@ export default function FranquiciaCliente({
         else {
           const lista = (data as Franquicia[]) ?? [];
           setLocales(lista);
-          setFranquicia(lista[0] ?? null);
+          setFranquicia(
+            lista.find((local) => local.id === franquiciaInicialId) ?? lista[0] ?? null
+          );
         }
         setCargando(false);
         return;
@@ -91,7 +95,7 @@ export default function FranquiciaCliente({
       else setFranquicia(data as Franquicia);
       setCargando(false);
     })();
-  }, [supabase, esRevision]);
+  }, [supabase, esRevision, franquiciaInicialId]);
 
   if (cargando) return <p className="ayuda">Cargando local…</p>;
   if (error) return <p className="error">No se pudo abrir el local: {error}</p>;

@@ -1,19 +1,19 @@
 export const dynamic = "force-dynamic";
 
+import Navbar from "@/components/Navbar";
 import { getPerfilActual, tienePermiso } from "@/lib/getPerfil";
 import { redirect } from "next/navigation";
-import Navbar from "@/components/Navbar";
-import ImportadorGeneralCliente from "./ImportadorGeneralCliente";
+import ConsolidadoFranquiciasCliente from "./ConsolidadoFranquiciasCliente";
 
-export default async function ImportarPage() {
+export default async function ConsolidadoFranquiciasPage() {
   const perfil = await getPerfilActual();
-  if (!tienePermiso(perfil, "importaciones.acceder")) redirect("/dashboard");
+  if (!tienePermiso(perfil, "franquicia.consolidado")) redirect("/dashboard");
 
   return (
     <>
       <Navbar perfil={perfil} />
       <main className="container">
-        <ImportadorGeneralCliente perfil={perfil} />
+        <ConsolidadoFranquiciasCliente />
       </main>
     </>
   );

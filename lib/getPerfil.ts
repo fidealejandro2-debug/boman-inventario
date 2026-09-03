@@ -18,7 +18,7 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
     "produccion.acceder", "notificaciones.acceder",
-    "mantenimiento.acceder", "mantenimiento.editar",
+    "mantenimiento.acceder", "mantenimiento.editar", "importaciones.acceder",
   ],
   logistica: [
     "inventario.acceder", "operaciones.acceder",
@@ -30,28 +30,30 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
     "produccion.acceder", "control.acceder", "reportes.acceder",
     "nomina.acceder", "notificaciones.acceder", "notificaciones.publicar",
-    "mantenimiento.acceder",
+    "mantenimiento.acceder", "franquicia.consolidado",
   ],
   tienda: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "notificaciones.acceder",
+    "importaciones.acceder",
   ],
   control: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
     "produccion.acceder", "control.acceder", "reportes.acceder",
     "notificaciones.acceder", "notificaciones.publicar",
-    "mantenimiento.acceder", "mantenimiento.editar",
+    "mantenimiento.acceder", "mantenimiento.editar", "franquicia.consolidado",
+    "importaciones.acceder",
   ],
   nomina: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "nomina.acceder", "nomina.editar",
-    "notificaciones.acceder",
+    "notificaciones.acceder", "importaciones.acceder",
   ],
   franquiciado: [
     "inventario.acceder", "operaciones.acceder", "franquicia.acceder",
     "franquicia.ventas", "franquicia.caja", "franquicia.inventario",
-    "franquicia.reposicion", "notificaciones.acceder",
+    "franquicia.reposicion", "notificaciones.acceder", "importaciones.acceder",
   ],
   vendedor_franquicia: [
     "inventario.acceder", "franquicia.acceder", "franquicia.ventas",

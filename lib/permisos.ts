@@ -28,10 +28,12 @@ export type PermisoCodigo =
   | "franquicia.reposicion"
   | "franquicia.precio_libre"
   | "franquicia.descuento"
+  | "franquicia.consolidado"
   | "notificaciones.acceder"
   | "notificaciones.publicar"
   | "mantenimiento.acceder"
-  | "mantenimiento.editar";
+  | "mantenimiento.editar"
+  | "importaciones.acceder";
 
 export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "inventario.acceder",
@@ -52,10 +54,12 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "franquicia.reposicion",
   "franquicia.precio_libre",
   "franquicia.descuento",
+  "franquicia.consolidado",
   "notificaciones.acceder",
   "notificaciones.publicar",
   "mantenimiento.acceder",
   "mantenimiento.editar",
+  "importaciones.acceder",
 ];
 
 export type Perfil = {

@@ -57,7 +57,7 @@ app/
   conteos/                                  conteo ciego y envío a Control
   control/                                  aprobaciones, diferencias y auditoría
   configuracion/inventario/                 mínimos/ubicaciones por almacén
-  importar/                                 redirige al flujo seguro de conteos
+  importar/                                 centro de Excel/CSV con flujos auditados
   administracion/usuarios/                       gestión de usuarios (admin)
   auth/callback/                                 procesa invitaciones
   establecer-clave/                             contraseña inicial

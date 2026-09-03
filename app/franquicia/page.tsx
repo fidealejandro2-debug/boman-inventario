@@ -5,7 +5,11 @@ import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import FranquiciaCliente from "./FranquiciaCliente";
 
-export default async function FranquiciaPage() {
+export default async function FranquiciaPage({
+  searchParams,
+}: {
+  searchParams?: { local?: string };
+}) {
   const perfil = await getPerfilActual();
   if (!tienePermiso(perfil, "franquicia.acceder")) redirect("/dashboard");
 
@@ -13,7 +17,11 @@ export default async function FranquiciaPage() {
     <>
       <Navbar perfil={perfil} />
       <div className="container">
-        <FranquiciaCliente rol={perfil.rol} permisos={perfil.permisos} />
+        <FranquiciaCliente
+          rol={perfil.rol}
+          permisos={perfil.permisos}
+          franquiciaInicialId={searchParams?.local}
+        />
       </div>
     </>
   );

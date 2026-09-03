@@ -17,6 +17,7 @@ type ModuloId =
   | "franquicias"
   | "reportes"
   | "nomina"
+  | "importaciones"
   | "administracion";
 
 type OpcionMenu = {
@@ -43,6 +44,7 @@ const ICONOS: Record<ModuloId | "inicio" | "buscar" | "salir", ReactNode> = {
   franquicias: <><path d="M4 10h16l-2-6H6l-2 6Z"/><path d="M5 10v10h14V10M9 20v-6h6v6"/><path d="M4 10c0 2 4 2 4 0 0 2 4 2 4 0 0 2 4 2 4 0 0 2 4 2 4 0"/></>,
   reportes: <><path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/></>,
   nomina: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
+  importaciones: <><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></>,
   administracion: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
   buscar: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
   salir: <><path d="M10 17l5-5-5-5M15 12H3"/><path d="M14 3h6v18h-6"/></>,
@@ -134,8 +136,10 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
   const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
   const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
+  const puedeVerConsolidadoFranquicias = tienePermiso(perfil, "franquicia.consolidado");
   const puedeVerNotificaciones = tienePermiso(perfil, "notificaciones.acceder");
   const puedeVerMantenimiento = tienePermiso(perfil, "mantenimiento.acceder");
+  const puedeVerImportaciones = tienePermiso(perfil, "importaciones.acceder");
   const nombreMenu = nombreParaMenu(perfil.nombre_completo);
   const rolVisible = ({
     admin: "Administrador",
@@ -173,6 +177,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "franquicias", etiqueta: "Franquicias", opciones: [
       { href: "/franquicia", etiqueta: "Operación del local", descripcion: "Ventas, caja e inventario", visible: puedeVerFranquicia },
+      { href: "/franquicias/consolidado", etiqueta: "Panel consolidado", descripcion: "Comparativo de todos los locales", visible: puedeVerConsolidadoFranquicias },
     ] },
     { id: "mantenimiento", etiqueta: "Mantenimiento", opciones: [
       { href: "/mantenimiento", etiqueta: "Maquinaria y activos", descripcion: "Preventivos, órdenes y costos", visible: puedeVerMantenimiento },
@@ -182,6 +187,9 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "nomina", etiqueta: "Talento humano", opciones: [
       { href: "/nomina", etiqueta: "Personal y nómina", descripcion: "Expedientes, novedades y roles", visible: puedeVerNomina },
+    ] },
+    { id: "importaciones", etiqueta: "Importaciones", opciones: [
+      { href: "/importar", etiqueta: "Centro de importaciones", descripcion: "Excel, CSV y cargas auditadas", visible: puedeVerImportaciones },
     ] },
     { id: "administracion", etiqueta: "Administración", opciones: [
       { href: "/administracion/empresas", etiqueta: "Empresas y locales", descripcion: "Grupo, RUC, tiendas y bodegas", visible: puedeAdministrar },
