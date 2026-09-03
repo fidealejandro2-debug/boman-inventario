@@ -160,11 +160,17 @@ declare
   v_talla_codigo text := upper(btrim(coalesce(p_producto->>'talla_codigo', '')));
   v_sku text;
   v_nombre text := btrim(coalesce(p_producto->>'nombre', ''));
+  v_nombre_normalizado text;
+  v_talla_normalizada text;
+  v_color_normalizado text;
   v_entidad_nombre text := btrim(coalesce(p_producto->>'entidad_nombre', ''));
   v_variante_nombre text := btrim(coalesce(p_producto->>'variante_nombre', ''));
   v_codigo_proveedor text;
   v_total integer;
   v_homologadas integer;
+  v_stock_minimo integer;
+  v_precio numeric;
+  v_costo_estandar numeric;
 begin
   if v_uid is null then raise exception 'Debes iniciar sesion para crear productos'; end if;
   if v_rol <> 'admin' then
@@ -215,6 +221,18 @@ begin
     if not found then raise exception 'La subcategoria no pertenece a la categoria'; end if;
   end if;
   if v_nombre = '' then raise exception 'El nombre del producto es obligatorio'; end if;
+  v_nombre_normalizado := btrim(regexp_replace(
+    translate(lower(v_nombre), 'áéíóúüñ', 'aeiouun'),
+    '[^a-z0-9]+', ' ', 'g'
+  ));
+  v_talla_normalizada := btrim(regexp_replace(
+    translate(lower(coalesce(p_producto->>'talla', '')), 'áéíóúüñ', 'aeiouun'),
+    '[^a-z0-9]+', ' ', 'g'
+  ));
+  v_color_normalizado := btrim(regexp_replace(
+    translate(lower(coalesce(p_producto->>'color', '')), 'áéíóúüñ', 'aeiouun'),
+    '[^a-z0-9]+', ' ', 'g'
+  ));
 
   perform public.registrar_abreviatura_sku_v67(
     v_import.grupo_id, 'categoria', v_categoria_nombre, v_cat, v_uid
@@ -244,9 +262,19 @@ begin
   end if;
   select * into v_existente
   from public.productos p
-  where p.activo and lower(btrim(p.nombre)) = lower(v_nombre)
-    and lower(coalesce(btrim(p.talla), '')) = lower(btrim(coalesce(p_producto->>'talla', '')))
-    and lower(coalesce(btrim(p.color), '')) = lower(btrim(coalesce(p_producto->>'color', '')))
+  where p.activo
+    and btrim(regexp_replace(
+      translate(lower(p.nombre), 'áéíóúüñ', 'aeiouun'),
+      '[^a-z0-9]+', ' ', 'g'
+    )) = v_nombre_normalizado
+    and btrim(regexp_replace(
+      translate(lower(coalesce(p.talla, '')), 'áéíóúüñ', 'aeiouun'),
+      '[^a-z0-9]+', ' ', 'g'
+    )) = v_talla_normalizada
+    and btrim(regexp_replace(
+      translate(lower(coalesce(p.color, '')), 'áéíóúüñ', 'aeiouun'),
+      '[^a-z0-9]+', ' ', 'g'
+    )) = v_color_normalizado
   limit 1;
   if found then
     raise exception 'Ya existe un producto equivalente con SKU %; revisalo antes de crear otro', v_existente.sku;
@@ -258,6 +286,17 @@ begin
     select 1 from public.unidades_medida_produccion u
     where u.codigo = p_producto->>'unidad_medida' and u.activo
   ) then raise exception 'Selecciona una unidad de medida activa'; end if;
+  begin
+    v_stock_minimo := coalesce(nullif(p_producto->>'stock_minimo', '')::integer, 0);
+    v_precio := nullif(p_producto->>'precio', '')::numeric;
+    v_costo_estandar := nullif(p_producto->>'costo_estandar', '')::numeric;
+  exception when invalid_text_representation or numeric_value_out_of_range then
+    raise exception 'Costo, precio y stock minimo deben contener valores numericos validos';
+  end;
+  if v_stock_minimo < 0 or coalesce(v_precio, 0) < 0
+     or coalesce(v_costo_estandar, 0) < 0 then
+    raise exception 'Costo, precio y stock minimo no pueden ser negativos';
+  end if;
 
   insert into public.productos (
     sku, nombre, categoria, categoria_id, subcategoria, subcategoria_id,
@@ -268,10 +307,9 @@ begin
     v_subcategoria_nombre, v_subcategoria_id,
     nullif(btrim(p_producto->>'talla'), ''),
     nullif(btrim(p_producto->>'color'), ''),
-    greatest(coalesce((p_producto->>'stock_minimo')::integer, 0), 0),
-    nullif(p_producto->>'precio', '')::numeric,
+    v_stock_minimo, v_precio,
     p_producto->>'tipo_inventario', p_producto->>'unidad_medida',
-    nullif(p_producto->>'costo_estandar', '')::numeric, now(), v_uid
+    v_costo_estandar, now(), v_uid
   ) returning id into v_producto_id;
 
   insert into public.productos_sku_creaciones_v67 (

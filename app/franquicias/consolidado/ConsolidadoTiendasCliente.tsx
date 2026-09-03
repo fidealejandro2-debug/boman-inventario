@@ -185,7 +185,7 @@ export default function ConsolidadoTiendasCliente() {
 
       <div className="card tienda-aclaracion">
         <strong>Lectura operativa</strong>
-        <span>La facturación proviene de los XML cargados. No representa efectivo ni utilidad: las tiendas propias todavía no tienen el diario de caja de las franquicias.</span>
+        <span>La facturación proviene de los XML cargados y no representa efectivo ni utilidad. El efectivo se controla en el diario de caja de cada tienda, con su cierre diario: ábrelo desde &quot;Ver caja&quot;.</span>
       </div>
 
       <div className="card">
@@ -211,7 +211,10 @@ export default function ConsolidadoTiendasCliente() {
                       <td className="num">{fila.productos_bajo_minimo ? <span className="badge bajo">{fila.productos_bajo_minimo} SKU</span> : <span className="badge ok">Al día</span>}<small>{fila.unidades_sugeridas_reponer} unidades sugeridas · {fila.productos_sin_stock} sin stock</small></td>
                       <td>{pendientes ? <span className="badge bajo">{pendientes} pendientes</span> : <span className="badge ok">Sin pendientes</span>}<small>{fila.solicitudes_pendientes} solicitudes · {fila.transferencias_pendientes_recepcion} por recibir<br />{fila.transferencias_pendientes_despacho} por despachar · {fila.conteos_pendientes_revision} conteos</small></td>
                       <td><small>Factura: {fechaVisible(fila.ultima_factura)}<br />Movimiento: {fechaVisible(fila.ultimo_movimiento, true)}<br />Conteo: {fechaVisible(fila.ultimo_conteo, true)}</small></td>
-                      <td><Link className="btn-enlace" href="/inventario">Ver inventario</Link></td>
+                      <td>
+                        <Link className="btn-enlace" href={`/tienda?local=${fila.almacen_id}`}>Ver caja</Link>
+                        <Link className="btn-enlace" href="/inventario">Ver inventario</Link>
+                      </td>
                     </tr>
                   );
                 })}

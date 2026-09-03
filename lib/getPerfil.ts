@@ -17,20 +17,22 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
   bodega: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
-    "produccion.acceder", "notificaciones.acceder",
+    "produccion.acceder", "produccion.calidad.registrar", "notificaciones.acceder",
     "mantenimiento.acceder", "mantenimiento.editar", "importaciones.acceder",
   ],
   logistica: [
     "inventario.acceder", "operaciones.acceder",
-    "movimientos.acceder", "produccion.acceder", "notificaciones.acceder",
+    "movimientos.acceder", "produccion.acceder", "produccion.calidad.registrar",
+    "notificaciones.acceder",
     "mantenimiento.acceder", "mantenimiento.editar",
   ],
   gerencia: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
-    "produccion.acceder", "control.acceder", "reportes.acceder",
+    "produccion.acceder", "produccion.calidad.resolver",
+    "control.acceder", "reportes.acceder",
     "nomina.acceder", "notificaciones.acceder", "notificaciones.publicar",
-    "mantenimiento.acceder", "franquicia.consolidado",
+    "mantenimiento.acceder", "franquicia.consolidado", "tesoreria.acceder",
   ],
   tienda: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
@@ -40,14 +42,16 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
   control: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
-    "produccion.acceder", "control.acceder", "reportes.acceder",
+    "produccion.acceder", "produccion.calidad.registrar",
+    "produccion.calidad.resolver", "control.acceder", "reportes.acceder",
     "notificaciones.acceder", "notificaciones.publicar",
     "mantenimiento.acceder", "mantenimiento.editar", "franquicia.consolidado",
-    "importaciones.acceder",
+    "importaciones.acceder", "tesoreria.acceder", "tesoreria.editar",
   ],
   nomina: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "nomina.acceder", "nomina.editar",
+    "produccion.calidad.descuento",
     "notificaciones.acceder", "importaciones.acceder",
   ],
   franquiciado: [

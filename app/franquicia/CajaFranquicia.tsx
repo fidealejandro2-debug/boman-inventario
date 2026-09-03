@@ -59,10 +59,18 @@ type ResumenDia = {
 export default function CajaFranquicia({
   franquicia,
   soloLectura = false,
+  esAdmin = false,
 }: {
-  franquicia: Franquicia;
+  /**
+   * Solo se necesita el almacen: la caja se identifica por local fisico, no por
+   * franquicia, para que sirva igual a una tienda propia (que no tiene fila en
+   * la tabla franquicias).
+   */
+  franquicia: Pick<Franquicia, "almacen_id">;
   /** Admin y Control revisan la caja del local; operarla es del titular. */
   soloLectura?: boolean;
+  /** Admin puede reabrir un dia cerrado aunque este en modo revision (el backend ya se lo permite). */
+  esAdmin?: boolean;
 }) {
   const supabase = createClient();
   const [movs, setMovs] = useState<Movimiento[]>([]);
@@ -111,7 +119,7 @@ export default function CajaFranquicia({
       supabase
         .from("vista_caja_franquicia_v42")
         .select("*")
-        .eq("franquicia_id", franquicia.id)
+        .eq("almacen_id", franquicia.almacen_id)
         .gte("fecha", desde)
         .lte("fecha", hasta)
         .order("fecha", { ascending: false })
@@ -119,13 +127,13 @@ export default function CajaFranquicia({
       supabase
         .from("franquicia_caja_cierres")
         .select("*")
-        .eq("franquicia_id", franquicia.id)
+        .eq("almacen_id", franquicia.almacen_id)
         .order("fecha", { ascending: false })
         .limit(60),
       supabase
         .from("vista_resumen_caja_diaria_franquicia_v47")
         .select("ingresos_total, egresos_total, ingresos_efectivo, egresos_efectivo")
-        .eq("franquicia_id", franquicia.id)
+        .eq("almacen_id", franquicia.almacen_id)
         .eq("fecha", fechaCierre)
         .maybeSingle(),
     ]);
@@ -144,7 +152,7 @@ export default function CajaFranquicia({
         // ultimo cierre. Si lo eligiera quien cuenta el efectivo, cualquier
         // faltante se podria dejar en cero.
         const { data: derivado } = await supabase.rpc("saldo_inicial_caja_franquicia_v49", {
-          p_franquicia_id: franquicia.id, p_fecha: fechaCierre,
+          p_almacen_id: franquicia.almacen_id, p_fecha: fechaCierre,
         });
         const valor = derivado === null || derivado === undefined ? null : Number(derivado);
         setSaldoDerivado(valor);
@@ -167,7 +175,7 @@ export default function CajaFranquicia({
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [franquicia.id, desde, hasta, fechaCierre]);
+  }, [franquicia.almacen_id, desde, hasta, fechaCierre]);
 
   const categorias = CATEGORIAS_CAJA.filter((c) => c.tipo === form.tipo);
 
@@ -392,7 +400,22 @@ export default function CajaFranquicia({
             <span className="label">Diferencia</span>
           </div>
         </div>
-        {soloLectura ? (
+        {soloLectura && cierreSeleccionado?.estado === "cerrado" && esAdmin ? (
+          <div className="filtros">
+            <span className="badge ok">Dia cerrado</span>
+            <span>
+              Contado {dinero(cierreSeleccionado.efectivo_contado)} · diferencia{" "}
+              {dinero(cierreSeleccionado.diferencia)}
+            </span>
+            <button
+              className="secondary"
+              disabled={guardando}
+              onClick={() => reabrirCaja(cierreSeleccionado)}
+            >
+              Reabrir con motivo
+            </button>
+          </div>
+        ) : soloLectura ? (
           <div className="info-box fq-aviso-supervision">
             Estás consultando la caja de este local. El titular registra movimientos y
             confirma el cierre; como administrador puedes revisar sus totales e historial.

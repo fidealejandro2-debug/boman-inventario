@@ -16,7 +16,12 @@ export type PermisoCodigo =
   | "movimientos.acceder"
   | "ventas.acceder"
   | "compras.acceder"
+  | "tesoreria.acceder"
+  | "tesoreria.editar"
   | "produccion.acceder"
+  | "produccion.calidad.registrar"
+  | "produccion.calidad.resolver"
+  | "produccion.calidad.descuento"
   | "control.acceder"
   | "reportes.acceder"
   | "nomina.acceder"
@@ -42,7 +47,12 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "movimientos.acceder",
   "ventas.acceder",
   "compras.acceder",
+  "tesoreria.acceder",
+  "tesoreria.editar",
   "produccion.acceder",
+  "produccion.calidad.registrar",
+  "produccion.calidad.resolver",
+  "produccion.calidad.descuento",
   "control.acceder",
   "reportes.acceder",
   "nomina.acceder",

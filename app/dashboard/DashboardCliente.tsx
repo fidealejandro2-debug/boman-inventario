@@ -48,12 +48,14 @@ type ResumenMantenimiento = {
   activos: number; detenidos: number; vencidos: number; proximos: number;
   ordenes_abiertas: number; ordenes_atrasadas: number;
 };
+type ResumenTesoreria = { cuentas_vencidas: number; saldo_vencido: number; efectivo_comprometido: number };
 
 const NOTIFICACIONES_VACIO: ResumenNotificaciones = { no_leidas: 0, criticas: 0, total: 0 };
 const MANTENIMIENTO_VACIO: ResumenMantenimiento = {
   activos: 0, detenidos: 0, vencidos: 0, proximos: 0,
   ordenes_abiertas: 0, ordenes_atrasadas: 0,
 };
+const TESORERIA_VACIO: ResumenTesoreria = { cuentas_vencidas: 0, saldo_vencido: 0, efectivo_comprometido: 0 };
 
 const RESUMEN_VACIO: ResumenPanel = {
   generado_at: "", hoy: "", rol: "",
@@ -134,14 +136,16 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const [busqueda, setBusqueda] = useState("");
   const [notificaciones, setNotificaciones] = useState<ResumenNotificaciones>(NOTIFICACIONES_VACIO);
   const [mantenimiento, setMantenimiento] = useState<ResumenMantenimiento>(MANTENIMIENTO_VACIO);
+  const [tesoreria, setTesoreria] = useState<ResumenTesoreria>(TESORERIA_VACIO);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError(null);
-    const [panel, avisos, activos] = await Promise.all([
+    const [panel, avisos, activos, cuentasPagar] = await Promise.all([
       supabase.rpc("resumen_panel_principal_v51"),
       supabase.rpc("resumen_notificaciones_v53"),
       supabase.rpc("resumen_mantenimiento_v54"),
+      supabase.from("vista_cuentas_por_pagar_v73").select("estado,saldo_pendiente,total_comprometido"),
     ]);
     const { data, error: errorCarga } = panel;
     if (errorCarga) {
@@ -153,6 +157,11 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     }
     if (!avisos.error && avisos.data) setNotificaciones(avisos.data as ResumenNotificaciones);
     if (!activos.error && activos.data) setMantenimiento(activos.data as ResumenMantenimiento);
+    if (!cuentasPagar.error && cuentasPagar.data) setTesoreria(cuentasPagar.data.reduce((acc, cuenta) => ({
+      cuentas_vencidas: acc.cuentas_vencidas + (cuenta.estado === "vencida" ? 1 : 0),
+      saldo_vencido: acc.saldo_vencido + (cuenta.estado === "vencida" ? Number(cuenta.saldo_pendiente) : 0),
+      efectivo_comprometido: acc.efectivo_comprometido + Number(cuenta.total_comprometido ?? 0),
+    }), { ...TESORERIA_VACIO }));
     setCargando(false);
   }, [supabase]);
 
@@ -230,6 +239,13 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         enlaces: [{ href: "/compras", etiqueta: "Órdenes y recepciones" }],
       },
       {
+        id: "tesoreria", titulo: "Finanzas", subtitulo: "Cuentas por pagar",
+        descripcion: `Controla vencimientos, pagos y cheques posfechados. Comprometido: ${DINERO.format(tesoreria.efectivo_comprometido)}.`,
+        href: "/cuentas-por-pagar", icono: "CXP", tono: "morado", visible: puede("tesoreria.acceder"),
+        pendiente: tesoreria.cuentas_vencidas, pendienteTexto: "facturas vencidas",
+        enlaces: [{ href: "/cuentas-por-pagar", etiqueta: "Ver cartera y flujo" }],
+      },
+      {
         id: "produccion", titulo: "Producción", subtitulo: "Planificación y planta",
         descripcion: "Fórmulas, materiales, órdenes, rutas, etapas, lotes, calidad y costos.",
         href: "/produccion", icono: "OP", tono: "morado", visible: puede("produccion.acceder"),
@@ -277,7 +293,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         ),
       },
     ];
-  }, [esFranquicia, perfil.rol, puede, resumen, notificaciones, mantenimiento]);
+  }, [esFranquicia, perfil.rol, puede, resumen, notificaciones, mantenimiento, tesoreria]);
 
   const modulosVisibles = useMemo(() => {
     const consulta = busqueda.trim().toLocaleLowerCase("es");
@@ -322,6 +338,11 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         id: "compras-recibir", titulo: "Compras por recibir", detalle: "Órdenes aprobadas o parcialmente recibidas",
         cantidad: numero(resumen.compras.pendientes_recepcion), href: "/compras", nivel: "normal",
       },
+      puede("tesoreria.acceder") && tesoreria.cuentas_vencidas > 0 && {
+        id: "cuentas-vencidas", titulo: "Facturas de proveedores vencidas",
+        detalle: `${DINERO.format(tesoreria.saldo_vencido)} pendientes de pago`,
+        cantidad: tesoreria.cuentas_vencidas, href: "/cuentas-por-pagar", nivel: "critico",
+      },
       puede("produccion.acceder") && numero(resumen.produccion.ordenes_atrasadas) > 0 && {
         id: "produccion-atrasada", titulo: "Producción atrasada", detalle: "Órdenes abiertas después de su fecha planificada",
         cantidad: numero(resumen.produccion.ordenes_atrasadas), href: "/produccion", nivel: "critico",
@@ -361,7 +382,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     const orden = { critico: 0, atencion: 1, normal: 2 };
     return items.filter((item): item is Pendiente => Boolean(item))
       .sort((a, b) => orden[a.nivel] - orden[b.nivel] || b.cantidad - a.cantidad);
-  }, [esFranquicia, puede, resumen, notificaciones, mantenimiento]);
+  }, [esFranquicia, puede, resumen, notificaciones, mantenimiento, tesoreria]);
 
   const kpis = useMemo(() => {
     if (esFranquicia) return [

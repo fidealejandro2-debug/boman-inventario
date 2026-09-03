@@ -409,6 +409,14 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
     }
     if (productoSimilar) return setError(`Ya existe un producto equivalente: ${productoSimilar.sku}. Reutilízalo en lugar de duplicarlo.`);
     if (productos.some((producto) => producto.sku.toUpperCase() === sku)) return setError(`El SKU ${sku} ya existe.`);
+    const costo = nuevoProducto.costoEstandar === "" ? null : Number(nuevoProducto.costoEstandar);
+    const precioVenta = nuevoProducto.precio === "" ? null : Number(nuevoProducto.precio);
+    const stockMinimo = Number(nuevoProducto.stockMinimo);
+    if ((costo !== null && (!Number.isFinite(costo) || costo < 0))
+      || (precioVenta !== null && (!Number.isFinite(precioVenta) || precioVenta < 0))
+      || !Number.isInteger(stockMinimo) || stockMinimo < 0) {
+      return setError("Costo, precio y stock mínimo deben ser valores válidos y no negativos.");
+    }
     if (nuevoProducto.motivo.trim().length < 10) return setError("Documenta la autorización o motivo con al menos 10 caracteres.");
     if (!await confirmarDialogo(
       `Se creará ${sku} con stock inicial cero y quedará homologado con el código del proveedor.\n\n¿Confirmas el alta?`

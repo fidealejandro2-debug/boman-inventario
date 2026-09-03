@@ -181,7 +181,9 @@ export default function FranquiciaCliente({
           {tabActiva === "factura" && puedeVender && (
             <FacturaXmlFranquicia franquicia={franquicia} />
           )}
-          {tabActiva === "caja" && puedeCaja && <CajaFranquicia franquicia={franquicia} soloLectura={esRevision} />}
+          {tabActiva === "caja" && puedeCaja && (
+            <CajaFranquicia franquicia={franquicia} soloLectura={esRevision} esAdmin={rol === "admin"} />
+          )}
           {tabActiva === "inventario" && puedeInventario && (
             <InventarioFranquicia franquicia={franquicia} soloLectura={esRevision} />
           )}

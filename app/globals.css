@@ -1932,12 +1932,45 @@ button.btn-mini {
 .alerta-precio-detalle.baja strong { color: #047857; }
 .alerta-precio-detalle.cambia strong { color: #92400e; }
 .alerta-precio-detalle span, .alerta-precio-detalle small { color: #7c4a1d; }
+.producto-homologacion-celda { min-width: 330px; }
+.producto-homologacion-celda select { width: 100%; }
+.btn-crear-producto-homologacion {
+  width: 100%; margin-top: 7px; padding: 7px 9px; border: 1px dashed #2e75b6;
+  background: #eff6ff; color: #174d79; box-shadow: none; font-size: 11.5px;
+}
+.btn-crear-producto-homologacion:hover { border-style: solid; background: #dceefe; color: #123b63; }
+.modal-sku { display: grid; gap: 14px; }
+.modal-sku .field { margin: 0; }
+.modal-sku input, .modal-sku select, .modal-sku textarea { width: 100%; }
+.sku-regla {
+  display: grid; gap: 4px; padding: 11px 13px; border-left: 4px solid #2e75b6;
+  border-radius: 8px; background: #eff6ff; color: #334155; font-size: 12px; line-height: 1.45;
+}
+.sku-regla strong { color: #123b63; }
+.sku-regla span { color: #5f6f82; }
+.sku-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px 13px; }
+.segmento-sku input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 800; letter-spacing: .08em; }
+.sku-sugerencias { min-height: 25px; display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.sku-sugerencias button {
+  padding: 3px 7px; border: 1px solid #b9cce0; border-radius: 999px; background: #fff;
+  color: #315b82; box-shadow: none; font: 750 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.sku-sugerencias button:hover { border-color: #2e75b6; background: #e9f4ff; color: #123b63; }
+.sku-preview {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 13px 15px; border: 1px solid #aac6df; border-radius: 10px; background: #f4f9fd;
+}
+.sku-preview span { color: #617187; font-size: 12px; font-weight: 700; }
+.sku-preview strong { color: #123b63; font: 900 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .04em; }
+.producto-similar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.producto-similar button { flex-shrink: 0; }
 
 @media (max-width: 900px) {
   .import-grid { grid-template-columns: 1fr; }
   .import-form-grid { grid-template-columns: 1fr; }
   .import-resultado { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .xml-documento-resumen { grid-template-columns: 1fr 1fr; }
+  .sku-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
   .import-seguridad { align-items: flex-start; flex-direction: column; gap: 4px; }
@@ -1949,6 +1982,10 @@ button.btn-mini {
   .xml-selectores, .xml-documento-resumen { grid-template-columns: 1fr; }
   .xml-documento-resumen .num { text-align: left; }
   .xml-documento-detalle select { min-width: 220px; width: 100%; }
+  .producto-homologacion-celda { min-width: 260px; }
+  .sku-form-grid { grid-template-columns: 1fr; }
+  .sku-preview, .producto-similar { align-items: flex-start; flex-direction: column; }
+  .sku-preview strong { font-size: 15px; overflow-wrap: anywhere; }
 }
 
 /* Selector del consolidado entre franquicias y tiendas propias */
@@ -1975,4 +2012,164 @@ button.btn-mini {
   .consolidado-tabs { width: 100%; }
   .consolidado-tabs button { flex: 1; padding-inline: 10px; }
   .tienda-aclaracion { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
+
+/* Cuentas por pagar y efectivo comprometido */
+.cxp-page { display: grid; gap: 15px; }
+.cxp-header { margin-bottom: 0; }
+.cxp-header .acciones { margin: 0; }
+.cxp-explicacion { display: flex; align-items: baseline; gap: 10px; margin: 0; }
+.cxp-explicacion strong { flex-shrink: 0; }
+.cxp-kpis { grid-template-columns: repeat(5, minmax(155px, 1fr)); margin-bottom: 0; }
+.cxp-kpis .kpi { min-height: 110px; }
+.cxp-kpis .kpi.compromiso { border-top-color: #7c3aed; }
+.cxp-kpis .kpi.compromiso .valor { color: #6d28d9; }
+.cxp-filtros { margin-bottom: 0; }
+.cxp-filtros select { min-width: 190px; }
+.cxp-lista { display: grid; gap: 10px; }
+.cxp-cuenta {
+  overflow: hidden; border: 1px solid #dce5ef; border-left: 4px solid #d59a22;
+  border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgba(15,23,42,.045);
+}
+.cxp-cuenta.estado-vencida { border-left-color: #dc2626; }
+.cxp-cuenta.estado-programada, .cxp-cuenta.estado-parcial { border-left-color: #7c3aed; }
+.cxp-cuenta.estado-pagada { border-left-color: #16a34a; }
+.cxp-cuenta.estado-anulada { border-left-color: #94a3b8; opacity: .78; }
+.cxp-cuenta-resumen {
+  width: 100%; display: grid; grid-template-columns: 1.7fr .55fr .55fr .7fr .8fr auto 20px;
+  align-items: center; gap: 13px; padding: 14px 16px; border: 0; border-radius: 0;
+  background: #fff; color: #172b4d; text-align: left; box-shadow: none;
+}
+.cxp-cuenta-resumen:hover { background: #f8fbfe; color: #172b4d; }
+.cxp-cuenta-resumen > span:not(.badge) { display: grid; gap: 3px; min-width: 0; }
+.cxp-cuenta-resumen small { overflow: hidden; color: #718096; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.cxp-cuenta-resumen strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxp-cuenta-resumen > b { color: #7690aa; font-size: 18px; text-align: center; }
+.badge.estado-pendiente { background: #fef3c7; color: #92400e; }
+.badge.estado-programada, .badge.estado-parcial { background: #ede9fe; color: #6d28d9; }
+.badge.estado-vencida { background: #fee2e2; color: #991b1b; }
+.badge.estado-pagada { background: #dcfce7; color: #166534; }
+.badge.estado-anulada { background: #e2e8f0; color: #64748b; }
+.cxp-cuenta-detalle { display: grid; gap: 12px; padding: 14px 16px 16px; border-top: 1px solid #e5ebf1; background: #fbfdff; }
+.cxp-montos { display: grid; grid-template-columns: repeat(6, minmax(110px, 1fr)); gap: 8px; }
+.cxp-montos span { display: grid; gap: 3px; padding: 9px 10px; border-radius: 8px; background: #eef3f8; color: #65758a; font-size: 10px; text-transform: uppercase; }
+.cxp-montos strong { color: #183e65; font-size: 14px; }
+.cxp-pagos { max-height: 360px; }
+.badge.pago-programado { background: #fef3c7; color: #92400e; }
+.badge.pago-emitido { background: #dbeafe; color: #1e40af; }
+.badge.pago-entregado { background: #ede9fe; color: #6d28d9; }
+.badge.pago-pagado { background: #dcfce7; color: #166534; }
+.badge.pago-anulado { background: #e2e8f0; color: #64748b; }
+.cxp-calendario { display: grid; gap: 11px; }
+.cxp-dia { overflow: hidden; border: 1px solid #dce5ef; border-radius: 12px; background: #fff; }
+.cxp-dia.vencido { border-color: #fecaca; }
+.cxp-dia-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 15px; background: #eef4fa; color: #173f66; }
+.cxp-dia.vencido .cxp-dia-cabecera { background: #fff1f2; color: #991b1b; }
+.cxp-dia-cabecera span { display: grid; gap: 2px; }
+.cxp-dia-cabecera small { color: #718096; font-size: 11px; }
+.cxp-compromiso { display: grid; grid-template-columns: 1.5fr 1fr .6fr .6fr; align-items: center; gap: 12px; padding: 11px 15px; border-top: 1px solid #edf1f5; }
+.cxp-compromiso > span { display: grid; gap: 2px; min-width: 0; }
+.cxp-compromiso small { overflow: hidden; color: #718096; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.cxp-saldo-modal { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 12px 14px; border-radius: 9px; background: #eff6ff; color: #52657a; }
+.cxp-saldo-modal strong { color: #173f66; font-size: 21px; }
+.cxp-cheque { margin: 2px 0 12px; padding: 13px; border: 1px solid #c4b5fd; border-radius: 10px; background: #faf7ff; }
+.cxp-cheque > strong { display: block; margin-bottom: 10px; color: #5b21b6; }
+.cxp-cheque .field { margin-bottom: 0; }
+
+@media (max-width: 1150px) {
+  .cxp-kpis { grid-template-columns: repeat(3, 1fr); }
+  .cxp-cuenta-resumen { grid-template-columns: 1.6fr .55fr .55fr .75fr .8fr 20px; }
+  .cxp-cuenta-resumen .badge { grid-column: 1 / -1; width: fit-content; }
+  .cxp-montos { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 720px) {
+  .cxp-explicacion { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .cxp-kpis { grid-template-columns: 1fr 1fr; }
+  .cxp-cuenta-resumen { grid-template-columns: 1fr 1fr; }
+  .cxp-cuenta-resumen > span:first-child { grid-column: 1 / -1; }
+  .cxp-cuenta-resumen > b { display: none; }
+  .cxp-montos { grid-template-columns: 1fr 1fr; }
+  .cxp-compromiso { grid-template-columns: 1fr 1fr; }
+  .cxp-compromiso > span:first-child { grid-column: 1 / -1; }
+}
+
+/* Novedades de calidad y errores de producción */
+.calidad-page { display: grid; gap: 15px; }
+.calidad-header { margin-bottom: 0; }
+.calidad-header .acciones, .calidad-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+.calidad-aviso { display: flex; align-items: baseline; gap: 10px; margin: 0; }
+.calidad-aviso strong { flex-shrink: 0; }
+.calidad-kpis { grid-template-columns: repeat(5, minmax(150px, 1fr)); margin-bottom: 0; }
+.calidad-kpis .kpi { min-height: 108px; }
+.calidad-filtros { margin-bottom: 0; }
+.calidad-filtros select { min-width: 170px; }
+.calidad-lista { display: grid; gap: 10px; }
+.calidad-caso {
+  overflow: hidden; border: 1px solid #dce5ef; border-left: 4px solid #d59a22;
+  border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgba(15,23,42,.045);
+}
+.calidad-caso.estado-cerrada { border-left-color: #16a34a; }
+.calidad-caso.estado-anulada { border-left-color: #94a3b8; opacity: .78; }
+.calidad-caso.prioridad-urgente:not(.estado-cerrada):not(.estado-anulada) { border-left-color: #dc2626; }
+.calidad-resumen {
+  width: 100%; display: grid; grid-template-columns: 1fr 1.25fr .8fr .9fr auto auto 20px;
+  align-items: center; gap: 13px; padding: 14px 16px; border: 0; border-radius: 0;
+  background: #fff; color: #172b4d; text-align: left; box-shadow: none;
+}
+.calidad-resumen:hover { background: #f8fbfe; color: #172b4d; }
+.calidad-resumen > span:not(.badge) { display: grid; gap: 3px; min-width: 0; }
+.calidad-resumen small { overflow: hidden; color: #718096; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.calidad-resumen strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calidad-resumen > b { color: #7690aa; font-size: 18px; text-align: center; }
+.badge.calidad-estado-abierta { background: #fef3c7; color: #92400e; }
+.badge.calidad-estado-en_analisis { background: #dbeafe; color: #1e40af; }
+.badge.calidad-estado-accion_correctiva { background: #ede9fe; color: #6d28d9; }
+.badge.calidad-estado-cerrada { background: #dcfce7; color: #166534; }
+.badge.calidad-estado-anulada { background: #e2e8f0; color: #64748b; }
+.badge.calidad-urgente { background: #fee2e2; color: #991b1b; }
+.calidad-detalle { display: grid; gap: 13px; padding: 15px 16px 16px; border-top: 1px solid #e5ebf1; background: #fbfdff; }
+.calidad-datos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.calidad-datos > div { display: grid; gap: 3px; padding: 9px 10px; border-radius: 8px; background: #eef3f8; }
+.calidad-datos span, .calidad-relato > span { color: #65758a; font-size: 10px; font-weight: 700; letter-spacing: .035em; text-transform: uppercase; }
+.calidad-datos strong { color: #183e65; font-size: 13px; overflow-wrap: anywhere; }
+.calidad-relato { display: grid; gap: 5px; padding: 12px 13px; border-left: 3px solid #7ca8cf; border-radius: 8px; background: #fff; }
+.calidad-relato p { margin: 0 0 7px; color: #334155; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.calidad-relato p:last-child { margin-bottom: 0; }
+.calidad-evidencias { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.calidad-evidencias > strong { margin-right: 4px; color: #183e65; }
+.calidad-evidencias a { display: grid; gap: 2px; max-width: 290px; padding: 7px 10px; border: 1px solid #bfd3e5; border-radius: 8px; background: #fff; color: #1f5689; text-decoration: none; }
+.calidad-evidencias a:hover { background: #eef7ff; }
+.calidad-evidencias small { overflow: hidden; color: #718096; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.calidad-descuento { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid #fed7aa; border-radius: 9px; background: #fff7ed; color: #7c2d12; }
+.calidad-descuento span { font-size: 12px; }
+.calidad-descuento b { color: #9a3412; font-size: 11px; }
+.calidad-acciones { justify-content: flex-end; padding-top: 2px; }
+button.advertencia { background: #b45309; }
+button.advertencia:hover { background: #92400e; }
+.calidad-modal .grid-form > .ancho-doble { grid-column: span 2; }
+.calidad-modal .grid-form > .ancho-total { grid-column: 1 / -1; }
+.calidad-modal .grid-form.una-columna { grid-template-columns: 1fr; }
+.calidad-modal .field { margin-bottom: 0; }
+.check-line { display: flex; align-items: flex-start; gap: 9px; margin: 2px 0; padding: 10px 12px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; }
+.check-line input { width: auto; margin-top: 3px; }
+.check-line span { display: grid; gap: 2px; }
+.check-line strong { color: #173f66; }
+.check-line small { color: #60758b; font-weight: 500; line-height: 1.4; }
+
+@media (max-width: 1150px) {
+  .calidad-kpis { grid-template-columns: repeat(3, 1fr); }
+  .calidad-resumen { grid-template-columns: 1.1fr 1.3fr .8fr .9fr 20px; }
+  .calidad-resumen .badge { width: fit-content; }
+  .calidad-resumen > .badge:first-of-type { grid-column: 1 / 2; }
+  .calidad-datos { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .calidad-aviso { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .calidad-kpis { grid-template-columns: 1fr 1fr; }
+  .calidad-resumen { grid-template-columns: 1fr 1fr; }
+  .calidad-resumen > span:first-child { grid-column: 1 / -1; }
+  .calidad-resumen > b { display: none; }
+  .calidad-datos { grid-template-columns: 1fr; }
+  .calidad-descuento { grid-template-columns: 1fr; }
+  .calidad-modal .grid-form > .ancho-doble { grid-column: auto; }
 }

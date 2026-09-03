@@ -11,6 +11,7 @@ type ModuloId =
   | "notificaciones"
   | "ventas"
   | "compras"
+  | "finanzas"
   | "produccion"
   | "inventario"
   | "mantenimiento"
@@ -38,6 +39,7 @@ const ICONOS: Record<ModuloId | "inicio" | "buscar" | "salir", ReactNode> = {
   notificaciones: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
   ventas: <><path d="M4 19V5h16v14H4Z"/><path d="M8 9h8M8 13h5"/><path d="M16 16h.01"/></>,
   compras: <><path d="M3 5h2l2 10h10l2-7H6"/><circle cx="9" cy="19" r="1"/><circle cx="17" cy="19" r="1"/></>,
+  finanzas: <><path d="M3 7h18v12H3z"/><path d="M3 10h18M7 15h3"/><circle cx="17" cy="15" r="2"/></>,
   produccion: <><path d="m4 14 5-5 4 4 7-7"/><path d="M4 20h16M4 4v16"/></>,
   inventario: <><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></>,
   mantenimiento: <><path d="M14.7 6.3a4 4 0 0 0-5-5l2.1 2.1-3.4 3.4-2.1-2.1a4 4 0 0 0 5 5L19 17.4a2.1 2.1 0 0 1-3 3l-7.7-7.7"/></>,
@@ -133,9 +135,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerControl = tienePermiso(perfil, "control.acceder");
   const puedeVerVentas = tienePermiso(perfil, "ventas.acceder");
   const puedeVerCompras = tienePermiso(perfil, "compras.acceder");
+  const puedeVerTesoreria = tienePermiso(perfil, "tesoreria.acceder");
   const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
   const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
   const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
+  // La caja de tienda propia usa el mismo permiso que la de franquicia, pero no
+  // se le muestra a los roles de franquicia: ellos entran por /franquicia.
+  const puedeVerCajaTienda = tienePermiso(perfil, "franquicia.caja")
+    && ["admin", "control", "gerencia", "tienda"].includes(perfil.rol);
   const puedeVerConsolidadoFranquicias = tienePermiso(perfil, "franquicia.consolidado");
   const puedeVerNotificaciones = tienePermiso(perfil, "notificaciones.acceder");
   const puedeVerMantenimiento = tienePermiso(perfil, "mantenimiento.acceder");
@@ -159,13 +166,18 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "ventas", etiqueta: "Ventas", opciones: [
       { href: "/ventas", etiqueta: "Facturas XML", descripcion: "Conciliación SRI e inventario", visible: puedeVerVentas },
+      { href: "/tienda", etiqueta: "Caja de tienda", descripcion: "Ingresos, egresos y cierre diario", visible: puedeVerCajaTienda },
     ] },
     { id: "compras", etiqueta: "Compras", opciones: [
       { href: "/compras", etiqueta: "Órdenes y recepciones", descripcion: "Proveedores, recepción y costos", visible: puedeVerCompras },
       { href: "/compras/importar-xml", etiqueta: "XML y homologación", descripcion: "Carga masiva de facturas recibidas", visible: puedeVerCompras },
     ] },
+    { id: "finanzas", etiqueta: "Finanzas", opciones: [
+      { href: "/cuentas-por-pagar", etiqueta: "Cuentas por pagar", descripcion: "Vencimientos, cheques y efectivo comprometido", visible: puedeVerTesoreria },
+    ] },
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion", etiqueta: "Órdenes de producción", descripcion: "Rutas, etapas, lotes y costos", visible: puedeVerProduccion },
+      { href: "/produccion/calidad", etiqueta: "Calidad y errores", descripcion: "Novedades, reprocesos y acciones correctivas", visible: puedeVerProduccion || puedeVerNomina },
     ] },
     { id: "inventario", etiqueta: "Inventario", opciones: [
       { href: "/inventario", etiqueta: "Existencias", descripcion: "Stock disponible por almacén", visible: tienePermiso(perfil, "inventario.acceder") },
