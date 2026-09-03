@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { confirmarDialogo } from "@/components/Dialogo";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
-import { exportarCSV } from "@/lib/utils";
+import { descargarPlantillaExcel } from "@/lib/plantillasExcel";
 import type { Perfil } from "@/lib/permisos";
 
 type Almacen = { id: string; nombre: string; codigo: string; tipo: string };
@@ -68,10 +68,23 @@ export default function ImportarStockGeneral({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     async function cargarBase() {
+      async function consultarProductos() {
+        const acumulado: Producto[] = [];
+        let desde = 0;
+        while (true) {
+          const respuesta = await supabase.from("productos")
+            .select("id, sku, nombre, talla").eq("activo", true).order("sku")
+            .range(desde, desde + 999);
+          if (respuesta.error) return { data: acumulado, error: respuesta.error };
+          acumulado.push(...((respuesta.data ?? []) as Producto[]));
+          if ((respuesta.data ?? []).length < 1000) return { data: acumulado, error: null };
+          desde += 1000;
+        }
+      }
       const [a, pa, p] = await Promise.all([
         supabase.from("almacenes").select("id, nombre, codigo, tipo").eq("activo", true).order("nombre"),
         supabase.from("perfil_almacenes").select("almacen_id").eq("perfil_id", perfil.id),
-        supabase.from("productos").select("id, sku, nombre, talla").eq("activo", true).order("sku"),
+        consultarProductos(),
       ]);
       const error = a.error ?? pa.error ?? p.error;
       if (error) setMsg({ tipo: "error", texto: error.message });
@@ -228,11 +241,32 @@ export default function ImportarStockGeneral({ perfil }: { perfil: Perfil }) {
     setProcesando(false);
   }
 
-  function descargarPlantilla() {
-    exportarCSV("plantilla_conteo_fisico", [
-      { SKU: "CAM-001-M", CANTIDAD: 12, OBSERVACION: "Conteo estante A1" },
-      { SKU: "CAM-001-L", CANTIDAD: 8, OBSERVACION: "" },
-    ]);
+  async function descargarPlantilla() {
+    try {
+      await descargarPlantillaExcel({
+        archivo: "plantilla_conteo_fisico.xlsx",
+        titulo: "Conteo físico de existencias",
+        descripcion: "Selecciona el SKU del catálogo y registra únicamente la cantidad físicamente contada. Los SKU omitidos no cambian.",
+        filasDisponibles: 5000,
+        ejemplos: [
+          { SKU: productos[0]?.sku ?? "CAM-001-M", CANTIDAD: 12, OBSERVACION: "Conteo estante A1" },
+          { SKU: productos[1]?.sku ?? "", CANTIDAD: 8, OBSERVACION: "" },
+        ],
+        columnas: [
+          { encabezado: "SKU", ancho: 24, obligatoria: true, ayuda: "Selecciona un SKU activo del catálogo.", regla: { tipo: "lista", valores: productos.map((p) => p.sku) } },
+          { encabezado: "CANTIDAD", ancho: 16, obligatoria: true, ayuda: "Cantidad física contada: entero igual o mayor que cero.", regla: { tipo: "entero", minimo: 0, maximo: 999999999 } },
+          { encabezado: "OBSERVACION", ancho: 48, ayuda: "Ubicación, incidencia o aclaración del conteo.", regla: { tipo: "longitud", maximo: 300 } },
+        ],
+        instrucciones: [
+          { campo: "SKU", regla: "Obligatorio. Elige un código de la lista del catálogo activo; no escribas nombres de producto.", ejemplo: productos[0]?.sku ?? "CAM-001-M" },
+          { campo: "CANTIDAD", regla: "Obligatoria. Debe ser un número entero igual o mayor que cero.", ejemplo: "12" },
+          { campo: "OBSERVACION", regla: "Opcional. Úsala para dejar ubicación o explicación de una diferencia.", ejemplo: "Conteo estante A1" },
+          { campo: "ALCANCE", regla: "Solo se cuentan los SKU incluidos. El archivo crea un conteo pendiente de revisión; no altera stock directamente.", ejemplo: "" },
+        ],
+      });
+    } catch (e) {
+      setMsg({ tipo: "error", texto: e instanceof Error ? e.message : "No se pudo generar la plantilla Excel." });
+    }
   }
 
   if (cargando) return <div className="card"><p>Cargando permisos, productos y almacenes…</p></div>;
@@ -244,7 +278,7 @@ export default function ImportarStockGeneral({ perfil }: { perfil: Perfil }) {
           <h2>Importar conteo físico</h2>
           <p>Solo se cuentan los SKU incluidos en el archivo; los productos omitidos conservan su stock.</p>
         </div>
-        <button type="button" className="secondary" onClick={descargarPlantilla}>Descargar plantilla CSV</button>
+        <button type="button" className="secondary" onClick={descargarPlantilla}>Descargar plantilla Excel validada</button>
       </div>
 
       <div className="import-pasos" aria-label="Proceso de importación">

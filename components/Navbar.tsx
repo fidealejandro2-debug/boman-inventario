@@ -162,6 +162,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "compras", etiqueta: "Compras", opciones: [
       { href: "/compras", etiqueta: "Órdenes y recepciones", descripcion: "Proveedores, recepción y costos", visible: puedeVerCompras },
+      { href: "/compras/importar-xml", etiqueta: "XML y homologación", descripcion: "Carga masiva de facturas recibidas", visible: puedeVerCompras },
     ] },
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion", etiqueta: "Órdenes de producción", descripcion: "Rutas, etapas, lotes y costos", visible: puedeVerProduccion },

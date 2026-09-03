@@ -33,6 +33,12 @@ type EquivalenciaFacturacion = {
 };
 type Asignacion = { productoId: string; cantidad: string };
 type EstadoLinea = { afectaInventario: boolean; asignaciones: Asignacion[] };
+type FacturaXmlEnCola = {
+  factura: FacturaSri;
+  archivoNombre: string;
+  archivoHash: string;
+  ruta: string;
+};
 type DocumentoVenta = {
   id: string;
   numero_documento: string;
@@ -84,6 +90,8 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
   const [factura, setFactura] = useState<FacturaSri | null>(null);
   const [archivoNombre, setArchivoNombre] = useState("");
   const [archivoHash, setArchivoHash] = useState("");
+  const [colaXml, setColaXml] = useState<FacturaXmlEnCola[]>([]);
+  const [incidenciasXml, setIncidenciasXml] = useState<string[]>([]);
   const [almacenId, setAlmacenId] = useState(perfil.entidad_id ?? "");
   const [lineas, setLineas] = useState<Record<number, EstadoLinea>>({});
   const [busquedas, setBusquedas] = useState<Record<number, string>>({});
@@ -166,45 +174,116 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     return estados;
   }
 
-  async function leerArchivo(evento: React.ChangeEvent<HTMLInputElement>) {
-    const archivo = evento.target.files?.[0];
+  function activarFacturaXml(item: FacturaXmlEnCola) {
+    const nueva = item.factura;
+    const mapeo = establecimientos.find((registro) =>
+      registro.emisor_ruc === nueva.emisorRuc
+      && registro.establecimiento === nueva.establecimiento
+      && registro.punto_emision === nueva.puntoEmision
+    );
+    const equivalencia = equivalencias.find((registro) =>
+      registro.emisor_ruc === nueva.emisorRuc
+      && registro.establecimiento_xml === nueva.establecimiento
+      && registro.punto_emision_xml === nueva.puntoEmision
+    );
+    const almacenPredeterminado = perfil.entidad_id
+      && almacenesDisponibles.some((almacen) => almacen.id === perfil.entidad_id)
+      ? perfil.entidad_id
+      : almacenesDisponibles.length === 1 ? almacenesDisponibles[0].id : "";
+
+    setAlmacenId(mapeo?.almacen_id ?? equivalencia?.almacen_id ?? almacenPredeterminado);
+    setFactura(nueva);
+    setArchivoNombre(item.archivoNombre);
+    setArchivoHash(item.archivoHash);
+    setLineas(estadoInicial(nueva));
+    setBusquedas({});
+    setNota("");
+    setCodigoConfirmado(false);
+    setCodigoNota(equivalencia?.motivo ?? "");
+  }
+
+  async function leerArchivos(evento: React.ChangeEvent<HTMLInputElement>) {
+    const seleccionados = Array.from(evento.target.files ?? []);
     evento.target.value = "";
-    if (!archivo) return;
+    if (!seleccionados.length) return;
     setMsg(null);
+    setIncidenciasXml([]);
     setProcesando(true);
     try {
-      if (!archivo.name.toLowerCase().endsWith(".xml")) throw new Error("Selecciona un archivo con extensión .xml.");
-      const contenido = await archivo.text();
-      const nueva = parsearFacturaSri(contenido);
-      const hash = await calcularHashXml(contenido);
-      const { data: repetida, error } = await supabase
-        .from("documentos_venta_xml").select("id, numero_documento").eq("clave_acceso", nueva.claveAcceso).maybeSingle();
-      if (error) throw error;
-      if (repetida) throw new Error(`La factura ${repetida.numero_documento} ya fue aplicada. No se descontó inventario nuevamente.`);
+      const archivosXml = seleccionados.filter((archivo) => archivo.name.toLowerCase().endsWith(".xml"));
+      if (!archivosXml.length) throw new Error("La selección no contiene archivos XML.");
+      if (archivosXml.length > 200) throw new Error("Puedes cargar hasta 200 XML por lote. Divide la carpeta en dos selecciones.");
 
-      const mapeo = establecimientos.find((item) =>
-        item.emisor_ruc === nueva.emisorRuc && item.establecimiento === nueva.establecimiento && item.punto_emision === nueva.puntoEmision
-      );
-      const equivalencia = equivalencias.find((item) =>
-        item.emisor_ruc === nueva.emisorRuc
-        && item.establecimiento_xml === nueva.establecimiento
-        && item.punto_emision_xml === nueva.puntoEmision
-      );
-      if (mapeo) setAlmacenId(mapeo.almacen_id);
-      else if (almacenesDisponibles.length === 1) setAlmacenId(almacenesDisponibles[0].id);
-      setFactura(nueva);
-      setArchivoNombre(archivo.name.slice(0, 255));
-      setArchivoHash(hash);
-      setLineas(estadoInicial(nueva));
-      setBusquedas({});
-      setNota("");
-      setCodigoConfirmado(false);
-      setCodigoNota(equivalencia?.motivo ?? "");
+      const incidencias: string[] = seleccionados.length === archivosXml.length
+        ? []
+        : [`Se ignoraron ${seleccionados.length - archivosXml.length} archivo(s) que no eran XML.`];
+      const resultados = await Promise.all(archivosXml.map(async (archivo) => {
+        try {
+          const contenido = await archivo.text();
+          return {
+            factura: parsearFacturaSri(contenido),
+            archivoNombre: archivo.name.slice(0, 255),
+            archivoHash: await calcularHashXml(contenido),
+            ruta: archivo.webkitRelativePath || archivo.name,
+          } satisfies FacturaXmlEnCola;
+        } catch (error: any) {
+          incidencias.push(`${archivo.webkitRelativePath || archivo.name}: ${error.message || "XML inválido"}`);
+          return null;
+        }
+      }));
+      const interpretadas = resultados.filter((item): item is FacturaXmlEnCola => item !== null);
+      const claves = Array.from(new Set(interpretadas.map((item) => item.factura.claveAcceso)));
+      const aplicadas = new Map<string, string>();
+      for (let inicio = 0; inicio < claves.length; inicio += 100) {
+        const { data, error } = await supabase
+          .from("documentos_venta_xml")
+          .select("clave_acceso, numero_documento")
+          .in("clave_acceso", claves.slice(inicio, inicio + 100));
+        if (error) throw error;
+        (data ?? []).forEach((documento: any) => aplicadas.set(documento.clave_acceso, documento.numero_documento));
+      }
+
+      const conocidas = new Set(colaXml.map((item) => item.factura.claveAcceso));
+      const nuevas: FacturaXmlEnCola[] = [];
+      interpretadas.forEach((item) => {
+        const clave = item.factura.claveAcceso;
+        if (aplicadas.has(clave)) {
+          incidencias.push(`${item.ruta}: la factura ${aplicadas.get(clave)} ya fue aplicada.`);
+        } else if (conocidas.has(clave)) {
+          incidencias.push(`${item.ruta}: factura repetida dentro de la selección o de la cola.`);
+        } else {
+          conocidas.add(clave);
+          nuevas.push(item);
+        }
+      });
+
+      const colaActualizada = [...colaXml, ...nuevas];
+      setColaXml(colaActualizada);
+      setIncidenciasXml(incidencias.slice(0, 30));
+      if (!factura && colaActualizada.length) activarFacturaXml(colaActualizada[0]);
+      if (!nuevas.length) {
+        setMsg({ tipo: "error", texto: "No se agregó ninguna factura nueva. Revisa el detalle de la carga." });
+      } else {
+        setMsg({
+          tipo: "ok",
+          texto: `${nuevas.length} factura(s) agregada(s) a la cola. Se revisan y aplican una por una para proteger el inventario.`,
+        });
+      }
     } catch (error: any) {
-      setFactura(null);
       setMsg({ tipo: "error", texto: error.message || "No se pudo leer el XML." });
     } finally {
       setProcesando(false);
+    }
+  }
+
+  function descartarFacturaActual() {
+    if (!factura) return;
+    const restantes = colaXml.filter((item) => item.factura.claveAcceso !== factura.claveAcceso);
+    setColaXml(restantes);
+    if (restantes.length) activarFacturaXml(restantes[0]);
+    else {
+      setFactura(null); setLineas({}); setArchivoNombre(""); setArchivoHash(""); setNota("");
+      setCodigoConfirmado(false); setCodigoNota("");
     }
   }
 
@@ -416,10 +495,20 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
     setProcesando(false);
     if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
     const resultado = data as { mensaje?: string; numero_documento?: string } | null;
-    setMsg({ tipo: "ok", texto: resultado?.mensaje ?? "Factura aplicada correctamente." });
-    setFactura(null); setLineas({}); setArchivoNombre(""); setArchivoHash(""); setNota("");
-    setCodigoConfirmado(false); setCodigoNota("");
-    setTab("historial");
+    const restantes = colaXml.filter((item) => item.factura.claveAcceso !== factura.claveAcceso);
+    setColaXml(restantes);
+    if (restantes.length) {
+      activarFacturaXml(restantes[0]);
+      setMsg({
+        tipo: "ok",
+        texto: `${resultado?.mensaje ?? "Factura aplicada correctamente."} Continúa con la siguiente; quedan ${restantes.length}.`,
+      });
+    } else {
+      setMsg({ tipo: "ok", texto: resultado?.mensaje ?? "Factura aplicada correctamente." });
+      setFactura(null); setLineas({}); setArchivoNombre(""); setArchivoHash(""); setNota("");
+      setCodigoConfirmado(false); setCodigoNota("");
+      setTab("historial");
+    }
     await cargarDatos();
   }
 
@@ -589,12 +678,33 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
 
       {tab === "importar" && puedeImportar && <>
         <section className="card carga-xml">
-          <h3 style={{ marginTop: 0 }}>1. Cargar factura autorizada</h3>
-          <p className="conteo">El archivo se interpreta en este navegador. Se conserva su huella de seguridad y los datos operativos, no el XML completo ni los datos del cliente.</p>
-          <label className="selector-archivo-xml">
-            <span>{cargando ? "Preparando catálogo…" : procesando ? "Procesando…" : factura ? "Cambiar archivo XML" : "Seleccionar archivo XML"}</span>
-            <input type="file" accept=".xml,text/xml,application/xml" onChange={leerArchivo} disabled={procesando || cargando} />
-          </label>
+          <h3 style={{ marginTop: 0 }}>1. Cargar facturas autorizadas</h3>
+          <p className="conteo">Selecciona uno o varios XML, o una carpeta completa. Se crea una cola y cada factura conserva la homologación, el control de stock y la protección contra dobles salidas.</p>
+          <div className="selectores-lote-xml">
+            <label className="selector-archivo-xml">
+              <span>{cargando ? "Preparando catálogo…" : procesando ? "Leyendo XML…" : "Seleccionar uno o varios XML"}</span>
+              <input type="file" multiple accept=".xml,text/xml,application/xml" onChange={leerArchivos} disabled={procesando || cargando} />
+            </label>
+            <label className="selector-archivo-xml secundario">
+              <span>Seleccionar carpeta con XML</span>
+              <input
+                type="file"
+                multiple
+                accept=".xml,text/xml,application/xml"
+                onChange={leerArchivos}
+                disabled={procesando || cargando}
+                {...({ webkitdirectory: "", directory: "" } as any)}
+              />
+            </label>
+          </div>
+          {colaXml.length > 0 && <div className="cola-xml-ventas">
+            <div className="header-row">
+              <div><strong>Cola de revisión: {colaXml.length}</strong><div className="conteo">Se aplican individualmente; la primera está abierta abajo.</div></div>
+              {factura && <button type="button" className="chip-limpiar" disabled={procesando} onClick={descartarFacturaActual}>Quitar actual de la cola</button>}
+            </div>
+            <div className="chips-cola-xml">{colaXml.slice(0, 12).map((item, indice) => <span key={item.factura.claveAcceso} className={indice === 0 ? "actual" : ""}>{indice + 1}. {item.factura.numeroDocumento}</span>)}{colaXml.length > 12 && <span>+{colaXml.length - 12} más</span>}</div>
+          </div>}
+          {incidenciasXml.length > 0 && <details className="incidencias-xml"><summary>{incidenciasXml.length} aviso(s) de la selección</summary><ul>{incidenciasXml.map((incidencia, indice) => <li key={`${incidencia}-${indice}`}>{incidencia}</li>)}</ul></details>}
         </section>
 
         {factura && <>

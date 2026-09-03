@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
-import { exportarCSV, fecha } from "@/lib/utils";
+import { fecha } from "@/lib/utils";
 import { confirmarDialogo } from "@/components/Dialogo";
+import { descargarPlantillaExcel } from "@/lib/plantillasExcel";
 
 type ProductoActual = { sku: string; nombre: string };
 type ItemCatalogo = {
@@ -193,17 +194,61 @@ export default function ImportarCatalogo({
     setProcesando(false);
   }
 
-  function descargarPlantilla() {
-    exportarCSV("plantilla_catalogo_productos", [{
-      SKU: "CAM-001-M",
-      NOMBRE: "Camiseta local",
-      CATEGORIA: "Camisetas",
-      SUBCATEGORIA: "Fútbol",
-      TALLA: "M",
-      COLOR: "Azul",
-      STOCK_MINIMO: 5,
-      PRECIO: "19.90",
-    }]);
+  async function descargarPlantilla() {
+    setProcesando(true);
+    setMsg(null);
+    const [categoriasRes, subcategoriasRes] = await Promise.all([
+      supabase.from("categorias_productos").select("nombre").eq("activo", true).order("nombre"),
+      supabase.from("subcategorias_productos").select("nombre").eq("activo", true).order("nombre"),
+    ]);
+    const error = categoriasRes.error ?? subcategoriasRes.error;
+    if (error) {
+      setMsg(`No se pudieron preparar los catálogos de la plantilla: ${error.message}`);
+      setProcesando(false);
+      return;
+    }
+    const categorias = (categoriasRes.data ?? []).map((item) => item.nombre);
+    const subcategorias = (subcategoriasRes.data ?? []).map((item) => item.nombre);
+    try {
+      await descargarPlantillaExcel({
+        archivo: "plantilla_catalogo_productos.xlsx",
+        titulo: "Importación del catálogo maestro",
+        descripcion: "Usa una fila por SKU. Categoría y subcategoría se eligen de los catálogos activos; crea primero cualquier valor que todavía no exista.",
+        filasDisponibles: 5000,
+        ejemplos: [{
+          SKU: "CAM-001-M",
+          NOMBRE: "Camiseta local",
+          CATEGORIA: categorias[0] ?? "Camisetas",
+          SUBCATEGORIA: subcategorias[0] ?? "",
+          TALLA: "M",
+          COLOR: "Azul",
+          STOCK_MINIMO: 5,
+          PRECIO: 19.90,
+        }],
+        columnas: [
+          { encabezado: "SKU", ancho: 22, obligatoria: true, ayuda: "Código único del producto, sin espacios al inicio o al final.", regla: { tipo: "longitud", maximo: 80 } },
+          { encabezado: "NOMBRE", ancho: 40, obligatoria: true, ayuda: "Nombre comercial del producto.", regla: { tipo: "longitud", maximo: 200 } },
+          { encabezado: "CATEGORIA", ancho: 26, obligatoria: true, ayuda: "Selecciona una categoría activa. Crea antes las categorías nuevas.", regla: { tipo: "lista", valores: categorias } },
+          { encabezado: "SUBCATEGORIA", ancho: 28, ayuda: "Selecciona una subcategoría activa que corresponda a la categoría.", regla: { tipo: "lista", valores: subcategorias } },
+          { encabezado: "TALLA", ancho: 14, ayuda: "Talla o variante. Déjala vacía cuando no aplique.", regla: { tipo: "longitud", maximo: 40 } },
+          { encabezado: "COLOR", ancho: 18, ayuda: "Color o tono. Déjalo vacío cuando no aplique.", regla: { tipo: "longitud", maximo: 60 } },
+          { encabezado: "STOCK_MINIMO", ancho: 18, ayuda: "Número entero igual o mayor que cero. Vacío conserva el valor existente.", regla: { tipo: "entero", minimo: 0, maximo: 999999999 } },
+          { encabezado: "PRECIO", ancho: 15, ayuda: "Precio de venta en USD, igual o mayor que cero. Vacío conserva el valor existente.", regla: { tipo: "decimal", minimo: 0, maximo: 999999999 } },
+        ],
+        instrucciones: [
+          { campo: "SKU", regla: "Obligatorio y único. Si aparece repetido, el importador conserva la última fila.", ejemplo: "CAM-001-M" },
+          { campo: "NOMBRE", regla: "Obligatorio. Escribe una descripción clara del producto.", ejemplo: "Camiseta local" },
+          { campo: "CATEGORIA", regla: "Obligatoria. Debe elegirse de la lista de categorías activas de la hoja CATÁLOGOS.", ejemplo: categorias[0] ?? "Camisetas" },
+          { campo: "SUBCATEGORIA", regla: "Opcional. Debe existir y pertenecer a la categoría seleccionada; el sistema lo volverá a comprobar.", ejemplo: subcategorias[0] ?? "" },
+          { campo: "STOCK_MINIMO", regla: "Entero no negativo. No cambia existencias; solo configura la alerta mínima.", ejemplo: "5" },
+          { campo: "PRECIO", regla: "Decimal no negativo en USD. No escribas el símbolo $. Vacío conserva el precio actual.", ejemplo: "19.90" },
+        ],
+      });
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "No se pudo generar la plantilla Excel.");
+    } finally {
+      setProcesando(false);
+    }
   }
 
   return (
@@ -227,7 +272,7 @@ export default function ImportarCatalogo({
         </div>
         <div className="field">
           <label>Plantilla</label>
-          <button type="button" className="secondary" onClick={descargarPlantilla}>Descargar plantilla</button>
+          <button type="button" className="secondary" disabled={procesando} onClick={descargarPlantilla}>Descargar Excel validado</button>
         </div>
       </div>
 

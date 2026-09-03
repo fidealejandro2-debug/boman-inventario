@@ -892,6 +892,16 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
   font-size: 13px; font-weight: 700;
 }
 .selector-archivo-xml input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.selectores-lote-xml { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.selector-archivo-xml.secundario { background: #fff; color: #1f3864; border: 1px solid #9fb2c8; }
+.cola-xml-ventas { margin-top: 12px; padding: 11px 12px; border: 1px solid #c9d7e6; border-radius: 8px; background: #f8fafc; }
+.cola-xml-ventas .header-row { margin-bottom: 8px; }
+.chips-cola-xml { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips-cola-xml span { padding: 5px 8px; border-radius: 999px; background: #e2e8f0; color: #475569; font-size: 11px; font-weight: 700; }
+.chips-cola-xml span.actual { background: #dbeafe; color: #1e40af; box-shadow: inset 0 0 0 1px #93c5fd; }
+.incidencias-xml { margin-top: 10px; padding: 9px 11px; border-radius: 7px; background: #fff7ed; color: #9a3412; font-size: 12px; }
+.incidencias-xml summary { cursor: pointer; font-weight: 750; }
+.incidencias-xml ul { margin: 8px 0 0; padding-left: 20px; }
 .grid-resumen-xml { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
 .grid-resumen-xml > div { display: grid; align-content: start; gap: 3px; padding: 11px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
 .grid-resumen-xml small, .grid-resumen-xml span { color: #64748b; font-size: 11px; }
@@ -1883,10 +1893,51 @@ button.btn-mini {
 .import-acciones { justify-content: flex-end; }
 .texto-alerta { color: #b45309; font-weight: 800; }
 
+/* Bandeja masiva de XML de compras */
+.compras-xml-page { display: grid; gap: 16px; }
+.xml-carga-card { display: grid; gap: 15px; }
+.xml-selectores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.xml-selector {
+  min-height: 116px; display: grid; align-content: center; gap: 6px; padding: 18px;
+  border: 1.5px dashed #8eb3d5; border-radius: 14px; background: #f6faff;
+  color: #173f66; cursor: pointer; transition: border-color .16s ease, background .16s ease;
+}
+.xml-selector:hover { border-color: #1f5b8d; background: #edf6ff; }
+.xml-selector strong { font-size: 15px; }
+.xml-selector span { color: #617187; font-size: 12px; }
+.xml-selector input { margin-top: 7px; color: #334155; }
+.xml-documentos { display: grid; gap: 10px; }
+.xml-documento {
+  overflow: hidden; border: 1px solid #dbe4ee; border-left: 4px solid #d59a22;
+  border-radius: 12px; background: #fff;
+}
+.xml-documento.listo { border-left-color: #24935d; }
+.xml-documento-resumen {
+  width: 100%; display: grid; grid-template-columns: 1.15fr 1.35fr .65fr auto;
+  align-items: center; gap: 14px; padding: 14px 16px; border: 0; border-radius: 0;
+  background: #fff; color: #172b4d; text-align: left; box-shadow: none;
+}
+.xml-documento-resumen:hover { background: #f8fbfe; color: #172b4d; }
+.xml-documento-resumen span:not(.badge) { display: grid; gap: 3px; min-width: 0; }
+.xml-documento-resumen small { overflow: hidden; color: #69798d; text-overflow: ellipsis; white-space: nowrap; }
+.xml-documento-resumen .num { text-align: right; }
+.xml-documento-detalle { padding: 14px 16px 16px; border-top: 1px solid #e5ebf1; background: #fbfdff; }
+.xml-documento-detalle select { min-width: 290px; }
+.xml-estados-documento { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.badge.alerta-precio-badge { background: #ffedd5; color: #9a3412; }
+.alerta-precio-resumen { margin-bottom: 11px; padding: 10px 12px; border: 1px solid #fdba74; border-radius: 8px; background: #fff7ed; color: #9a3412; font-size: 12px; }
+.fila-alerta-precio td { background: #fffbeb; }
+.alerta-precio-detalle { display: grid; justify-items: end; gap: 1px; min-width: 142px; margin-top: 5px; padding: 5px 7px; border-radius: 6px; background: #fff7ed; color: #9a3412; font-size: 10px; white-space: nowrap; }
+.alerta-precio-detalle.sube strong { color: #b91c1c; }
+.alerta-precio-detalle.baja strong { color: #047857; }
+.alerta-precio-detalle.cambia strong { color: #92400e; }
+.alerta-precio-detalle span, .alerta-precio-detalle small { color: #7c4a1d; }
+
 @media (max-width: 900px) {
   .import-grid { grid-template-columns: 1fr; }
   .import-form-grid { grid-template-columns: 1fr; }
   .import-resultado { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .xml-documento-resumen { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 600px) {
   .import-seguridad { align-items: flex-start; flex-direction: column; gap: 4px; }
@@ -1895,6 +1946,9 @@ button.btn-mini {
   .import-opcion > b { grid-column: 2; }
   .import-resultado { grid-template-columns: 1fr 1fr; }
   .import-resultado .btn-enlace { grid-column: 1 / -1; justify-content: center; }
+  .xml-selectores, .xml-documento-resumen { grid-template-columns: 1fr; }
+  .xml-documento-resumen .num { text-align: left; }
+  .xml-documento-detalle select { min-width: 220px; width: 100%; }
 }
 
 /* Selector del consolidado entre franquicias y tiendas propias */

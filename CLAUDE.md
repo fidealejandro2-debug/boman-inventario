@@ -104,7 +104,9 @@ sql/
   v27_ausencias_vacaciones.sql calendarios confirmados, periodos por aniversario y vacaciones FIFO
   v28_novedades_disciplinarias.sql expediente sancionatorio, correlativos por RUC y evidencias
   v29_anticipos_descuentos.sql anticipos, cuotas, multas y motor de descuentos con topes
-  verificacion_v18.sql ... verificacion_v29.sql comprobaciones de cada migración
+  v65_importador_xml_compras.sql carga masiva de XML recibidos, homologación y registro contable controlado
+  v66_alertas_precios_compras_xml.sql referencia del último precio y alertas de variación por proveedor/código
+  verificacion_v18.sql ... verificacion_v66.sql comprobaciones de cada migración
   actualizacion_completa_v9_a_v11.sql paquete único para una base que ya llegó hasta v8
 ```
 

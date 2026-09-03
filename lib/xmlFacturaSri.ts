@@ -25,6 +25,25 @@ export type FacturaSri = {
   lineas: LineaFacturaSri[];
 };
 
+export type LineaCompraSri = LineaFacturaSri & {
+  tarifaIva: number;
+  valorIva: number;
+};
+
+export type FacturaCompraSri = Omit<FacturaSri, "lineas"> & {
+  compradorRuc: string;
+  baseCero: number;
+  baseGravada: number;
+  tarifaGravada: number;
+  baseNoObjeto: number;
+  baseExenta: number;
+  montoIva: number;
+  montoIce: number;
+  propina: number;
+  formaPago: string | null;
+  lineas: LineaCompraSri[];
+};
+
 function hijos(elemento: Element) {
   return Array.from(elemento.children);
 }
@@ -148,6 +167,119 @@ export function parsearFacturaSri(contenido: string): FacturaSri {
     numeroDocumento: `${establecimiento}-${puntoEmision}-${secuencial}`,
     fechaEmision: fechaSriAIso(texto(hijo(facturaInfo, "fechaEmision"))),
     importeTotal,
+    lineas,
+  };
+}
+
+function redondear(valor: number) {
+  return Math.round((valor + Number.EPSILON) * 100) / 100;
+}
+
+export function parsearFacturaCompraSri(contenido: string): FacturaCompraSri {
+  const comun = parsearFacturaSri(contenido);
+  const exterior = documentoXml(contenido, "El archivo");
+  const autorizacion = Array.from(exterior.querySelectorAll("*")).find(
+    (nodo) => nodo.localName === "autorizacion"
+  );
+  const comprobanteTexto = autorizacion ? texto(hijo(autorizacion, "comprobante")) : null;
+  const interior = comprobanteTexto ? documentoXml(comprobanteTexto, "El comprobante interno") : exterior;
+  const factura = Array.from(interior.querySelectorAll("*")).find((nodo) => nodo.localName === "factura")
+    ?? (interior.documentElement.localName === "factura" ? interior.documentElement : null);
+  const info = factura ? hijo(factura, "infoFactura") : null;
+  const detalles = factura ? hijo(factura, "detalles") : null;
+  if (!factura || !info || !detalles) throw new Error("La factura de compra no contiene cabecera o detalle.");
+
+  const compradorRuc = (texto(hijo(info, "identificacionComprador")) ?? "").replace(/\D/g, "");
+  if (!/^\d{13}$/.test(compradorRuc)) {
+    throw new Error("La identificación del comprador debe ser el RUC de 13 dígitos de una empresa configurada.");
+  }
+
+  let baseCero = 0;
+  let baseGravada = 0;
+  let baseNoObjeto = 0;
+  let baseExenta = 0;
+  let montoIva = 0;
+  let montoIce = 0;
+  const tarifasPositivas: number[] = [];
+  const totalConImpuestos = hijo(info, "totalConImpuestos");
+  const impuestosTotales = totalConImpuestos
+    ? hijos(totalConImpuestos).filter((nodo) => nodo.localName === "totalImpuesto")
+    : [];
+  impuestosTotales.forEach((impuesto) => {
+    const codigo = texto(hijo(impuesto, "codigo")) ?? "";
+    const codigoPorcentaje = texto(hijo(impuesto, "codigoPorcentaje")) ?? "";
+    const base = numero(hijo(impuesto, "baseImponible"), "base imponible");
+    const valor = numero(hijo(impuesto, "valor"), "valor de impuesto");
+    const tarifaTexto = texto(hijo(impuesto, "tarifa"));
+    const tarifaDeclarada = tarifaTexto === null ? null : Number(tarifaTexto);
+    const tarifa = tarifaDeclarada !== null && Number.isFinite(tarifaDeclarada)
+      ? tarifaDeclarada
+      : base > 0 ? redondear(valor * 100 / base) : 0;
+    if (codigo === "2") {
+      montoIva += valor;
+      if (codigoPorcentaje === "6") baseNoObjeto += base;
+      else if (codigoPorcentaje === "7") baseExenta += base;
+      else if (tarifa > 0 || valor > 0) {
+        baseGravada += base;
+        if (tarifa > 0) tarifasPositivas.push(tarifa);
+      } else baseCero += base;
+    } else if (codigo === "3") {
+      montoIce += valor;
+    }
+  });
+
+  const totalSinImpuestos = numero(hijo(info, "totalSinImpuestos"), "total sin impuestos");
+  const basesIdentificadas = redondear(baseCero + baseGravada + baseNoObjeto + baseExenta);
+  const diferenciaBase = redondear(totalSinImpuestos - basesIdentificadas);
+  if (Math.abs(diferenciaBase) <= 0.02) baseCero = redondear(baseCero + diferenciaBase);
+  else if (!impuestosTotales.length) baseCero = redondear(totalSinImpuestos);
+  else throw new Error("Las bases tributarias del XML no cuadran con el total sin impuestos.");
+
+  const nodosDetalle = hijos(detalles).filter((nodo) => nodo.localName === "detalle");
+  const lineas = comun.lineas.map((linea, indice) => {
+    const nodo = nodosDetalle[indice];
+    const impuestos = nodo ? hijo(nodo, "impuestos") : null;
+    const iva = impuestos
+      ? hijos(impuestos).filter((item) => item.localName === "impuesto").find(
+          (item) => texto(hijo(item, "codigo")) === "2"
+        )
+      : null;
+    const valor = iva ? Number(texto(hijo(iva, "valor")) ?? 0) : 0;
+    const base = iva ? Number(texto(hijo(iva, "baseImponible")) ?? linea.totalSinImpuesto) : 0;
+    const tarifaTexto = iva ? texto(hijo(iva, "tarifa")) : null;
+    const tarifaDeclarada = tarifaTexto === null ? null : Number(tarifaTexto);
+    const tarifa = tarifaDeclarada !== null && Number.isFinite(tarifaDeclarada)
+      ? tarifaDeclarada
+      : base > 0 ? redondear(valor * 100 / base) : 0;
+    if (!Number.isFinite(base) || !Number.isFinite(tarifa) || !Number.isFinite(valor)) {
+      throw new Error(`La línea ${linea.numeroLinea} contiene un IVA inválido.`);
+    }
+    return { ...linea, tarifaIva: tarifa, valorIva: redondear(valor) };
+  });
+
+  const propinaTexto = texto(hijo(info, "propina"));
+  const propina = propinaTexto === null ? 0 : Number(propinaTexto);
+  const totalCalculado = redondear(
+    baseCero + baseGravada + baseNoObjeto + baseExenta + montoIva + montoIce + propina
+  );
+  if (!Number.isFinite(propina) || Math.abs(totalCalculado - redondear(comun.importeTotal)) > 0.02) {
+    throw new Error("El total del XML no cuadra con sus bases, impuestos y propina.");
+  }
+  const pagos = hijo(info, "pagos");
+  const primerPago = pagos ? hijos(pagos).find((nodo) => nodo.localName === "pago") : null;
+
+  return {
+    ...comun,
+    compradorRuc,
+    baseCero: redondear(baseCero),
+    baseGravada: redondear(baseGravada),
+    tarifaGravada: tarifasPositivas[0] ?? 0,
+    baseNoObjeto: redondear(baseNoObjeto),
+    baseExenta: redondear(baseExenta),
+    montoIva: redondear(montoIva),
+    montoIce: redondear(montoIce),
+    propina: redondear(propina),
+    formaPago: primerPago ? texto(hijo(primerPago, "formaPago")) : null,
     lineas,
   };
 }

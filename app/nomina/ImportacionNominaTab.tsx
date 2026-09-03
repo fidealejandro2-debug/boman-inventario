@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mensajeError, type Empleado, type Empresa } from "./lib";
 import Aviso from "@/components/Aviso";
 import { confirmarDialogo } from "@/components/Dialogo";
+import { descargarPlantillaExcel } from "@/lib/plantillasExcel";
 
 type TipoCarga = "atraso" | "ausencia" | "descuento" | "anticipo";
 type EstadoFila = "pendiente" | "guardada" | "error";
@@ -202,7 +203,7 @@ export default function ImportacionNominaTab({
     return resultado;
   }, [filas]);
 
-  function descargarPlantilla() {
+  async function descargarPlantilla() {
     const ejemplos = [
       {
         TIPO: "atraso",
@@ -273,23 +274,42 @@ export default function ImportacionNominaTab({
         BASE_REGLAMENTO: "",
       },
     ];
-    const instrucciones = [
-      { CAMPO: "TIPO", REGLA: "atraso, ausencia, descuento o anticipo." },
-      { CAMPO: "IDENTIFICACION", REGLA: "Cédula/identificación existente. Formatea esta columna como texto." },
-      { CAMPO: "ATRASO", REGLA: "MINUTOS es obligatorio. VALOR vacío = solo registro; con valor = sanción económica en borrador." },
-      { CAMPO: "AUSENCIA", REGLA: "Usa TIPO_AUSENCIA. HORAS es opcional; si se llena, debe ser un solo día." },
-      { CAMPO: "DESCUENTO", REGLA: "Requiere VALOR, CUOTAS, MES_APLICACION, ORIGEN_DESCUENTO y DOCUMENTO del expediente." },
-      { CAMPO: "ANTICIPO", REGLA: "Requiere FECHA, VALOR, CUOTAS, MES_APLICACION y DOCUMENTO del expediente." },
-      { CAMPO: "DOCUMENTO", REGLA: "Escribe el nombre exacto del documento activo en el expediente, o su UUID." },
-      { CAMPO: "EMPRESA_RUC", REGLA: "Opcional; si queda vacío se usa la empresa pagadora vigente de la persona." },
-      { CAMPO: "BASE_REGLAMENTO", REGLA: "Obligatoria cuando un atraso lleva VALOR. La sanción queda pendiente de revisión." },
-    ];
-    const libro = XLSX.utils.book_new();
-    const hoja = XLSX.utils.json_to_sheet(ejemplos);
-    hoja["!cols"] = Object.keys(ejemplos[0]).map((campo) => ({ wch: Math.max(13, campo.length + 2) }));
-    XLSX.utils.book_append_sheet(libro, hoja, "CARGA");
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(instrucciones), "INSTRUCCIONES");
-    XLSX.writeFile(libro, "plantilla_carga_masiva_nomina.xlsx");
+    await descargarPlantillaExcel({
+      archivo: "plantilla_carga_masiva_nomina.xlsx",
+      titulo: "Carga masiva de novedades de nómina",
+      descripcion: "Elige los valores de las listas desplegables. Una fila representa un atraso, ausencia, descuento o anticipo.",
+      filasDisponibles: 1000,
+      ejemplos,
+      columnas: [
+        { encabezado: "TIPO", ancho: 16, obligatoria: true, ayuda: "Selecciona atraso, ausencia, descuento o anticipo.", regla: { tipo: "lista", valores: Array.from(TIPOS) } },
+        { encabezado: "IDENTIFICACION", ancho: 20, obligatoria: true, ayuda: "Selecciona la identificación exacta de una persona activa.", regla: { tipo: "lista", valores: empleados.map((e) => e.identificacion) } },
+        { encabezado: "FECHA", ancho: 15, ayuda: "Fecha de la novedad en formato AAAA-MM-DD.", regla: { tipo: "fecha", desde: "2000-01-01", hasta: "2100-12-31" } },
+        { encabezado: "FECHA_HASTA", ancho: 15, ayuda: "Último día de la ausencia. Déjalo vacío para otros tipos.", regla: { tipo: "fecha", desde: "2000-01-01", hasta: "2100-12-31" } },
+        { encabezado: "TIPO_AUSENCIA", ancho: 28, ayuda: "Solo para TIPO ausencia. Selecciona una causa válida.", regla: { tipo: "lista", valores: Array.from(TIPOS_AUSENCIA) } },
+        { encabezado: "HORAS", ancho: 12, ayuda: "Horas de ausencia parcial. Entre 0 y 24.", regla: { tipo: "decimal", minimo: 0, maximo: 24 } },
+        { encabezado: "MINUTOS", ancho: 12, ayuda: "Minutos de atraso. Obligatorio para TIPO atraso.", regla: { tipo: "entero", minimo: 1, maximo: 1440 } },
+        { encabezado: "VALOR", ancho: 14, ayuda: "Monto en USD. En atrasos puede quedar vacío si solo quieres registrar el hecho.", regla: { tipo: "decimal", minimo: 0.01, maximo: 999999999 } },
+        { encabezado: "CUOTAS", ancho: 11, ayuda: "Número entero de cuotas; aplica a descuentos y anticipos.", regla: { tipo: "entero", minimo: 1, maximo: 120 } },
+        { encabezado: "MES_APLICACION", ancho: 18, ayuda: "Primer mes del rol en formato AAAA-MM, por ejemplo 2026-09.", regla: { tipo: "longitud", maximo: 7 } },
+        { encabezado: "EMPRESA_RUC", ancho: 18, ayuda: "RUC pagador. Vacío usa la empresa vigente de la persona.", regla: { tipo: "lista", valores: empresas.map((e) => e.ruc) } },
+        { encabezado: "ORIGEN_DESCUENTO", ancho: 27, ayuda: "Solo para descuentos. Selecciona el origen exacto.", regla: { tipo: "lista", valores: Array.from(ORIGENES_DESCUENTO) } },
+        { encabezado: "DESCRIPCION", ancho: 42, obligatoria: true, ayuda: "Explica la novedad de forma clara.", regla: { tipo: "longitud", maximo: 500 } },
+        { encabezado: "DOCUMENTO", ancho: 38, ayuda: "Nombre exacto o UUID de un documento activo del expediente.", regla: { tipo: "longitud", maximo: 250 } },
+        { encabezado: "BASE_REGLAMENTO", ancho: 38, ayuda: "Obligatoria cuando un atraso tiene valor monetario.", regla: { tipo: "longitud", maximo: 300 } },
+      ],
+      instrucciones: [
+        { campo: "TIPO", regla: "Obligatorio. Usa la lista: atraso, ausencia, descuento o anticipo.", ejemplo: "ausencia" },
+        { campo: "IDENTIFICACION", regla: "Obligatorio. Cédula o identificación de una persona activa; la celda se trata como texto.", ejemplo: "0100000001" },
+        { campo: "ATRASO", regla: "FECHA y MINUTOS son obligatorios. VALOR vacío registra únicamente el atraso; con valor crea una sanción en borrador y exige BASE_REGLAMENTO.", ejemplo: "20 minutos, sin valor" },
+        { campo: "AUSENCIA", regla: "FECHA, FECHA_HASTA y TIPO_AUSENCIA son obligatorios. HORAS es opcional y solo puede usarse cuando empieza y termina el mismo día.", ejemplo: "permiso_con_sueldo" },
+        { campo: "TIPOS DE AUSENCIA", regla: Array.from(TIPOS_AUSENCIA).join(", "), ejemplo: "vacaciones" },
+        { campo: "DESCUENTO", regla: "Requiere VALOR, CUOTAS, MES_APLICACION, ORIGEN_DESCUENTO y DOCUMENTO del expediente.", ejemplo: "uniforme" },
+        { campo: "ORÍGENES DE DESCUENTO", regla: Array.from(ORIGENES_DESCUENTO).join(", "), ejemplo: "consumo_interno" },
+        { campo: "ANTICIPO", regla: "Requiere FECHA, VALOR, CUOTAS, MES_APLICACION y DOCUMENTO del expediente.", ejemplo: "100 en 2 cuotas" },
+        { campo: "DOCUMENTO", regla: "Escribe el nombre exacto del documento activo en el expediente, o su UUID.", ejemplo: "Solicitud anticipo septiembre" },
+        { campo: "EMPRESA_RUC", regla: "Opcional; si queda vacío se usa la empresa pagadora vigente de la persona.", ejemplo: empresas[0]?.ruc ?? "" },
+      ],
+    });
   }
 
   async function leerArchivo(file: File) {
@@ -645,8 +665,8 @@ export default function ImportacionNominaTab({
             if (file) void leerArchivo(file);
           }}
         />
-        <button type="button" className="secondary" onClick={descargarPlantilla}>
-          Descargar plantilla Excel
+        <button type="button" className="secondary" disabled={leyendo || procesando} onClick={descargarPlantilla}>
+          Descargar Excel validado
         </button>
       </div>
 

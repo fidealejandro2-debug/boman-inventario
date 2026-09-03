@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import LineasDocumentoEditor, {
   type LineaDocumentoEdicion,
@@ -364,7 +365,7 @@ export default function ComprasCliente({ perfil }: { perfil: Perfil }) {
   }
 
   return <>
-    <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Compras multiempresa</h2><p className="conteo">Proveedor compartido, RUC comprador, aprobación, recepción parcial y cuarentena.</p></div>{puedeCrear && tab === "ordenes" && <button onClick={() => setMostrarOrden((v) => !v)}>{mostrarOrden ? "Cancelar" : "+ Nueva orden"}</button>}{puedeGestionarProveedor && tab === "proveedores" && <button onClick={() => editarProveedor()}>+ Nuevo proveedor</button>}</div>
+    <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Compras multiempresa</h2><p className="conteo">Proveedor compartido, RUC comprador, aprobación, recepción parcial y cuarentena.</p></div><div className="acciones-documento"><Link className="btn-enlace secondary" href="/compras/importar-xml">Importar XML</Link>{puedeCrear && tab === "ordenes" && <button onClick={() => setMostrarOrden((v) => !v)}>{mostrarOrden ? "Cancelar" : "+ Nueva orden"}</button>}{puedeGestionarProveedor && tab === "proveedores" && <button onClick={() => editarProveedor()}>+ Nuevo proveedor</button>}</div></div>
     {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
     <div className="tabs"><button className={`tab ${tab === "ordenes" ? "activo" : ""}`} onClick={() => setTab("ordenes")}>Órdenes de compra</button><button className={`tab ${tab === "proveedores" ? "activo" : ""}`} onClick={() => setTab("proveedores")}>Proveedores ({proveedores.filter((p) => p.activo).length})</button></div>
 

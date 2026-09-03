@@ -16,12 +16,18 @@ export default function ImportadorGeneralCliente({ perfil }: { perfil: Perfil })
   const [productos, setProductos] = useState<ProductoActual[]>([]);
 
   async function cargarProductos() {
-    const { data } = await supabase
-      .from("productos")
-      .select("sku, nombre")
-      .eq("activo", true)
-      .order("sku");
-    setProductos((data ?? []) as ProductoActual[]);
+    const acumulado: ProductoActual[] = [];
+    let desde = 0;
+    while (true) {
+      const { data, error } = await supabase.from("productos")
+        .select("sku, nombre").eq("activo", true).order("sku")
+        .range(desde, desde + 999);
+      if (error) return;
+      acumulado.push(...((data ?? []) as ProductoActual[]));
+      if ((data ?? []).length < 1000) break;
+      desde += 1000;
+    }
+    setProductos(acumulado);
   }
 
   useEffect(() => { cargarProductos(); }, []);
@@ -29,6 +35,7 @@ export default function ImportadorGeneralCliente({ perfil }: { perfil: Perfil })
   const puedeStock = ["admin", "control", "bodega", "tienda", "franquiciado"].includes(perfil.rol);
   const puedeCatalogo = perfil.rol === "admin";
   const puedeVentas = tienePermiso(perfil, "ventas.acceder") || tienePermiso(perfil, "franquicia.ventas");
+  const puedeCompras = tienePermiso(perfil, "compras.acceder");
   const puedeNomina = tienePermiso(perfil, "nomina.editar");
 
   return (
@@ -68,6 +75,13 @@ export default function ImportadorGeneralCliente({ perfil }: { perfil: Perfil })
               <span className="import-opcion-icono">XML</span>
               <span><strong>Facturas de venta</strong><small>Procesa comprobantes XML, concilia productos y aplica la salida segura de inventario.</small></span>
               <b>Abrir módulo</b>
+            </Link>
+          )}
+          {puedeCompras && (
+            <Link className="import-opcion" href="/compras/importar-xml">
+              <span className="import-opcion-icono">XML</span>
+              <span><strong>Facturas de compra</strong><small>Selecciona varios XML o una carpeta completa; quedan pendientes de homologar antes del registro contable.</small></span>
+              <b>Abrir bandeja</b>
             </Link>
           )}
           {puedeNomina && (
