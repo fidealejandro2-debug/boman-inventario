@@ -11,7 +11,8 @@ type Activo = {
   categoria: string; marca: string | null; modelo: string | null; numero_serie: string | null;
   ubicacion: string | null; responsable_id: string | null; responsable: string | null;
   criticidad: string; estado: string; fecha_adquisicion: string | null; valor_adquisicion: number | null;
-  garantia_hasta: string | null; tipo_medidor: string; lectura_actual: number;
+  garantia_hasta: string | null; porcentaje_depreciacion_anual: number | null;
+  tipo_medidor: string; lectura_actual: number;
   frecuencia_mantenimiento_dias: number | null; frecuencia_mantenimiento_uso: number | null;
   ultimo_mantenimiento_fecha: string | null; proximo_mantenimiento_fecha: string | null;
   proxima_lectura_mantenimiento: number | null; notas: string | null; activo: boolean;
@@ -37,10 +38,24 @@ const ACTIVO_VACIO = {
   codigo: "", nombre: "", categoria: "maquinaria", empresa_id: "", almacen_id: "",
   marca: "", modelo: "", numero_serie: "", ubicacion: "", responsable_id: "", criticidad: "media",
   estado: "operativo", fecha_adquisicion: "", valor_adquisicion: "", garantia_hasta: "",
+  porcentaje_depreciacion_anual: "10",
   tipo_medidor: "ninguno", lectura_actual: "0", frecuencia_mantenimiento_dias: "",
   frecuencia_mantenimiento_uso: "", proximo_mantenimiento_fecha: "",
   proxima_lectura_mantenimiento: "", notas: "", activo: true,
 };
+// Las categorías siguen los grupos de depreciación del RALRTI Art. 28 num. 6
+// lit. a). El tope anual es solo la sugerencia inicial: el reglamento fija un
+// máximo, no un valor único, así que el campo queda editable.
+const CATEGORIAS_ACTIVO: { valor: string; etiqueta: string; tope: string }[] = [
+  { valor: "maquinaria", etiqueta: "Maquinaria", tope: "10" },
+  { valor: "equipo", etiqueta: "Equipo", tope: "10" },
+  { valor: "equipo_computo", etiqueta: "Equipo de cómputo y software", tope: "33" },
+  { valor: "herramienta", etiqueta: "Herramienta", tope: "10" },
+  { valor: "muebles_enseres", etiqueta: "Muebles y enseres", tope: "10" },
+  { valor: "vehiculo", etiqueta: "Vehículo", tope: "20" },
+  { valor: "infraestructura", etiqueta: "Infraestructura / inmueble", tope: "5" },
+  { valor: "otro", etiqueta: "Otro", tope: "" },
+];
 const ORDEN_VACIA = { activo_id: "", tipo: "preventivo", prioridad: "normal", fecha_programada: "", descripcion: "", responsable_id: "", costo_estimado: "0" };
 const DINERO = new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" });
 
@@ -127,7 +142,10 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
       responsable_id: a.responsable_id ?? "",
       estado: a.estado, fecha_adquisicion: a.fecha_adquisicion ?? "",
       valor_adquisicion: a.valor_adquisicion == null ? "" : String(a.valor_adquisicion),
-      garantia_hasta: a.garantia_hasta ?? "", tipo_medidor: a.tipo_medidor,
+      garantia_hasta: a.garantia_hasta ?? "",
+      porcentaje_depreciacion_anual: a.porcentaje_depreciacion_anual == null
+        ? "" : String(a.porcentaje_depreciacion_anual),
+      tipo_medidor: a.tipo_medidor,
       lectura_actual: String(a.lectura_actual),
       frecuencia_mantenimiento_dias: a.frecuencia_mantenimiento_dias == null ? "" : String(a.frecuencia_mantenimiento_dias),
       frecuencia_mantenimiento_uso: a.frecuencia_mantenimiento_uso == null ? "" : String(a.frecuencia_mantenimiento_uso),
@@ -250,11 +268,11 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
       {!cargando && !ordenesFiltradas.length && <tr><td colSpan={8} className="vacio">No hay órdenes con estos filtros.</td></tr>}</tbody></table></div></div>}
 
     {editando !== undefined && <div className="modal-operativo" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditando(undefined); }}><div className="modal-contenido ancho"><div className="header-row"><div><h2>{editando ? `Editar ${editando.codigo}` : "Nuevo activo"}</h2><p className="conteo">Identificación, ubicación y plan preventivo.</p></div><button className="secondary" onClick={() => setEditando(undefined)}>Cerrar</button></div><div className="grid-form">
-      <div className="field"><label>Código *</label><input value={formActivo.codigo} onChange={(e) => cambiarActivo({ codigo: e.target.value })} /></div><div className="field"><label>Nombre *</label><input value={formActivo.nombre} onChange={(e) => cambiarActivo({ nombre: e.target.value })} /></div><div className="field"><label>Categoría *</label><select value={formActivo.categoria} onChange={(e) => cambiarActivo({ categoria: e.target.value })}>{["maquinaria", "vehiculo", "equipo", "herramienta", "infraestructura", "otro"].map((v) => <option key={v}>{v}</option>)}</select></div>
+      <div className="field"><label>Código *</label><input value={formActivo.codigo} onChange={(e) => cambiarActivo({ codigo: e.target.value })} /></div><div className="field"><label>Nombre *</label><input value={formActivo.nombre} onChange={(e) => cambiarActivo({ nombre: e.target.value })} /></div><div className="field"><label>Categoría *</label><select value={formActivo.categoria} onChange={(e) => { const c = CATEGORIAS_ACTIVO.find((x) => x.valor === e.target.value); cambiarActivo({ categoria: e.target.value, porcentaje_depreciacion_anual: c ? c.tope : "" }); }}>{CATEGORIAS_ACTIVO.map((c) => <option value={c.valor} key={c.valor}>{c.etiqueta}</option>)}</select></div>
       <div className="field"><label>Empresa *</label><select value={formActivo.empresa_id} onChange={(e) => cambiarActivo({ empresa_id: e.target.value, almacen_id: "" })}><option value="">Selecciona…</option>{empresas.map((e) => <option value={e.id} key={e.id}>{e.codigo} · {e.razon_social}</option>)}</select></div><div className="field"><label>Almacén</label><select value={formActivo.almacen_id} onChange={(e) => cambiarActivo({ almacen_id: e.target.value })}><option value="">Sin almacén</option>{almacenesEmpresa.map((a) => <option value={a.id} key={a.id}>{a.nombre}</option>)}</select></div><div className="field"><label>Ubicación</label><input value={formActivo.ubicacion} onChange={(e) => cambiarActivo({ ubicacion: e.target.value })} /></div>
       <div className="field"><label>Marca</label><input value={formActivo.marca} onChange={(e) => cambiarActivo({ marca: e.target.value })} /></div><div className="field"><label>Modelo</label><input value={formActivo.modelo} onChange={(e) => cambiarActivo({ modelo: e.target.value })} /></div><div className="field"><label>Número de serie</label><input value={formActivo.numero_serie} onChange={(e) => cambiarActivo({ numero_serie: e.target.value })} /></div>
       <div className="field"><label>Responsable</label><select value={formActivo.responsable_id} onChange={(e) => cambiarActivo({ responsable_id: e.target.value })}><option value="">Sin asignar</option>{responsables.map((p) => <option value={p.id} key={p.id}>{p.nombre_completo}</option>)}</select></div><div className="field"><label>Criticidad</label><select value={formActivo.criticidad} onChange={(e) => cambiarActivo({ criticidad: e.target.value })}>{["baja", "media", "alta", "critica"].map((v) => <option key={v}>{v}</option>)}</select></div><div className="field"><label>Estado</label><select value={formActivo.estado} onChange={(e) => cambiarActivo({ estado: e.target.value })}>{["operativo", "detenido", "mantenimiento", "fuera_servicio", "baja"].map((v) => <option key={v}>{etiqueta(v)}</option>)}</select></div>
-      <div className="field"><label>Fecha adquisición</label><input type="date" value={formActivo.fecha_adquisicion} onChange={(e) => cambiarActivo({ fecha_adquisicion: e.target.value })} /></div><div className="field"><label>Valor adquisición</label><input type="number" min={0} step="0.01" value={formActivo.valor_adquisicion} onChange={(e) => cambiarActivo({ valor_adquisicion: e.target.value })} /></div><div className="field"><label>Garantía hasta</label><input type="date" value={formActivo.garantia_hasta} onChange={(e) => cambiarActivo({ garantia_hasta: e.target.value })} /></div>
+      <div className="field"><label>Fecha adquisición</label><input type="date" value={formActivo.fecha_adquisicion} onChange={(e) => cambiarActivo({ fecha_adquisicion: e.target.value })} /></div><div className="field"><label>Valor adquisición</label><input type="number" min={0} step="0.01" value={formActivo.valor_adquisicion} onChange={(e) => cambiarActivo({ valor_adquisicion: e.target.value })} /></div><div className="field"><label>Garantía hasta</label><input type="date" value={formActivo.garantia_hasta} onChange={(e) => cambiarActivo({ garantia_hasta: e.target.value })} /></div><div className="field"><label>Depreciación anual %</label><input type="number" min={0} max={100} step="0.01" value={formActivo.porcentaje_depreciacion_anual} onChange={(e) => cambiarActivo({ porcentaje_depreciacion_anual: e.target.value })} /><small className="ayuda">Tope RALRTI Art. 28: 5 inmuebles · 10 maquinaria, equipos y muebles · 20 vehículos · 33 cómputo.</small></div>
       <div className="field"><label>Tipo de medidor</label><select value={formActivo.tipo_medidor} onChange={(e) => cambiarActivo({ tipo_medidor: e.target.value })}>{["ninguno", "horas", "kilometros", "ciclos"].map((v) => <option key={v}>{v}</option>)}</select></div><div className="field"><label>Lectura actual</label><input type="number" min={0} step="0.01" value={formActivo.lectura_actual} onChange={(e) => cambiarActivo({ lectura_actual: e.target.value })} /></div><div className="field"><label>Próxima lectura</label><input type="number" min={0} step="0.01" value={formActivo.proxima_lectura_mantenimiento} onChange={(e) => cambiarActivo({ proxima_lectura_mantenimiento: e.target.value })} /></div>
       <div className="field"><label>Frecuencia en días</label><input type="number" min={1} value={formActivo.frecuencia_mantenimiento_dias} onChange={(e) => cambiarActivo({ frecuencia_mantenimiento_dias: e.target.value })} /></div><div className="field"><label>Frecuencia por uso</label><input type="number" min={0} step="0.01" value={formActivo.frecuencia_mantenimiento_uso} onChange={(e) => cambiarActivo({ frecuencia_mantenimiento_uso: e.target.value })} /></div><div className="field"><label>Próxima fecha</label><input type="date" value={formActivo.proximo_mantenimiento_fecha} onChange={(e) => cambiarActivo({ proximo_mantenimiento_fecha: e.target.value })} /></div>
       <div className="field ancho-total"><label>Notas</label><textarea rows={3} value={formActivo.notas} onChange={(e) => cambiarActivo({ notas: e.target.value })} /></div>
