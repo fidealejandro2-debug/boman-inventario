@@ -19,6 +19,13 @@ select
  to_regprocedure('public.registrar_cobro_franquicia_v81(uuid,date,numeric,text,text,uuid)') is not null as cobrar_ok,
  to_regprocedure('public.registrar_devolucion_franquicia_v81(uuid,date,jsonb,jsonb,text,uuid)') is not null as devolver_ok;
 
+select p.proname,
+ position('''credito''' in pg_get_functiondef(p.oid))>0 as admite_credito_ok
+from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and p.proname in
+ ('registrar_venta_franquicia_v47','aplicar_factura_venta_franquicia_v47')
+order by p.proname;
+
 select tablename,rowsecurity from pg_tables where schemaname='public' and tablename in
  ('franquicia_caja_turnos','clientes_franquicia','cuentas_cobrar_franquicia','cobros_franquicia','devoluciones_franquicia','devolucion_franquicia_lineas') order by tablename;
 

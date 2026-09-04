@@ -155,12 +155,21 @@ alter table public.ventas_franquicia drop constraint if exists ventas_franquicia
 alter table public.ventas_franquicia add constraint ventas_franquicia_medio_pago_check check(medio_pago in ('efectivo','transferencia','tarjeta','mixto','otro','credito'));
 
 -- Las RPC v47 validaban una lista literal. Se amplia sin duplicar sus motores.
+-- pg_get_functiondef conserva el formato instalado, que puede variar entre
+-- versiones; por eso se reemplaza solo el ultimo elemento de la lista y se
+-- acepta tambien que otra migracion ya hubiera agregado credito.
 do $migra$ declare n text; o oid; d text; nuevo text; begin
  foreach n in array array['registrar_venta_franquicia_v47','aplicar_factura_venta_franquicia_v47'] loop
   select p.oid into o from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace where ns.nspname='public' and p.proname=n limit 1;
-  d:=pg_get_functiondef(o); nuevo:=replace(d,
-    $old$('efectivo', 'transferencia', 'tarjeta', 'otro')$old$,
-    $new$('efectivo', 'transferencia', 'tarjeta', 'otro', 'credito')$new$);
+  if o is null then raise exception 'No existe la funcion requerida %',n; end if;
+  d:=pg_get_functiondef(o);
+  if position($busca$'credito'$busca$ in d)>0 then continue; end if;
+  nuevo:=regexp_replace(
+    d,
+    $regex$'otro'[[:space:]]*\)$regex$,
+    $reemplazo$'otro', 'credito')$reemplazo$,
+    'g'
+  );
   if nuevo=d then raise exception 'No se pudo habilitar credito en %',n; end if; execute nuevo;
  end loop;
 end;$migra$;

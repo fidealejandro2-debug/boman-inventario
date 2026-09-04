@@ -10,7 +10,7 @@ import type { Franquicia } from "./FranquiciaCliente";
 type Producto = { id: string; sku: string; nombre: string; talla: string | null; categoria: string | null };
 type Linea = {
   id: string; producto_id: string; stock_sistema: number;
-  cantidad_contada: number | null; observacion: string | null;
+  cantidad_contada: number | null; cantidad_reconteo: number | null; observacion: string | null;
   producto: Producto | null;
 };
 type Conteo = {
@@ -39,6 +39,13 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
+  // Revisar y aprobar: el mismo franquiciado puede hacer el segundo conteo y
+  // resolver su propio conteo (v84) -no hay un segundo revisor obligatorio,
+  // fue una decision explicita del negocio, con el limite de que solo puede
+  // tocar conteos de su propio almacen (verificado server-side igual).
+  const [revisando, setRevisando] = useState<Conteo | null>(null);
+  const [reconteos, setReconteos] = useState<Record<string, string>>({});
+  const [notaRevision, setNotaRevision] = useState("");
 
   async function cargar() {
     setCargando(true);
@@ -50,7 +57,7 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
         creador:perfiles!documentos_inventario_creado_por_fkey(nombre_completo),
         responsable:perfiles!documentos_inventario_conteo_responsable_id_fkey(nombre_completo),
         lineas:documento_inventario_lineas(
-          id, producto_id, stock_sistema, cantidad_contada, observacion,
+          id, producto_id, stock_sistema, cantidad_contada, cantidad_reconteo, observacion,
           producto:productos(id, sku, nombre, talla, categoria)
         )
       `).eq("tipo", "conteo").eq("origen_id", franquicia.almacen_id)
@@ -159,6 +166,49 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
     setValores(siguientes);
   }
 
+  function abrirRevision(conteo: Conteo) {
+    const valores: Record<string, string> = {};
+    conteo.lineas.forEach((l) => {
+      if (l.cantidad_contada !== l.stock_sistema) valores[l.producto_id] = l.cantidad_reconteo == null ? "" : String(l.cantidad_reconteo);
+    });
+    setRevisando(conteo); setReconteos(valores); setNotaRevision(""); setMsg(null);
+  }
+
+  async function guardarReconteo() {
+    if (!revisando) return false;
+    const distintas = revisando.lineas.filter((l) => l.cantidad_contada !== l.stock_sistema);
+    const items = distintas
+      .filter((l) => reconteos[l.producto_id] !== "")
+      .map((l) => ({ producto_id: l.producto_id, cantidad: Number(reconteos[l.producto_id]) }));
+    if (items.length !== distintas.length || items.some((i) => !Number.isInteger(i.cantidad) || i.cantidad < 0)) {
+      setMsg({ tipo: "error", texto: "Registra un segundo conteo válido para cada diferencia." });
+      return false;
+    }
+    const { error } = await supabase.rpc("guardar_reconteo_inventario", {
+      p_documento_id: revisando.id, p_items: items, p_nota: notaRevision || "Segundo conteo",
+    });
+    if (error) { setMsg({ tipo: "error", texto: mensajeError(error) }); return false; }
+    return true;
+  }
+
+  async function resolverConteo(aprobar: boolean) {
+    if (!revisando) return;
+    if (!notaRevision.trim()) { setMsg({ tipo: "error", texto: "Escribe la resolución o motivo." }); return; }
+    setProcesando(true); setMsg(null);
+    if (aprobar && revisando.lineas.some((l) => l.cantidad_contada !== l.stock_sistema)) {
+      const ok = await guardarReconteo();
+      if (!ok) { setProcesando(false); return; }
+    }
+    const { error } = await supabase.rpc("resolver_conteo_inventario", {
+      p_documento_id: revisando.id, p_aprobar: aprobar, p_nota: notaRevision.trim(),
+    });
+    setProcesando(false);
+    if (error) { setMsg({ tipo: "error", texto: mensajeError(error) }); return; }
+    setRevisando(null);
+    setMsg({ tipo: "ok", texto: aprobar ? "Conteo aprobado: las diferencias ya se aplicaron al inventario." : "Conteo devuelto para corregir." });
+    await cargar();
+  }
+
   function imprimirHoja(conteo: Conteo) {
     imprimirDocumento(conteo.numero, `<h1>${conteo.numero} · Hoja de conteo ciego</h1>
       <p><b>Tienda:</b> ${franquicia.nombre} &nbsp; <b>Fecha:</b> ${fecha(conteo.created_at)}</p>
@@ -170,7 +220,7 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
   return (
     <>
       <div className="header-row">
-        <div><h3 style={{ margin: 0 }}>Conteo físico</h3><p className="conteo">Cuenta el stock de la tienda; el administrador revisa y aprueba.</p></div>
+        <div><h3 style={{ margin: 0 }}>Conteo físico</h3><p className="conteo">Cuenta el stock de la tienda y aprueba el resultado.</p></div>
         {!soloLectura && !activo && !conteoEnCurso && <button onClick={() => setMostrarNuevo((v) => !v)}>{mostrarNuevo ? "Cancelar" : "+ Iniciar conteo"}</button>}
       </div>
       {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
@@ -219,14 +269,41 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
         </div>
       </section>}
 
+      {revisando && <section className="card">
+        <div className="header-row">
+          <div><h4 style={{ margin: 0 }}>Revisar {revisando.numero}</h4><p className="conteo">Contado por {revisando.creador?.nombre_completo}.</p></div>
+          <button className="chip-limpiar" onClick={() => setRevisando(null)}>Cerrar</button>
+        </div>
+        {(() => {
+          const diferencias = revisando.lineas.filter((l) => l.cantidad_contada !== l.stock_sistema);
+          if (!diferencias.length) return <p className="ayuda">El conteo coincide con el stock del sistema en todos los productos. No hace falta un segundo conteo.</p>;
+          return <>
+            <p className="info-box">Hay {diferencias.length} producto(s) con diferencia. Registra el segundo conteo de cada uno antes de aprobar.</p>
+            <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th className="num">Stock sistema</th><th className="num">1er conteo</th><th className="num">2do conteo</th></tr></thead><tbody>
+              {diferencias.map((l) => <tr key={l.id}>
+                <td><strong>{l.producto?.sku}</strong></td><td>{l.producto?.nombre}</td>
+                <td className="num">{l.stock_sistema}</td><td className="num">{l.cantidad_contada}</td>
+                <td className="num"><input type="number" min={0} value={reconteos[l.producto_id] ?? ""} onChange={(e) => setReconteos({ ...reconteos, [l.producto_id]: e.target.value })} style={{ width: 90, textAlign: "right" }} /></td>
+              </tr>)}
+            </tbody></table></div>
+          </>;
+        })()}
+        <div className="field"><label>Resolución / motivo</label><input value={notaRevision} onChange={(e) => setNotaRevision(e.target.value)} placeholder="Ej: Diferencia por venta no registrada, se ajusta." style={{ width: "100%" }} /></div>
+        <div className="acciones-documento">
+          <button className="secondary" disabled={procesando} onClick={() => resolverConteo(false)}>Rechazar y volver a contar</button>
+          <button disabled={procesando} onClick={() => resolverConteo(true)}>{procesando ? "Procesando..." : "Aprobar y aplicar al inventario"}</button>
+        </div>
+      </section>}
+
       <div className="card">
         <h4 style={{ marginTop: 0 }}>Historial de conteos de esta tienda</h4>
-        {cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Fecha</th><th>Iniciado por</th><th>Estado</th></tr></thead><tbody>
+        {cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Fecha</th><th>Iniciado por</th><th>Estado</th>{!soloLectura && <th></th>}</tr></thead><tbody>
           {conteos.map((c) => <tr key={c.id}>
             <td><strong>{c.numero}</strong></td><td>{fecha(c.created_at)}</td><td>{c.creador?.nombre_completo}</td>
             <td><span className={`badge estado-${c.estado}`}>{ETIQUETAS_ESTADO[c.estado] ?? c.estado}</span></td>
+            {!soloLectura && <td>{c.estado === "pendiente_revision" && <button className="secondary" onClick={() => abrirRevision(c)}>Revisar</button>}</td>}
           </tr>)}
-          {!conteos.length && <tr><td colSpan={4} className="vacio">No hay conteos registrados en esta tienda.</td></tr>}
+          {!conteos.length && <tr><td colSpan={soloLectura ? 4 : 5} className="vacio">No hay conteos registrados en esta tienda.</td></tr>}
         </tbody></table></div>}
       </div>
     </>
