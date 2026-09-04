@@ -178,6 +178,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion", etiqueta: "Órdenes de producción", descripcion: "Rutas, etapas, lotes y costos", visible: puedeVerProduccion },
       { href: "/produccion/calidad", etiqueta: "Calidad y errores", descripcion: "Novedades, reprocesos y acciones correctivas", visible: puedeVerProduccion || puedeVerNomina },
+      { href: "/tablero", etiqueta: "Tablero de contratos", descripcion: "Avance por etapa de los contratos de Boman Sport", visible: puedeVerProduccion },
     ] },
     { id: "inventario", etiqueta: "Inventario", opciones: [
       { href: "/inventario", etiqueta: "Existencias", descripcion: "Stock disponible por almacén", visible: tienePermiso(perfil, "inventario.acceder") },

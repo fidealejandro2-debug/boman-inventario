@@ -152,12 +152,18 @@ declare
   v_oid oid;
   v_def text;
   v_nuevo text;
-  v_col_vieja text := E'      fecha_adquisicion, valor_adquisicion, garantia_hasta, tipo_medidor,';
-  v_col_nueva  text := E'      fecha_adquisicion, valor_adquisicion, garantia_hasta,\n      porcentaje_depreciacion_anual, tipo_medidor,';
-  v_val_vieja text := E'      nullif(p_datos->>\'garantia_hasta\', \'\')::date,\n      coalesce(p_datos->>\'tipo_medidor\', \'ninguno\'),';
-  v_val_nueva text := E'      nullif(p_datos->>\'garantia_hasta\', \'\')::date,\n      nullif(p_datos->>\'porcentaje_depreciacion_anual\', \'\')::numeric,\n      coalesce(p_datos->>\'tipo_medidor\', \'ninguno\'),';
-  v_upd_vieja text := E'      garantia_hasta = nullif(p_datos->>\'garantia_hasta\', \'\')::date,';
-  v_upd_nueva text := E'      garantia_hasta = nullif(p_datos->>\'garantia_hasta\', \'\')::date,\n      porcentaje_depreciacion_anual = nullif(p_datos->>\'porcentaje_depreciacion_anual\', \'\')::numeric,';
+  -- Los tres anclajes son de UNA sola linea a proposito. Un anclaje que abarque
+  -- dos lineas unidas con \n no calza si la funcion se guardo con finales de
+  -- linea de Windows (\r\n), que es lo que pasa al pegar el archivo desde el
+  -- editor de Supabase: la primera version de v78 fallo exactamente por eso.
+  v_col_vieja text := '      fecha_adquisicion, valor_adquisicion, garantia_hasta, tipo_medidor,';
+  v_col_nueva text := '      fecha_adquisicion, valor_adquisicion, garantia_hasta, porcentaje_depreciacion_anual, tipo_medidor,';
+  v_val_vieja text := '      coalesce(p_datos->>''tipo_medidor'', ''ninguno''),';
+  v_val_nueva text := '      nullif(p_datos->>''porcentaje_depreciacion_anual'', '''')::numeric,' || chr(10) ||
+                      '      coalesce(p_datos->>''tipo_medidor'', ''ninguno''),';
+  v_upd_vieja text := '      garantia_hasta = nullif(p_datos->>''garantia_hasta'', '''')::date,';
+  v_upd_nueva text := '      garantia_hasta = nullif(p_datos->>''garantia_hasta'', '''')::date,' || chr(10) ||
+                      '      porcentaje_depreciacion_anual = nullif(p_datos->>''porcentaje_depreciacion_anual'', '''')::numeric,';
 begin
   select p.oid into v_oid
   from pg_catalog.pg_proc p
@@ -169,6 +175,10 @@ begin
   end if;
 
   v_def := pg_catalog.pg_get_functiondef(v_oid);
+  -- Si la funcion se instalo pegando el archivo desde Windows, el cuerpo puede
+  -- venir con \r\n y ningun anclaje calzaria. Se normaliza antes de comparar;
+  -- la funcion se vuelve a crear con finales de linea Unix, que es indistinto.
+  v_def := replace(v_def, chr(13) || chr(10), chr(10));
 
   if position('porcentaje_depreciacion_anual' in v_def) > 0 then
     raise notice 'v78 ya habia parcheado guardar_activo_mantenimiento_v54';
@@ -177,7 +187,9 @@ begin
        or position(v_val_vieja in v_def) = 0
        or position(v_upd_vieja in v_def) = 0 then
       raise exception
-        'v78: guardar_activo_mantenimiento_v54 cambio de forma y no se pudo agregar la tasa de depreciacion. Revisar a mano';
+        'v78: no se pudo agregar la tasa de depreciacion a guardar_activo_mantenimiento_v54. Anclajes encontrados -> columnas:% valores:% update:%. El que salga 0 es el que cambio de forma.',
+        position(v_col_vieja in v_def), position(v_val_vieja in v_def),
+        position(v_upd_vieja in v_def);
     end if;
     v_nuevo := replace(v_def, v_col_vieja, v_col_nueva);
     v_nuevo := replace(v_nuevo, v_val_vieja, v_val_nueva);
