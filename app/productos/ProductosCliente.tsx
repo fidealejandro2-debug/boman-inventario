@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import ImportarCatalogo from "./ImportarCatalogo";
 import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
+import GaleriaImagenes from "@/components/GaleriaImagenes";
 
 type Producto = {
   id: string;
@@ -74,6 +75,7 @@ export default function ProductosCliente() {
   const [categoriaMasiva, setCategoriaMasiva] = useState("");
   const [subcategoriaMasiva, setSubcategoriaMasiva] = useState("");
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
+  const [fotosDe, setFotosDe] = useState<Producto | null>(null);
 
   async function cargar() {
     setCargando(true);
@@ -699,6 +701,7 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
                       <td className="num">{p.stock_minimo}</td>
                       <td className="num">{p.precio != null ? `$${Number(p.precio).toFixed(2)}` : "-"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
+                        <button className="secondary" onClick={() => setFotosDe(p)} style={{ padding: "5px 10px", marginRight: 5 }}>Fotos</button>
                         <button className="secondary" onClick={() => abrirEdicion(p)} style={{ padding: "5px 10px", marginRight: 5 }}>Editar</button>
                         <button className="chip-limpiar" disabled={cambiandoEstado === p.id}
                           onClick={() => alternarActivo(p)} style={{ padding: "5px 10px" }}>
@@ -714,6 +717,12 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
           </div>
         )}
       </div>
+      {fotosDe && <div className="modal-operativo" onMouseDown={(e) => { if (e.target === e.currentTarget) setFotosDe(null); }}>
+        <div className="modal-contenido ancho">
+          <div className="header-row"><div><h2 style={{ margin: 0 }}>{fotosDe.sku} · {fotosDe.nombre}</h2><p className="conteo">Fotografía el producto con el celular o elige varias imágenes.</p></div><button className="secondary" onClick={() => setFotosDe(null)}>Cerrar</button></div>
+          <GaleriaImagenes entidadTipo="producto" entidadId={fotosDe.id} titulo={fotosDe.nombre} puedeEditar />
+        </div>
+      </div>}
     </>
   );
 }

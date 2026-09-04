@@ -55,7 +55,10 @@ export default function LineasDocumentoEditor({
     : productos,
   [permitirDecimales, productos]);
 
-  const sugerencias = useMemo(() => {
+  // Se recorta a 12 para no pintar cientos de filas, pero sin avisar de que
+  // hay mas el usuario ve una caja llena y cree que esa es toda la lista
+  // ("no hay mas con esa inicial") cuando en realidad quedan afuera.
+  const coincidencias = useMemo(() => {
     const q = normalizar(busqueda);
     if (!q) return [];
 
@@ -74,9 +77,10 @@ export default function LineasDocumentoEditor({
         const prioridadA = skuA === q ? 0 : nombreA === q ? 1 : skuA.startsWith(q) ? 2 : nombreA.startsWith(q) ? 3 : 4;
         const prioridadB = skuB === q ? 0 : nombreB === q ? 1 : skuB.startsWith(q) ? 2 : nombreB.startsWith(q) ? 3 : 4;
         return prioridadA - prioridadB || nombreA.localeCompare(nombreB) || skuA.localeCompare(skuB);
-      })
-      .slice(0, 12);
+      });
   }, [busqueda, productosBuscables]);
+  const sugerencias = coincidencias.slice(0, 12);
+  const ocultas = coincidencias.length - sugerencias.length;
 
   function agregar(producto: ProductoDocumento, cantidad = cantidadRapida) {
     const cantidadValida = cantidad > 0 && (permitirDecimales || Number.isInteger(cantidad)) ? cantidad : 1;
@@ -217,6 +221,11 @@ export default function LineasDocumentoEditor({
                   );
                 })}
                 {!sugerencias.length && <div className="sugerencias-vacio">No se encontraron productos.</div>}
+                {ocultas > 0 && (
+                  <div className="sugerencias-vacio">
+                    + {ocultas} resultado{ocultas === 1 ? "" : "s"} más — sigue escribiendo para acotar la búsqueda.
+                  </div>
+                )}
               </div>
             )}
           </div>
