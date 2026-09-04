@@ -1,0 +1,21 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { nuevaClaveIdempotencia } from "@/lib/erp";
+import { dinero, mensajeError } from "./lib";
+import type { Franquicia } from "./FranquiciaCliente";
+
+type Turno={id:string;caja_codigo:string;turno:string;estado:string;saldo_inicial:number;abierto_por:string;abierto_at:string;operador:string;ingresos_total:number|null;egresos_total:number|null;efectivo_esperado:number|null;efectivo_contado:number|null;diferencia:number|null};
+export default function TurnoCajaFranquicia({franquicia,soloLectura=false}:{franquicia:Franquicia;soloLectura?:boolean}){
+ const supabase=useMemo(()=>createClient(),[]); const [turnos,setTurnos]=useState<Turno[]>([]); const [uid,setUid]=useState("");
+ const [caja,setCaja]=useState("CAJA-1"); const [nombre,setNombre]=useState("Mañana"); const [inicial,setInicial]=useState("0"); const [contado,setContado]=useState(""); const [nota,setNota]=useState(""); const [error,setError]=useState<string|null>(null); const [procesando,setProcesando]=useState(false);
+ async function cargar(){const [{data:u},{data,error}]=await Promise.all([supabase.auth.getUser(),supabase.from("vista_turnos_caja_franquicia_v81").select("*").eq("franquicia_id",franquicia.id).order("abierto_at",{ascending:false}).limit(30)]);setUid(u.user?.id??"");if(error)setError(error.message);else setTurnos((data??[]) as Turno[]);}
+ useEffect(()=>{cargar();},[franquicia.id]);
+ const activo=turnos.find(t=>t.abierto_por===uid&&["abierto","reabierto"].includes(t.estado));
+ async function abrir(){setProcesando(true);setError(null);const{error}=await supabase.rpc("abrir_turno_caja_v81",{p_caja_codigo:caja,p_turno:nombre,p_saldo:Number(inicial),p_idempotency_key:nuevaClaveIdempotencia()});setProcesando(false);if(error)return setError(mensajeError(error));await cargar();}
+ async function cerrar(){if(!activo||contado==="")return setError("Indica el efectivo contado.");setProcesando(true);setError(null);const{error}=await supabase.rpc("cerrar_turno_caja_v81",{p_turno_id:activo.id,p_efectivo_contado:Number(contado),p_nota:nota||null,p_idempotency_key:nuevaClaveIdempotencia()});setProcesando(false);if(error)return setError(mensajeError(error));setContado("");setNota("");await cargar();}
+ return <div className="card-interna"><h4>Turnos y cajas físicas</h4>{error&&<p className="error">{error}</p>}{!soloLectura&&(activo?<><p className="ayuda"><strong>{activo.caja_codigo} · {activo.turno}</strong> está abierto a tu nombre. Todas tus operaciones quedan dentro de este cierre.</p><div className="form-inline"><label>Efectivo contado<input type="number" min="0" step="0.01" value={contado} onChange={e=>setContado(e.target.value)}/></label><label>Nota<input value={nota} onChange={e=>setNota(e.target.value)}/></label><button onClick={cerrar} disabled={procesando}>{procesando?"Cerrando…":"Cerrar mi turno"}</button></div></>:<><p className="ayuda">Abre un turno antes de vender. Una caja física solo puede estar abierta por una persona a la vez.</p><div className="form-inline"><label>Caja<input value={caja} onChange={e=>setCaja(e.target.value.toUpperCase())}/></label><label>Turno<input value={nombre} onChange={e=>setNombre(e.target.value)}/></label><label>Saldo inicial<input type="number" min="0" step="0.01" value={inicial} onChange={e=>setInicial(e.target.value)}/></label><button onClick={abrir} disabled={procesando}>{procesando?"Abriendo…":"Abrir turno"}</button></div></>)}
+ {soloLectura&&<p className="ayuda">Vista de supervisión por caja física, turno y operador.</p>}
+ {turnos.length>0&&<div className="tabla-scroll"><table><thead><tr><th>Caja / turno</th><th>Operador</th><th>Estado</th><th className="num">Ingresos</th><th className="num">Contado</th><th className="num">Diferencia</th></tr></thead><tbody>{turnos.filter(t=>soloLectura||t.estado==="cerrado").slice(0,12).map(t=><tr key={t.id}><td>{t.caja_codigo} · {t.turno}</td><td>{t.operador}</td><td>{t.estado}</td><td className="num">{dinero(t.ingresos_total??0)}</td><td className="num">{dinero(t.efectivo_contado??0)}</td><td className="num">{dinero(t.diferencia??0)}</td></tr>)}</tbody></table></div>}
+ </div>;
+}

@@ -37,6 +37,7 @@ export const CATEGORIAS_CAJA = [
   { valor: "sueldos", etiqueta: "Sueldos", tipo: "egreso" },
   { valor: "transporte", etiqueta: "Transporte", tipo: "egreso" },
   { valor: "suministros", etiqueta: "Suministros", tipo: "egreso" },
+  { valor: "deposito_banco", etiqueta: "Depósito bancario", tipo: "egreso" },
   { valor: "otro_egreso", etiqueta: "Otro egreso", tipo: "egreso" },
 ];
 

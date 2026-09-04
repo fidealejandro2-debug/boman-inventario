@@ -8,6 +8,7 @@ import {
   type FacturaSri,
 } from "@/lib/xmlFacturaSri";
 import Aviso from "@/components/Aviso";
+import { pedirTextoDialogo } from "@/components/Dialogo";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, MEDIOS_PAGO, mensajeError } from "./lib";
 
@@ -23,9 +24,10 @@ type Producto = {
 type Asignacion = { productoId: string; cantidad: string };
 type EstadoLinea = { afectaInventario: boolean; asignaciones: Asignacion[] };
 type PagoMixto = Record<
-  "efectivo" | "transferencia" | "tarjeta",
+  "efectivo" | "transferencia" | "tarjeta" | "credito",
   { monto: string; referencia: string }
 >;
+type Cliente = { id: string; nombre: string; identificacion: string | null };
 
 type DocumentoAplicado = {
   id: string;
@@ -38,17 +40,21 @@ type DocumentoAplicado = {
 
 export default function FacturaXmlFranquicia({
   franquicia,
+  puedeCredito,
 }: {
   franquicia: Franquicia;
+  puedeCredito: boolean;
 }) {
   const supabase = createClient();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [historial, setHistorial] = useState<DocumentoAplicado[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [factura, setFactura] = useState<FacturaSri | null>(null);
   const [lineas, setLineas] = useState<Record<number, EstadoLinea>>({});
   const [busquedas, setBusquedas] = useState<Record<number, string>>({});
   const [archivoNombre, setArchivoNombre] = useState("");
   const [archivoHash, setArchivoHash] = useState("");
+  const [cola, setCola] = useState<File[]>([]);
   const [nota, setNota] = useState("");
   const [medioPago, setMedioPago] = useState("efectivo");
   const [referenciaPago, setReferenciaPago] = useState("");
@@ -56,7 +62,10 @@ export default function FacturaXmlFranquicia({
     efectivo: { monto: "", referencia: "" },
     transferencia: { monto: "", referencia: "" },
     tarjeta: { monto: "", referencia: "" },
+    credito: { monto: "", referencia: "" },
   });
+  const [clienteId, setClienteId] = useState("");
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +73,7 @@ export default function FacturaXmlFranquicia({
 
   async function cargar() {
     setCargando(true);
-    const [p, h] = await Promise.all([
+    const [p, h, cl] = await Promise.all([
       supabase
         .from("vista_stock_operativo")
         .select("producto_id, sku, producto, talla, color, stock_disponible")
@@ -76,10 +85,17 @@ export default function FacturaXmlFranquicia({
         .eq("almacen_id", franquicia.almacen_id)
         .order("fecha_emision", { ascending: false })
         .limit(50),
+      supabase
+        .from("clientes_franquicia")
+        .select("id, nombre, identificacion")
+        .eq("franquicia_id", franquicia.id)
+        .eq("activo", true)
+        .order("nombre"),
     ]);
     if (p.error) setError(p.error.message);
     else setProductos((p.data as Producto[]) ?? []);
     if (!h.error) setHistorial((h.data as DocumentoAplicado[]) ?? []);
+    if (!cl.error) setClientes((cl.data as Cliente[]) ?? []);
     setCargando(false);
   }
 
@@ -88,9 +104,7 @@ export default function FacturaXmlFranquicia({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [franquicia.id]);
 
-  async function leerArchivo(evento: React.ChangeEvent<HTMLInputElement>) {
-    const archivo = evento.target.files?.[0];
-    evento.target.value = "";
+  async function cargarArchivo(archivo?: File) {
     if (!archivo) return;
     setError(null);
     setAviso(null);
@@ -131,13 +145,30 @@ export default function FacturaXmlFranquicia({
         efectivo: { monto: "", referencia: "" },
         transferencia: { monto: "", referencia: "" },
         tarjeta: { monto: "", referencia: "" },
+        credito: { monto: "", referencia: "" },
       });
+      setClienteId("");
+      setFechaVencimiento("");
     } catch (e: any) {
       setFactura(null);
       setError(e.message || "No se pudo leer el XML.");
     } finally {
       setProcesando(false);
     }
+  }
+
+  function leerArchivos(evento: React.ChangeEvent<HTMLInputElement>) {
+    const archivos = Array.from(evento.target.files ?? []).filter((a) => a.name.toLowerCase().endsWith(".xml"));
+    evento.target.value = "";
+    if (!archivos.length) return setError("No se encontraron archivos XML.");
+    if (factura) setCola((actual) => [...actual, ...archivos]);
+    else { const [primero, ...resto] = archivos; setCola((actual) => [...actual, ...resto]); cargarArchivo(primero); }
+  }
+
+  function siguienteArchivo() {
+    const [primero, ...resto] = cola;
+    setCola(resto); setFactura(null);
+    if (primero) cargarArchivo(primero);
   }
 
   function candidatos(numeroLinea: number) {
@@ -209,9 +240,11 @@ export default function FacturaXmlFranquicia({
             referencia: referenciaPago.trim() || null,
           }]
         : [];
-  const pagoInvalido =
-    medioPago === "mixto" &&
-    (Math.abs(diferenciaPagos) >= 0.005 || pagos.length < 2);
+  const referenciasFaltantes = pagos.some((p) => ["transferencia", "tarjeta"].includes(p.medio_pago) && !p.referencia);
+  const usaCredito = pagos.some((p) => p.medio_pago === "credito");
+  const pagoInvalido = referenciasFaltantes || (medioPago === "mixto" &&
+    (Math.abs(diferenciaPagos) >= 0.005 || pagos.length < 2)) ||
+    (usaCredito && (!clienteId || !fechaVencimiento));
 
   function actualizarPagoMixto(
     medio: keyof PagoMixto,
@@ -222,6 +255,23 @@ export default function FacturaXmlFranquicia({
       ...pagosMixtos,
       [medio]: { ...pagosMixtos[medio], [campo]: valor },
     });
+  }
+
+  async function crearCliente() {
+    const nombre = (await pedirTextoDialogo("Nombre completo o razón social del cliente:", ""))?.trim();
+    if (!nombre) return;
+    const identificacion = (await pedirTextoDialogo("Cédula o RUC (opcional):", ""))?.trim() ?? "";
+    const telefono = (await pedirTextoDialogo("Teléfono (opcional):", ""))?.trim() ?? "";
+    const { data, error } = await supabase.rpc("guardar_cliente_franquicia_v81", {
+      p_id: null,
+      p_identificacion: identificacion || null,
+      p_nombre: nombre,
+      p_telefono: telefono || null,
+      p_email: null,
+    });
+    if (error) return setError(mensajeError(error));
+    await cargar();
+    setClienteId(String(data));
   }
 
   async function aplicar() {
@@ -236,7 +286,9 @@ export default function FacturaXmlFranquicia({
     }
     if (pagoInvalido) {
       return setError(
-        pagos.length < 2
+        referenciasFaltantes ? "Transferencia y tarjeta requieren número de referencia." : usaCredito && (!clienteId || !fechaVencimiento)
+          ? "La venta a crédito requiere cliente y fecha de vencimiento."
+          : pagos.length < 2
           ? "Un pago mixto debe usar al menos dos medios."
           : diferenciaPagos < 0
             ? `Falta distribuir ${dinero(Math.abs(diferenciaPagos))}.`
@@ -283,11 +335,13 @@ export default function FacturaXmlFranquicia({
 
     // El envoltorio v44 resuelve el almacen del local, admite los roles de
     // franquicia (el motor historico los rechaza) y registra el ingreso en caja.
-    const { data, error } = await supabase.rpc("aplicar_factura_venta_franquicia_v47", {
+    const { data, error } = await supabase.rpc("aplicar_factura_venta_franquicia_v81", {
       p_documento: documento,
       p_asignaciones: asignaciones,
       p_pagos: pagos,
       p_nota: nota || null,
+      p_cliente_id: usaCredito ? clienteId : null,
+      p_fecha_vencimiento: usaCredito ? fechaVencimiento : null,
     });
     setProcesando(false);
     if (error) return setError(mensajeError(error));
@@ -301,6 +355,7 @@ export default function FacturaXmlFranquicia({
     setNota("");
     setReferenciaPago("");
     cargar();
+    const [siguiente, ...resto] = cola; setCola(resto); if (siguiente) cargarArchivo(siguiente);
   }
 
   if (cargando) return <p className="ayuda">Cargando…</p>;
@@ -317,12 +372,14 @@ export default function FacturaXmlFranquicia({
       <p className="ayuda">
         Sube el XML de la factura que emitió tu facturador. Cada línea se relaciona con
         el producto del local que corresponde, y al aplicarla se descuenta el stock.
-        El total entra como ingreso a la caja del local y una misma factura no se puede aplicar dos veces.
+        El valor pagado entra a caja; cualquier parte a crédito queda en cartera. Una misma factura no se puede aplicar dos veces.
       </p>
 
       <div className="card-interna">
         <h4>Cargar factura</h4>
-        <input type="file" accept=".xml" onChange={leerArchivo} disabled={procesando} />
+        <div className="form-inline"><label>Seleccionar XML<input type="file" accept=".xml" multiple onChange={leerArchivos} disabled={procesando} /></label><label>Seleccionar carpeta<input type="file" accept=".xml" multiple {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} onChange={leerArchivos} disabled={procesando} /></label></div>
+        <p className="ayuda">Puedes elegir varios archivos o una carpeta completa. Se revisan uno por uno antes de descontar stock. Pendientes en cola: <strong>{cola.length}</strong>.</p>
+        {!factura&&cola.length>0&&<button className="secondary" onClick={siguienteArchivo}>Procesar siguiente XML</button>}
         {procesando && !factura && <p className="ayuda">Leyendo el XML…</p>}
       </div>
 
@@ -479,6 +536,7 @@ export default function FacturaXmlFranquicia({
                 {MEDIOS_PAGO.map((medio) => (
                   <option key={medio.valor} value={medio.valor}>{medio.etiqueta}</option>
                 ))}
+                {puedeCredito && <option value="credito">Crédito</option>}
               </select>
             </label>
             {medioPago !== "mixto" && (
@@ -499,13 +557,35 @@ export default function FacturaXmlFranquicia({
                 onChange={(e) => setNota(e.target.value)}
               />
             </label>
+            {usaCredito && (
+              <>
+                <label>
+                  Cliente del crédito
+                  <select value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
+                    <option value="">Selecciona…</option>
+                    {clientes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}{c.identificacion ? ` · ${c.identificacion}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className="btn-mini secondary" onClick={crearCliente}>
+                    + Nuevo cliente
+                  </button>
+                </label>
+                <label>
+                  Vencimiento
+                  <input type="date" min={factura.fechaEmision} value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} />
+                </label>
+              </>
+            )}
           </div>
 
           {medioPago === "mixto" && (
             <div className="card-interna">
               <h4>Distribucion del pago</h4>
               <div className="form-grid">
-                {(["efectivo", "transferencia", "tarjeta"] as const).map((medio) => (
+                {(["efectivo", "transferencia", "tarjeta", ...(puedeCredito ? ["credito" as const] : [])] as const).map((medio) => (
                   <div key={medio}>
                     <label>
                       {medio.charAt(0).toUpperCase() + medio.slice(1)}
@@ -517,7 +597,7 @@ export default function FacturaXmlFranquicia({
                         onChange={(e) => actualizarPagoMixto(medio, "monto", e.target.value)}
                       />
                     </label>
-                    {medio !== "efectivo" && (
+                    {medio !== "efectivo" && medio !== "credito" && (
                       <label>
                         Referencia
                         <input
@@ -559,8 +639,8 @@ export default function FacturaXmlFranquicia({
             >
               {procesando ? "Aplicando…" : "Aplicar factura y descontar stock"}
             </button>
-            <button className="secondary" onClick={() => setFactura(null)}>
-              Cancelar
+            <button className="secondary" onClick={siguienteArchivo}>
+              Omitir y seguir
             </button>
           </div>
         </div>

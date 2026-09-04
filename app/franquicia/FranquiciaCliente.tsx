@@ -11,6 +11,9 @@ import InventarioFranquicia from "./InventarioFranquicia";
 import FacturaXmlFranquicia from "./FacturaXmlFranquicia";
 import AlertasFranquicia from "./AlertasFranquicia";
 import MensualFranquicia from "./MensualFranquicia";
+import CarteraFranquicia from "./CarteraFranquicia";
+import TurnoCajaFranquicia from "./TurnoCajaFranquicia";
+import ConteoFranquicia from "./ConteoFranquicia";
 
 export type Franquicia = {
   id: string;
@@ -21,7 +24,7 @@ export type Franquicia = {
   empresa_id: string;
 };
 
-type Pestana = "ventas" | "factura" | "caja" | "inventario" | "alertas" | "mensual";
+type Pestana = "ventas" | "factura" | "caja" | "cartera" | "inventario" | "conteo" | "alertas" | "mensual";
 
 export default function FranquiciaCliente({
   rol,
@@ -49,8 +52,17 @@ export default function FranquiciaCliente({
   const puedeCaja = tienePermiso(perfil, "franquicia.caja") || esRevision;
   const puedePrecio = tienePermiso(perfil, "franquicia.precio_libre");
   const puedeDescuento = tienePermiso(perfil, "franquicia.descuento");
-  const puedeInventario = tienePermiso(perfil, "franquicia.inventario") || esRevision;
+  const editaInventario = tienePermiso(perfil, "franquicia.inventario") && !esRevision;
+  const puedeInventario = tienePermiso(perfil, "inventario.acceder") || editaInventario || esRevision;
   const puedeReposicion = tienePermiso(perfil, "franquicia.reposicion") || esRevision;
+  const puedeCobros = tienePermiso(perfil, "franquicia.cobros") || esRevision;
+  const puedeDevoluciones = tienePermiso(perfil, "franquicia.devoluciones");
+  const puedeTurnos = tienePermiso(perfil, "franquicia.turnos");
+  // Conteo fisico: lo hace quien opera la tienda (vendedor o franquiciado), no
+  // una lista de permisos aparte -las RPC de conteo (v82) ya filtran por estos
+  // mismos dos roles, no por un codigo de permiso. Admin lo ve en modo revision,
+  // solo lectura: la aprobacion la sigue haciendo desde /conteos, no aqui.
+  const puedeConteo = rol === "franquiciado" || rol === "vendedor_franquicia" || esRevision;
 
   useEffect(() => {
     (async () => {
@@ -117,8 +129,10 @@ export default function FranquiciaCliente({
     { id: "ventas", etiqueta: "Venta rápida", visible: puedeVender },
     { id: "factura", etiqueta: "Factura XML", visible: puedeVender },
     { id: "caja", etiqueta: "Caja", visible: puedeCaja },
+    { id: "cartera", etiqueta: "Crédito y cobros", visible: puedeCobros },
     { id: "mensual", etiqueta: "Mensual", visible: puedeCaja },
     { id: "inventario", etiqueta: "Inventario", visible: puedeInventario },
+    { id: "conteo", etiqueta: "Conteo físico", visible: puedeConteo },
     { id: "alertas", etiqueta: "Alertas", visible: puedeReposicion },
   ];
   const visibles = pestanas.filter((p) => p.visible);
@@ -170,23 +184,33 @@ export default function FranquiciaCliente({
               </button>
             ))}
           </div>
+          {puedeTurnos && ["ventas", "factura", "caja", "cartera"].includes(tabActiva ?? "") && (
+            <TurnoCajaFranquicia franquicia={franquicia} soloLectura={esRevision} />
+          )}
 
           {tabActiva === "ventas" && puedeVender && (
             <VentasFranquicia
               franquicia={franquicia}
               puedePrecio={puedePrecio}
               puedeDescuento={puedeDescuento}
+              puedeCredito={tienePermiso(perfil, "franquicia.cobros")}
+              puedeDevoluciones={puedeDevoluciones}
             />
           )}
           {tabActiva === "factura" && puedeVender && (
-            <FacturaXmlFranquicia franquicia={franquicia} />
+            <FacturaXmlFranquicia
+              franquicia={franquicia}
+              puedeCredito={tienePermiso(perfil, "franquicia.cobros")}
+            />
           )}
           {tabActiva === "caja" && puedeCaja && (
             <CajaFranquicia franquicia={franquicia} soloLectura={esRevision} esAdmin={rol === "admin"} />
           )}
           {tabActiva === "inventario" && puedeInventario && (
-            <InventarioFranquicia franquicia={franquicia} soloLectura={esRevision} />
+            <InventarioFranquicia franquicia={franquicia} soloLectura={esRevision || !editaInventario} />
           )}
+          {tabActiva === "cartera" && puedeCobros && <CarteraFranquicia franquicia={franquicia} soloLectura={esRevision} />}
+          {tabActiva === "conteo" && puedeConteo && <ConteoFranquicia franquicia={franquicia} soloLectura={esRevision} />}
           {tabActiva === "mensual" && puedeCaja && (
             <MensualFranquicia franquicia={franquicia} />
           )}

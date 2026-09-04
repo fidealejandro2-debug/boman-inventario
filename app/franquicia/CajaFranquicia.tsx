@@ -182,6 +182,7 @@ export default function CajaFranquicia({
   async function registrar() {
     if (!form.concepto.trim()) return setError("Escribe el concepto del movimiento.");
     if (Number(form.monto) <= 0) return setError("El monto debe ser mayor a cero.");
+    if (["transferencia", "tarjeta"].includes(form.medio_pago) && !form.referencia.trim()) return setError("La referencia es obligatoria para transferencia o tarjeta.");
 
     setGuardando(true);
     setError(null);
@@ -194,6 +195,9 @@ export default function CajaFranquicia({
       p_medio_pago: form.medio_pago,
       p_referencia: form.referencia || null,
       p_idempotency_key: nuevaClaveIdempotencia(),
+      // Ignorado para franquiciado/tienda (resuelven su propio local por sesion);
+      // obligatorio para admin, que no tiene un local "propio" que resolver.
+      p_almacen_id: franquicia.almacen_id,
     });
     setGuardando(false);
     if (error) return setError(mensajeError(error));
@@ -314,7 +318,10 @@ export default function CajaFranquicia({
         </div>
       </div>
 
-      <div className={`card-interna fq-caja-cierre ${soloLectura ? "fq-caja-supervision" : ""}`}>
+      <div
+        className={`card-interna fq-caja-cierre ${soloLectura ? "fq-caja-supervision" : ""}`}
+        style={!soloLectura ? { display: "none" } : undefined}
+      >
         <div className="fq-caja-cabecera">
           <h4>Cierre diario de efectivo</h4>
           {soloLectura && <span className="badge fq-badge-supervision">Vista de supervisión</span>}
@@ -442,8 +449,14 @@ export default function CajaFranquicia({
         )}
       </div>
 
-      {!soloLectura && <div className="card-interna">
+      {(!soloLectura || esAdmin) && <div className="card-interna">
         <h4>Registrar movimiento</h4>
+        {/* El admin no tiene caja propia que abrir/cerrar (por eso el resto de
+            la pantalla sigue en modo supervision): esto es solo para dejar
+            constancia de depositos o ajustes de efectivo de un local ajeno,
+            ej. el efectivo que ya se contó en un cierre anterior y se lleva
+            al banco. */}
+        {soloLectura && esAdmin && <p className="ayuda">Quedará registrado a tu nombre como movimiento administrativo de este local.</p>}
         <div className="form-grid">
           <label>
             Tipo
@@ -522,12 +535,12 @@ export default function CajaFranquicia({
             />
           </label>
         </div>
-        <button onClick={registrar} disabled={guardando || soloLectura}>
+        <button onClick={registrar} disabled={guardando || (soloLectura && !esAdmin)}>
           {guardando ? "Registrando…" : "Registrar movimiento"}
         </button>
       </div>}
 
-      <div className="card-interna">
+      {soloLectura && <div className="card-interna">
         <h4>Historial de cierres</h4>
         <div className="tabla-scroll">
           <table>
@@ -574,7 +587,7 @@ export default function CajaFranquicia({
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       <div className="filtros">
         <label className="check-inline">

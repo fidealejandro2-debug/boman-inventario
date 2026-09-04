@@ -7,7 +7,8 @@ import { exportarCSV, fecha as fmtFecha } from "@/lib/utils";
 import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, hoyLocalISO, MEDIOS_PAGO, mensajeError } from "./lib";
-import { pedirMotivoDialogo } from "@/components/Dialogo";
+import { pedirMotivoDialogo, pedirTextoDialogo } from "@/components/Dialogo";
+import DevolucionVentaFranquicia from "./DevolucionVentaFranquicia";
 
 type Disponible = {
   producto_id: string;
@@ -36,7 +37,7 @@ type PagoVenta = {
 };
 
 type PagoMixto = Record<
-  "efectivo" | "transferencia" | "tarjeta",
+  "efectivo" | "transferencia" | "tarjeta" | "credito",
   { monto: string; referencia: string }
 >;
 
@@ -55,16 +56,21 @@ type Venta = {
   created_at: string;
   pagos: PagoVenta[];
 };
+type Cliente = { id: string; nombre: string; identificacion: string | null };
 
 export default function VentasFranquicia({
   franquicia,
   puedePrecio,
   puedeDescuento,
+  puedeCredito,
+  puedeDevoluciones,
 }: {
   franquicia: Franquicia;
   /** Sin esto la venta va al precio de catalogo; la base lo vuelve a validar. */
   puedePrecio: boolean;
   puedeDescuento: boolean;
+  puedeCredito: boolean;
+  puedeDevoluciones: boolean;
 }) {
   const supabase = createClient();
   const [stock, setStock] = useState<Disponible[]>([]);
@@ -90,13 +96,18 @@ export default function VentasFranquicia({
     efectivo: { monto: "", referencia: "" },
     transferencia: { monto: "", referencia: "" },
     tarjeta: { monto: "", referencia: "" },
+    credito: { monto: "", referencia: "" },
   });
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clienteId, setClienteId] = useState("");
+  const [vencimiento, setVencimiento] = useState("");
+  const [devolviendo, setDevolviendo] = useState<Venta | null>(null);
   const [nota, setNota] = useState("");
   const [fechaVenta, setFechaVenta] = useState(hoyLocalISO());
 
   async function cargar() {
     setCargando(true);
-    const [s, v] = await Promise.all([
+    const [s, v, c] = await Promise.all([
       supabase
         .from("vista_stock_operativo")
         .select("producto_id, sku, producto, talla, color, precio, stock_disponible")
@@ -108,10 +119,12 @@ export default function VentasFranquicia({
         .eq("franquicia_id", franquicia.id)
         .order("numero", { ascending: false })
         .limit(100),
+      supabase.from("clientes_franquicia").select("id,nombre,identificacion").eq("franquicia_id",franquicia.id).eq("activo",true).order("nombre"),
     ]);
     if (s.error) setError(s.error.message);
     else setStock((s.data as Disponible[]) ?? []);
     if (!v.error) setVentas((v.data as Venta[]) ?? []);
+    if (!c.error) setClientes((c.data as Cliente[]) ?? []);
     setCargando(false);
   }
 
@@ -226,6 +239,8 @@ export default function VentasFranquicia({
   if (medioPago === "mixto" && pagos.length < 2) {
     problemas.push("Un pago mixto debe usar al menos dos medios");
   }
+  if (pagos.some((p) => ["transferencia", "tarjeta"].includes(p.medio_pago) && !p.referencia?.trim())) problemas.push("Transferencia y tarjeta requieren número de referencia");
+  if (pagos.some((p) => p.medio_pago === "credito") && (!clienteId || !vencimiento)) problemas.push("El crédito requiere cliente y fecha de vencimiento");
 
   async function registrar() {
     if (!lineas.length) return setError("Agrega al menos un producto.");
@@ -235,7 +250,7 @@ export default function VentasFranquicia({
 
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("registrar_venta_franquicia_v50", {
+    const { error } = await supabase.rpc("registrar_venta_franquicia_v81", {
       p_fecha: fechaVenta,
       p_items: lineas.map((l) => ({
         producto_id: l.producto_id,
@@ -247,6 +262,8 @@ export default function VentasFranquicia({
       p_descuento: Number(descuentoGeneral || 0),
       p_referencia: medioPago === "mixto" ? null : referencia || null,
       p_nota: nota || null,
+      p_cliente_id: clienteId || null,
+      p_fecha_vencimiento: vencimiento || null,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
     setGuardando(false);
@@ -260,8 +277,10 @@ export default function VentasFranquicia({
       efectivo: { monto: "", referencia: "" },
       transferencia: { monto: "", referencia: "" },
       tarjeta: { monto: "", referencia: "" },
+      credito: { monto: "", referencia: "" },
     });
     setNota("");
+    setClienteId(""); setVencimiento("");
     cargar();
   }
 
@@ -280,6 +299,19 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
     if (error) return setError(mensajeError(error));
     confirmar("Venta anulada", (data as { mensaje?: string } | null)?.mensaje ?? "El stock volvió al local.");
     cargar();
+  }
+
+  async function crearCliente() {
+    const nombre = (await pedirTextoDialogo("Nombre completo o razón social del cliente:", ""))?.trim();
+    if (!nombre) return;
+    const identificacion = (await pedirTextoDialogo("Cédula o RUC (opcional):", ""))?.trim() ?? "";
+    const telefono = (await pedirTextoDialogo("Teléfono (opcional):", ""))?.trim() ?? "";
+    const { data, error } = await supabase.rpc("guardar_cliente_franquicia_v81", {
+      p_id: null, p_identificacion: identificacion || null, p_nombre: nombre,
+      p_telefono: telefono || null, p_email: null,
+    });
+    if (error) return setError(mensajeError(error));
+    await cargar(); setClienteId(String(data));
   }
 
   const ventasHoy = ventas.filter((v) => v.fecha === hoyLocalISO() && v.estado === "registrada");
@@ -454,6 +486,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                       {m.etiqueta}
                     </option>
                   ))}
+                  {puedeCredito && <option value="credito">Crédito</option>}
                 </select>
               </label>
               <label>
@@ -479,6 +512,10 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                 />
               </label>
               )}
+              {(medioPago === "credito" || (medioPago === "mixto" && Number(pagosMixtos.credito.monto)>0)) && <>
+                <label>Cliente<select value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Selecciona…</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}{c.identificacion?` · ${c.identificacion}`:""}</option>)}</select><button type="button" className="btn-mini secondary" onClick={crearCliente}>+ Nuevo cliente</button></label>
+                <label>Vencimiento<input type="date" min={fechaVenta} value={vencimiento} onChange={e=>setVencimiento(e.target.value)}/></label>
+              </>}
               <label className="ancho-total">
                 Nota
                 <input
@@ -497,7 +534,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                   exactamente con el total de la venta.
                 </p>
                 <div className="form-grid">
-                  {(["efectivo", "transferencia", "tarjeta"] as const).map((medio) => (
+                  {(["efectivo", "transferencia", "tarjeta", ...(puedeCredito ? ["credito" as const] : [])] as const).map((medio) => (
                     <div key={medio}>
                       <label>
                         {medio.charAt(0).toUpperCase() + medio.slice(1)}
@@ -509,7 +546,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                           onChange={(e) => actualizarPagoMixto(medio, "monto", e.target.value)}
                         />
                       </label>
-                      {medio !== "efectivo" && (
+                      {["transferencia", "tarjeta"].includes(medio) && (
                         <label>
                           Referencia
                           <input
@@ -608,9 +645,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                 </td>
                 <td>
                   {v.estado === "registrada" && (
-                    <button className="btn-mini secondary" disabled={guardando} onClick={() => anular(v)}>
-                      Anular
-                    </button>
+                    <>{puedeDevoluciones&&<button className="btn-mini secondary" disabled={guardando} onClick={() => setDevolviendo(v)}>Devolver</button>}<button className="btn-mini secondary" disabled={guardando} onClick={() => anular(v)}>Anular</button></>
                   )}
                 </td>
               </tr>
@@ -625,6 +660,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
           </tbody>
         </table>
       </div>
+      {devolviendo&&<DevolucionVentaFranquicia ventaId={devolviendo.id} numero={devolviendo.numero} factor={devolviendo.subtotal > 0 ? devolviendo.total / devolviendo.subtotal : 1} onCerrar={()=>setDevolviendo(null)} onListo={()=>{setDevolviendo(null);confirmar("Devolución registrada","El stock y el reembolso quedaron registrados.");cargar();}}/>}
     </>
   );
 }

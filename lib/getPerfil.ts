@@ -57,11 +57,12 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
   franquiciado: [
     "inventario.acceder", "operaciones.acceder", "franquicia.acceder",
     "franquicia.ventas", "franquicia.caja", "franquicia.inventario",
-    "franquicia.reposicion", "notificaciones.acceder", "importaciones.acceder",
+    "franquicia.reposicion", "franquicia.turnos", "franquicia.cobros",
+    "franquicia.devoluciones", "notificaciones.acceder", "importaciones.acceder",
   ],
   vendedor_franquicia: [
     "inventario.acceder", "franquicia.acceder", "franquicia.ventas",
-    "notificaciones.acceder",
+    "franquicia.turnos", "notificaciones.acceder",
   ],
 };
 
