@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fecha } from "@/lib/utils";
 import { ETIQUETAS_ESTADO, imprimirDocumento, nuevaClaveIdempotencia } from "@/lib/erp";
+import { confirmarDialogo, mostrarAvisoDialogo } from "@/components/Dialogo";
 import { mensajeError } from "./lib";
 import type { Franquicia } from "./FranquiciaCliente";
 
@@ -71,6 +72,12 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
   }
 
   useEffect(() => { cargar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [franquicia.almacen_id]);
+  useEffect(() => {
+    if (msg?.tipo !== "error") return;
+    const actual = msg;
+    void mostrarAvisoDialogo(msg.texto, "No se pudo completar la acción", true)
+      .then(() => setMsg((vigente) => vigente === actual ? null : vigente));
+  }, [msg]);
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -134,7 +141,7 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
     if (!activo) return;
     const vacios = activo.lineas.filter((l) => (valores[l.producto_id] ?? "") === "");
     if (enviar && vacios.length > 0) {
-      if (!confirm(`${vacios.length} producto(s) están vacíos y se registrarán con cantidad 0.\n\nSignifica que físicamente no encontraste existencias de esos productos. ¿Continuar?`)) return;
+      if (!await confirmarDialogo(`${vacios.length} producto(s) están vacíos y se registrarán con cantidad 0.\n\nSignifica que físicamente no encontraste existencias de esos productos. ¿Continuar?`)) return;
     }
     const valoresFinales = { ...valores };
     if (enviar) vacios.forEach((l) => { valoresFinales[l.producto_id] = "0"; });
@@ -181,19 +188,22 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
       .filter((l) => reconteos[l.producto_id] !== "")
       .map((l) => ({ producto_id: l.producto_id, cantidad: Number(reconteos[l.producto_id]) }));
     if (items.length !== distintas.length || items.some((i) => !Number.isInteger(i.cantidad) || i.cantidad < 0)) {
-      setMsg({ tipo: "error", texto: "Registra un segundo conteo válido para cada diferencia." });
+      await mostrarAvisoDialogo("Registra un segundo conteo válido para cada diferencia.", "No se puede continuar", true);
       return false;
     }
     const { error } = await supabase.rpc("guardar_reconteo_inventario", {
       p_documento_id: revisando.id, p_items: items, p_nota: notaRevision || "Segundo conteo",
     });
-    if (error) { setMsg({ tipo: "error", texto: mensajeError(error) }); return false; }
+    if (error) { await mostrarAvisoDialogo(mensajeError(error), "No se pudo guardar el segundo conteo", true); return false; }
     return true;
   }
 
   async function resolverConteo(aprobar: boolean) {
     if (!revisando) return;
-    if (!notaRevision.trim()) { setMsg({ tipo: "error", texto: "Escribe la resolución o motivo." }); return; }
+    if (!notaRevision.trim()) {
+      await mostrarAvisoDialogo("Escribe la resolución o motivo.", "Falta la resolución", true);
+      return;
+    }
     setProcesando(true); setMsg(null);
     if (aprobar && revisando.lineas.some((l) => l.cantidad_contada !== l.stock_sistema)) {
       const ok = await guardarReconteo();
@@ -203,7 +213,7 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
       p_documento_id: revisando.id, p_aprobar: aprobar, p_nota: notaRevision.trim(),
     });
     setProcesando(false);
-    if (error) { setMsg({ tipo: "error", texto: mensajeError(error) }); return; }
+    if (error) { await mostrarAvisoDialogo(mensajeError(error), "No se pudo resolver el conteo", true); return; }
     setRevisando(null);
     setMsg({ tipo: "ok", texto: aprobar ? "Conteo aprobado: las diferencias ya se aplicaron al inventario." : "Conteo devuelto para corregir." });
     await cargar();
@@ -223,7 +233,7 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
         <div><h3 style={{ margin: 0 }}>Conteo físico</h3><p className="conteo">Cuenta el stock de la tienda y aprueba el resultado.</p></div>
         {!soloLectura && !activo && !conteoEnCurso && <button onClick={() => setMostrarNuevo((v) => !v)}>{mostrarNuevo ? "Cancelar" : "+ Iniciar conteo"}</button>}
       </div>
-      {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
+      {msg?.tipo === "ok" && <div className="success">{msg.texto}</div>}
 
       {!soloLectura && mostrarNuevo && !activo && <form className="card" onSubmit={crearConteo}>
         <div className="field"><label>Acta / motivo</label><input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej: Conteo mensual" style={{ width: "100%" }} /></div>
