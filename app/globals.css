@@ -208,9 +208,19 @@ a { color: inherit; }
   transition: transform .18s ease, color .15s ease;
 }
 .nav-seccion.abierta .nav-modulo-flecha { color: #fff; transform: rotate(180deg); }
+.nav-submenu-envoltorio {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .26s var(--ease-settle);
+}
+.nav-submenu-envoltorio.abierta {
+  grid-template-rows: 1fr;
+}
 .nav-submenu {
   display: grid;
   gap: 2px;
+  min-height: 0;
+  overflow: hidden;
   margin: 3px 0 7px 16px;
   padding-left: 13px;
   border-left: 1px solid rgba(255,255,255,.15);

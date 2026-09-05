@@ -284,20 +284,22 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
                   <span className="nav-modulo-texto">{modulo.etiqueta}</span>
                   <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
                 </button>
-                {expandido && !contraido && (
-                  <div className="nav-submenu" id={`nav-submenu-${modulo.id}`}>
-                    {modulo.opciones.map((opcion) => (
-                      <Link
-                        key={opcion.href}
-                        href={opcion.href}
-                        className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
-                        title={`${opcion.etiqueta} — ${opcion.descripcion}`}
-                      >
-                        <span className="nav-subenlace-marca" aria-hidden="true" />
-                        <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
-                        <span className="nav-enlace-flecha" aria-hidden="true">›</span>
-                      </Link>
-                    ))}
+                {!contraido && (
+                  <div className={`nav-submenu-envoltorio${expandido ? " abierta" : ""}`}>
+                    <div className="nav-submenu" id={`nav-submenu-${modulo.id}`}>
+                      {modulo.opciones.map((opcion) => (
+                        <Link
+                          key={opcion.href}
+                          href={opcion.href}
+                          className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
+                          title={`${opcion.etiqueta} — ${opcion.descripcion}`}
+                        >
+                          <span className="nav-subenlace-marca" aria-hidden="true" />
+                          <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
+                          <span className="nav-enlace-flecha" aria-hidden="true">›</span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 )}
               </section>
