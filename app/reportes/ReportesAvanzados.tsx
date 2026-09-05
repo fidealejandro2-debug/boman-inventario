@@ -255,9 +255,9 @@ export default function ReportesAvanzados() {
       {error && <div className="error">No se pudieron cargar los datos: {error}</div>}
 
       <div className="tabs">
-        <div className={`tab ${tab === "rotacion" ? "activo" : ""}`} onClick={() => setTab("rotacion")}>Rotación de inventario</div>
-        <div className={`tab ${tab === "incidencias" ? "activo" : ""}`} onClick={() => setTab("incidencias")}>Incidencias de calidad (SGC)</div>
-        <div className={`tab ${tab === "conciliacion" ? "activo" : ""}`} onClick={() => setTab("conciliacion")}>Conciliación de ventas XML</div>
+        <button type="button" className={`tab ${tab === "rotacion" ? "activo" : ""}`} onClick={() => setTab("rotacion")}>Rotación de inventario</button>
+        <button type="button" className={`tab ${tab === "incidencias" ? "activo" : ""}`} onClick={() => setTab("incidencias")}>Incidencias de calidad (SGC)</button>
+        <button type="button" className={`tab ${tab === "conciliacion" ? "activo" : ""}`} onClick={() => setTab("conciliacion")}>Conciliación de ventas XML</button>
       </div>
 
       {tab === "rotacion" && (

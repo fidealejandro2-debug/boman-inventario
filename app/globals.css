@@ -605,7 +605,7 @@ tr.fila-alerta td { color: #991b1b; }
   overflow-x: auto;
   border: 1px solid var(--borde);
   border-radius: 11px;
-  background: rgba(255,255,255,.94);
+  background: color-mix(in srgb, var(--superficie) 94%, transparent);
   box-shadow: 0 7px 22px rgba(15,23,42,.08);
   backdrop-filter: blur(12px);
   scrollbar-width: none;
@@ -619,11 +619,14 @@ tr.fila-alerta td { color: #991b1b; }
 .tab {
   flex: 0 0 auto;
   padding: 7px 13px; border-radius: 8px; cursor: pointer;
-  background: transparent; border: 0; color: #52657a;
+  background: transparent; border: 0; color: var(--texto-secundario);
   font-size: 12px; font-weight: 600;
+  transition: background .18s var(--ease-settle), color .18s var(--ease-settle),
+    box-shadow .18s var(--ease-settle), transform .12s var(--ease-settle);
 }
-.tab:hover { color: #173d63; background: #eff4f9; }
-.tab.activo { background: #1f4e78; color: white; box-shadow: 0 3px 9px rgba(31,78,120,.2); }
+.tab:hover { color: var(--azul-fuerte); background: var(--azul-suave); }
+.tab.activo { background: var(--azul); color: white; box-shadow: 0 3px 9px color-mix(in srgb, var(--azul) 45%, transparent); }
+.tab:active { transform: scale(.97); }
 
 @media (max-width: 900px) {
   .nav-mobile-bar {
