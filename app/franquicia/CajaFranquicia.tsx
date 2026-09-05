@@ -13,7 +13,11 @@ import {
   hoyLocalISO,
   mensajeError,
 } from "./lib";
-import { pedirMotivoDialogo } from "@/components/Dialogo";
+import {
+  confirmarDialogo,
+  mostrarAvisoDialogo,
+  pedirMotivoDialogo,
+} from "@/components/Dialogo";
 
 type Movimiento = {
   id: string;
@@ -56,10 +60,39 @@ type ResumenDia = {
   egresos_efectivo: number;
 };
 
+type Deposito = {
+  id: string;
+  cierre_id: string;
+  movimiento_id: string;
+  fecha_cierre: string;
+  efectivo_contado: number;
+  fecha_deposito: string;
+  monto: number;
+  banco: string;
+  referencia: string;
+  comprobante_url: string | null;
+  nota: string | null;
+  estado: "registrado" | "confirmado" | "anulado";
+  registrado_por_nombre: string;
+  confirmado_por_nombre: string | null;
+  created_at: string;
+};
+
+function diaSiguienteISO(fecha: string) {
+  const [anio, mes, dia] = fecha.split("-").map(Number);
+  const siguiente = new Date(anio, mes - 1, dia + 1, 12);
+  return [
+    siguiente.getFullYear(),
+    String(siguiente.getMonth() + 1).padStart(2, "0"),
+    String(siguiente.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 export default function CajaFranquicia({
   franquicia,
   soloLectura = false,
   esAdmin = false,
+  puedeConciliar = false,
 }: {
   /**
    * Solo se necesita el almacen: la caja se identifica por local fisico, no por
@@ -71,10 +104,13 @@ export default function CajaFranquicia({
   soloLectura?: boolean;
   /** Admin puede reabrir un dia cerrado aunque este en modo revision (el backend ya se lo permite). */
   esAdmin?: boolean;
+  /** Administración y Control pueden confirmar que el depósito llegó al banco. */
+  puedeConciliar?: boolean;
 }) {
   const supabase = createClient();
   const [movs, setMovs] = useState<Movimiento[]>([]);
   const [cierres, setCierres] = useState<Cierre[]>([]);
+  const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [resumenDia, setResumenDia] = useState<ResumenDia>({
     ingresos_total: 0,
     egresos_total: 0,
@@ -102,6 +138,15 @@ export default function CajaFranquicia({
   const [saldoDerivado, setSaldoDerivado] = useState<number | null>(null);
   const [efectivoContado, setEfectivoContado] = useState("");
   const [notaCierre, setNotaCierre] = useState("");
+  const [deposito, setDeposito] = useState({
+    cierreId: "",
+    fecha: hoyLocalISO(),
+    monto: "",
+    banco: "",
+    referencia: "",
+    comprobanteUrl: "",
+    nota: "",
+  });
 
   const [form, setForm] = useState({
     fecha: hoyLocalISO(),
@@ -115,7 +160,7 @@ export default function CajaFranquicia({
 
   async function cargar() {
     setCargando(true);
-    const [movimientos, historial, resumen] = await Promise.all([
+    const [movimientos, historial, resumen, listaDepositos] = await Promise.all([
       supabase
         .from("vista_caja_franquicia_v42")
         .select("*")
@@ -136,6 +181,12 @@ export default function CajaFranquicia({
         .eq("almacen_id", franquicia.almacen_id)
         .eq("fecha", fechaCierre)
         .maybeSingle(),
+      supabase
+        .from("vista_depositos_caja_v87")
+        .select("*")
+        .eq("almacen_id", franquicia.almacen_id)
+        .order("created_at", { ascending: false })
+        .limit(100),
     ]);
     if (movimientos.error) setError(movimientos.error.message);
     else setMovs((movimientos.data as Movimiento[]) ?? []);
@@ -169,6 +220,8 @@ export default function CajaFranquicia({
         }
       );
     }
+    if (listaDepositos.error) setError(listaDepositos.error.message);
+    else setDepositos((listaDepositos.data as Deposito[]) ?? []);
     setCargando(false);
   }
 
@@ -176,6 +229,13 @@ export default function CajaFranquicia({
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [franquicia.almacen_id, desde, hasta, fechaCierre]);
+
+  useEffect(() => {
+    if (!error) return;
+    const actual = error;
+    void mostrarAvisoDialogo(error, "No se pudo completar la acción", true)
+      .then(() => setError((vigente) => vigente === actual ? null : vigente));
+  }, [error]);
 
   const categorias = CATEGORIAS_CAJA.filter((c) => c.tipo === form.tipo);
 
@@ -245,6 +305,13 @@ export default function CajaFranquicia({
     if (efectivoContado === "" || Number(efectivoContado) < 0) {
       return setError("Cuenta el efectivo fisico e indica el valor encontrado.");
     }
+    const detalleDiferencia = Math.abs(diferenciaCierre) >= 0.01
+      ? `\n\nExiste una diferencia de ${dinero(diferenciaCierre)} y quedará registrada.`
+      : "\n\nEl efectivo contado coincide con el esperado.";
+    if (!await confirmarDialogo(
+      `Vas a cerrar la caja del ${fechaCierre.split("-").reverse().join("/")} con ${dinero(Number(efectivoContado))} contados.${detalleDiferencia}`,
+      Math.abs(diferenciaCierre) >= 0.01
+    )) return;
     setGuardando(true);
     setError(null);
     const { error } = await supabase.rpc("cerrar_caja_franquicia_v49", {
@@ -277,6 +344,79 @@ export default function CajaFranquicia({
     cargar();
   }
 
+  const depositadoPorCierre = useMemo(() => {
+    const totales = new Map<string, number>();
+    depositos.forEach((item) => {
+      if (item.estado === "anulado") return;
+      totales.set(item.cierre_id, (totales.get(item.cierre_id) ?? 0) + Number(item.monto));
+    });
+    return totales;
+  }, [depositos]);
+
+  const cierresConEfectivo = useMemo(() => cierres.filter((cierre) =>
+    cierre.estado === "cerrado"
+      && cierre.fecha < hoyLocalISO()
+      && Number(cierre.efectivo_contado) - (depositadoPorCierre.get(cierre.id) ?? 0) >= 0.01
+  ), [cierres, depositadoPorCierre]);
+
+  const cierreDeposito = cierres.find((item) => item.id === deposito.cierreId);
+  const disponibleDeposito = cierreDeposito
+    ? Number(cierreDeposito.efectivo_contado) - (depositadoPorCierre.get(cierreDeposito.id) ?? 0)
+    : 0;
+
+  async function registrarDeposito() {
+    const cierre = cierres.find((item) => item.id === deposito.cierreId);
+    if (!cierre) return setError("Selecciona el cierre del que sale el efectivo.");
+    if (!deposito.banco.trim() || !deposito.referencia.trim()) {
+      return setError("Banco y referencia del depósito son obligatorios.");
+    }
+    if (Number(deposito.monto) <= 0) return setError("El monto del depósito debe ser mayor que cero.");
+    const disponible = Number(cierre.efectivo_contado) - (depositadoPorCierre.get(cierre.id) ?? 0);
+    if (Number(deposito.monto) > disponible) {
+      return setError(`Solo quedan ${dinero(disponible)} pendientes de depositar para ese cierre.`);
+    }
+    if (!await confirmarDialogo(
+      `Se registrará un depósito de ${dinero(Number(deposito.monto))} en ${deposito.banco.trim()}.\n\nEl efectivo saldrá de la caja del local y quedará pendiente de confirmación administrativa.`
+    )) return;
+
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("registrar_deposito_caja_v87", {
+      p_cierre_id: cierre.id,
+      p_fecha: deposito.fecha,
+      p_monto: Number(deposito.monto),
+      p_banco: deposito.banco.trim(),
+      p_referencia: deposito.referencia.trim(),
+      p_comprobante_url: deposito.comprobanteUrl.trim() || null,
+      p_nota: deposito.nota.trim() || null,
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    confirmar("Depósito registrado", "El efectivo salió de caja y Administración recibió la solicitud de confirmación.");
+    setDeposito({ cierreId: "", fecha: hoyLocalISO(), monto: "", banco: "", referencia: "", comprobanteUrl: "", nota: "" });
+    cargar();
+  }
+
+  async function confirmarDeposito(item: Deposito) {
+    const motivo = await pedirMotivoDialogo(
+      `Verificación del depósito ${item.referencia} por ${dinero(item.monto)}:`,
+      5,
+      "Comprobación realizada"
+    );
+    if (!motivo) return;
+    setGuardando(true);
+    setError(null);
+    const { error } = await supabase.rpc("confirmar_deposito_caja_v87", {
+      p_deposito_id: item.id,
+      p_nota: motivo,
+    });
+    setGuardando(false);
+    if (error) return setError(mensajeError(error));
+    confirmar("Depósito confirmado", "La referencia bancaria quedó conciliada por Administración.");
+    cargar();
+  }
+
   const totales = useMemo(() => {
     // El original revertido ya sale del saldo; su contrapartida es evidencia
     // en el diario, no un movimiento mas, o la reversa restaria dos veces.
@@ -291,7 +431,7 @@ export default function CajaFranquicia({
   return (
     <>
       <Aviso
-        error={error}
+        error={null}
         aviso={aviso}
         titulo={tituloAviso}
         onCerrar={(cual) => (cual === "error" ? setError(null) : setAviso(null))}
@@ -320,7 +460,6 @@ export default function CajaFranquicia({
 
       <div
         className={`card-interna fq-caja-cierre ${soloLectura ? "fq-caja-supervision" : ""}`}
-        style={!soloLectura ? { display: "none" } : undefined}
       >
         <div className="fq-caja-cabecera">
           <h4>Cierre diario de efectivo</h4>
@@ -540,7 +679,7 @@ export default function CajaFranquicia({
         </button>
       </div>}
 
-      {soloLectura && <div className="card-interna">
+      <div className="card-interna">
         <h4>Historial de cierres</h4>
         <div className="tabla-scroll">
           <table>
@@ -587,7 +726,159 @@ export default function CajaFranquicia({
             </tbody>
           </table>
         </div>
-      </div>}
+      </div>
+
+      <div className="card-interna">
+        <div className="fq-caja-cabecera">
+          <h4>Depósitos del efectivo contado</h4>
+          <span className="badge">Conciliación bancaria</span>
+        </div>
+        <p className="ayuda">
+          Vincula cada depósito con el cierre del que salió el dinero. El sistema
+          descuenta ese efectivo de la caja y Administración confirma después la
+          referencia bancaria. El depósito se registra desde el día siguiente al cierre.
+        </p>
+
+        {(!soloLectura || esAdmin) && (
+          <>
+            <div className="form-grid">
+              <label>
+                Cierre de origen
+                <select
+                  value={deposito.cierreId}
+                  onChange={(e) => {
+                    const cierre = cierres.find((item) => item.id === e.target.value);
+                    const restante = cierre
+                      ? Number(cierre.efectivo_contado) - (depositadoPorCierre.get(cierre.id) ?? 0)
+                      : 0;
+                    setDeposito({
+                      ...deposito,
+                      cierreId: e.target.value,
+                      monto: cierre ? restante.toFixed(2) : "",
+                      fecha: cierre && deposito.fecha < diaSiguienteISO(cierre.fecha)
+                        ? diaSiguienteISO(cierre.fecha)
+                        : deposito.fecha,
+                    });
+                  }}
+                >
+                  <option value="">Selecciona un cierre</option>
+                  {cierresConEfectivo.map((cierre) => {
+                    const restante = Number(cierre.efectivo_contado)
+                      - (depositadoPorCierre.get(cierre.id) ?? 0);
+                    return (
+                      <option key={cierre.id} value={cierre.id}>
+                        {cierre.fecha.split("-").reverse().join("/")} · pendiente {dinero(restante)}
+                      </option>
+                    );
+                  })}
+                </select>
+                {!cierresConEfectivo.length && (
+                  <small className="ayuda">
+                    No hay cierres anteriores con efectivo pendiente de depositar.
+                  </small>
+                )}
+              </label>
+              <label>
+                Fecha del depósito
+                <input
+                  type="date"
+                  value={deposito.fecha}
+                  min={cierreDeposito ? diaSiguienteISO(cierreDeposito.fecha) : undefined}
+                  max={hoyLocalISO()}
+                  onChange={(e) => setDeposito({ ...deposito, fecha: e.target.value })}
+                />
+              </label>
+              <label>
+                Monto
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={cierreDeposito ? disponibleDeposito : undefined}
+                  value={deposito.monto}
+                  onChange={(e) => setDeposito({ ...deposito, monto: e.target.value })}
+                />
+                {cierreDeposito && <small className="ayuda">Disponible: {dinero(disponibleDeposito)}</small>}
+              </label>
+              <label>
+                Banco
+                <input
+                  value={deposito.banco}
+                  onChange={(e) => setDeposito({ ...deposito, banco: e.target.value })}
+                  placeholder="Ej. Banco Pichincha"
+                />
+              </label>
+              <label>
+                Referencia bancaria
+                <input
+                  value={deposito.referencia}
+                  onChange={(e) => setDeposito({ ...deposito, referencia: e.target.value })}
+                  placeholder="Número de comprobante"
+                />
+              </label>
+              <label>
+                Enlace del comprobante
+                <input
+                  type="url"
+                  value={deposito.comprobanteUrl}
+                  onChange={(e) => setDeposito({ ...deposito, comprobanteUrl: e.target.value })}
+                  placeholder="https://... (opcional)"
+                />
+              </label>
+              <label className="ancho-total">
+                Nota
+                <input
+                  value={deposito.nota}
+                  onChange={(e) => setDeposito({ ...deposito, nota: e.target.value })}
+                  placeholder="Observación opcional"
+                />
+              </label>
+            </div>
+            <button
+              onClick={registrarDeposito}
+              disabled={guardando || !cierresConEfectivo.length}
+            >
+              {guardando ? "Registrando..." : "Registrar depósito"}
+            </button>
+          </>
+        )}
+
+        <div className="tabla-scroll" style={{ marginTop: 16 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Cierre</th><th>Depósito</th><th>Banco / referencia</th>
+                <th className="num">Monto</th><th>Registrado por</th><th>Estado</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {depositos.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.fecha_cierre.split("-").reverse().join("/")}</td>
+                  <td>{item.fecha_deposito.split("-").reverse().join("/")}</td>
+                  <td>
+                    <strong>{item.banco}</strong><br />{item.referencia}
+                    {item.comprobante_url && <><br /><a href={item.comprobante_url} target="_blank" rel="noreferrer">Ver comprobante</a></>}
+                  </td>
+                  <td className="num">{dinero(item.monto)}</td>
+                  <td>{item.registrado_por_nombre}</td>
+                  <td><span className={`badge estado-${item.estado}`}>{item.estado}</span></td>
+                  <td>
+                    {puedeConciliar && item.estado === "registrado" && (
+                      <button className="btn-mini secondary" disabled={guardando} onClick={() => confirmarDeposito(item)}>
+                        Confirmar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!depositos.length && (
+                <tr><td colSpan={7} className="vacio">Todavía no hay depósitos vinculados a cierres.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="filtros">
         <label className="check-inline">
@@ -638,7 +929,8 @@ export default function CajaFranquicia({
                 <td className="num">{m.tipo === "egreso" ? dinero(m.monto) : "—"}</td>
                 <td className="num">{dinero(m.saldo_acumulado)}</td>
                 <td>
-                  {m.estado === "vigente" && !m.venta_id && (
+                  {m.estado === "vigente" && !m.venta_id
+                    && !depositos.some((deposito) => deposito.movimiento_id === m.id) && (
                     <button
                       className="btn-mini secondary"
                       disabled={guardando}

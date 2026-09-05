@@ -131,6 +131,7 @@ export default function CajaTiendaCliente({
         franquicia={{ almacen_id: tienda.id }}
         soloLectura={esRevision}
         esAdmin={rol === "admin"}
+        puedeConciliar={["admin", "control"].includes(rol)}
       />
     </div>
   );

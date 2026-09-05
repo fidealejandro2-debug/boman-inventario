@@ -204,7 +204,12 @@ export default function FranquiciaCliente({
             />
           )}
           {tabActiva === "caja" && puedeCaja && (
-            <CajaFranquicia franquicia={franquicia} soloLectura={esRevision} esAdmin={rol === "admin"} />
+            <CajaFranquicia
+              franquicia={franquicia}
+              soloLectura={esRevision}
+              esAdmin={rol === "admin"}
+              puedeConciliar={["admin", "control"].includes(rol)}
+            />
           )}
           {tabActiva === "inventario" && puedeInventario && (
             <InventarioFranquicia franquicia={franquicia} soloLectura={esRevision || !editaInventario} />
