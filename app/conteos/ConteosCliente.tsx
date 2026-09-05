@@ -17,10 +17,12 @@ type Linea = {
 type Conteo = {
   id: string; numero: string; estado: string; nota: string | null; created_at: string;
   origen_id: string; creado_por: string; version: number;
+  aprobado_at: string | null; aplicado_at: string | null;
   conteo_responsable_id: string | null; conteo_actividad_at: string | null;
   origen: { nombre: string } | null;
   creador: { nombre_completo: string } | null;
-  responsable: { nombre_completo: string; rol: string } | null; lineas: Linea[];
+  responsable: { nombre_completo: string; rol: string } | null;
+  aprobador: { nombre_completo: string } | null; lineas: Linea[];
 };
 
 function cantidadActual(linea: Linea) {
@@ -75,10 +77,12 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
       supabase.from("productos").select("id, sku, nombre, talla, categoria").eq("activo", true).order("nombre"),
       supabase.from("documentos_inventario").select(`
         id, numero, estado, nota, created_at, origen_id, creado_por, version,
+        aprobado_at, aplicado_at,
         conteo_responsable_id, conteo_actividad_at,
         origen:almacenes!documentos_inventario_origen_id_fkey(nombre),
         creador:perfiles!documentos_inventario_creado_por_fkey(nombre_completo),
         responsable:perfiles!documentos_inventario_conteo_responsable_id_fkey(nombre_completo, rol),
+        aprobador:perfiles!documentos_inventario_aprobado_por_fkey(nombre_completo),
         lineas:documento_inventario_lineas(
           id, producto_id, stock_sistema, cantidad_contada, cantidad_reconteo, observacion,
           producto:productos(id, sku, nombre, talla, categoria)
@@ -258,6 +262,15 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
     setMsg(null);
   }
 
+  function copiarPrimerConteo() {
+    if (!revisando) return;
+    const copiados = { ...reconteos };
+    revisando.lineas.forEach((linea) => {
+      if (linea.cantidad_contada !== linea.stock_sistema) copiados[linea.producto_id] = String(linea.cantidad_contada ?? 0);
+    });
+    setReconteos(copiados);
+  }
+
   async function guardarReconteo() {
     if (!revisando) return false;
     const diferencias = revisando.lineas.filter((linea) =>
@@ -335,8 +348,10 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
     const visibles = lineasResultado(conteo);
     const ocultas = conteo.lineas.length - visibles.length;
     const diferencias = visibles.filter((linea) => cantidadActual(linea) !== (linea.stock_sistema ?? 0)).length;
-    imprimirDocumento(conteo.numero, `<h1>${conteo.numero} · Resultado de conteo</h1>
-      <p><b>Almacén:</b> ${conteo.origen?.nombre ?? ""} &nbsp; <b>Fecha:</b> ${fecha(conteo.created_at)}</p>
+    imprimirDocumento(conteo.numero, `<h1>${conteo.numero} · Acta de conteo físico</h1>
+      <p><b>Almacén:</b> ${conteo.origen?.nombre ?? ""} &nbsp; <b>Inicio:</b> ${fecha(conteo.created_at)}</p>
+      <p><b>Contado por:</b> ${conteo.creador?.nombre_completo ?? "—"} &nbsp; <b>Aprobado por:</b> ${conteo.aprobador?.nombre_completo ?? "Pendiente"} ${conteo.aprobado_at ? `· ${fecha(conteo.aprobado_at)}` : ""}</p>
+      <p><b>Resolución:</b> ${conteo.nota ?? "Sin observación"}</p>
       <p><b>${visibles.length}</b> líneas con existencias o movimiento &nbsp; <b>${diferencias}</b> diferencia(s) &nbsp; <b>${ocultas}</b> líneas 0 → 0 omitidas</p>
       <table><thead><tr><th>SKU</th><th>Producto</th><th>Talla</th><th class="num">Stock anterior</th><th class="num">Conteo actual</th><th class="num">Diferencia</th></tr></thead><tbody>
       ${visibles.length ? visibles.map((linea) => {
@@ -378,6 +393,7 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
           const diferencias = revisando.lineas.filter((linea) => linea.cantidad_contada !== linea.stock_sistema);
           if (!diferencias.length) return <p className="ayuda">El conteo coincide con el stock del sistema. No hace falta un segundo conteo.</p>;
           return <><p className="info-box">Hay {diferencias.length} producto(s) con diferencia. Registra el segundo conteo de cada uno antes de aprobar.</p>
+            <button type="button" className="secondary" onClick={copiarPrimerConteo}>Copiar el 1er conteo en todos</button>
             <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th className="num">Stock sistema</th><th className="num">1er conteo</th><th className="num">2do conteo</th></tr></thead><tbody>{diferencias.map((linea) => <tr key={linea.id}><td><strong>{linea.producto?.sku}</strong></td><td>{linea.producto?.nombre}</td><td className="num">{linea.stock_sistema}</td><td className="num">{linea.cantidad_contada}</td><td className="num"><input type="number" min={0} value={reconteos[linea.producto_id] ?? ""} onChange={(e) => setReconteos({ ...reconteos, [linea.producto_id]: e.target.value })} style={{ width: 90, textAlign: "right" }} /></td></tr>)}</tbody></table></div></>;
         })()}
         <div className="field"><label>Resolución / motivo</label><input value={notaRevision} onChange={(e) => setNotaRevision(e.target.value)} placeholder="Ej: Segundo conteo verificado físicamente." style={{ width: "100%" }} /></div>
@@ -406,7 +422,7 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
                       : <small>Asignado a otro usuario</small>
                 : puedeRevisar(conteo)
                   ? <button disabled={procesando} onClick={() => abrirRevision(conteo)}>Revisar y aprobar</button>
-                  : <button className="secondary" onClick={() => imprimirResultado(conteo)}>Ver resultado</button>}</td>
+                  : <button className="secondary" onClick={() => imprimirResultado(conteo)}>Imprimir acta</button>}</td>
             </tr>;
           })}{!conteos.length && <tr><td colSpan={8} className="vacio">No hay conteos registrados.</td></tr>}</tbody>
         </table></div>}

@@ -17,11 +17,17 @@ type Linea = {
 type Conteo = {
   id: string; numero: string; estado: string; nota: string | null; created_at: string;
   creado_por: string; version: number;
+  aprobado_at: string | null; aplicado_at: string | null;
   conteo_responsable_id: string | null;
   creador: { nombre_completo: string } | null;
   responsable: { nombre_completo: string } | null;
+  aprobador: { nombre_completo: string } | null;
   lineas: Linea[];
 };
+
+function cantidadFinal(linea: Linea) {
+  return linea.cantidad_reconteo ?? linea.cantidad_contada ?? 0;
+}
 
 export default function ConteoFranquicia({ franquicia, soloLectura = false }: { franquicia: Franquicia; soloLectura?: boolean }) {
   const supabase = useMemo(() => createClient(), []);
@@ -55,8 +61,10 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
       supabase.from("productos").select("id, sku, nombre, talla, categoria").eq("activo", true).order("nombre"),
       supabase.from("documentos_inventario").select(`
         id, numero, estado, nota, created_at, creado_por, version, conteo_responsable_id,
+        aprobado_at, aplicado_at,
         creador:perfiles!documentos_inventario_creado_por_fkey(nombre_completo),
         responsable:perfiles!documentos_inventario_conteo_responsable_id_fkey(nombre_completo),
+        aprobador:perfiles!documentos_inventario_aprobado_por_fkey(nombre_completo),
         lineas:documento_inventario_lineas(
           id, producto_id, stock_sistema, cantidad_contada, cantidad_reconteo, observacion,
           producto:productos(id, sku, nombre, talla, categoria)
@@ -181,6 +189,15 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
     setRevisando(conteo); setReconteos(valores); setNotaRevision(""); setMsg(null);
   }
 
+  function copiarPrimerConteo() {
+    if (!revisando) return;
+    const copiados = { ...reconteos };
+    revisando.lineas.forEach((l) => {
+      if (l.cantidad_contada !== l.stock_sistema) copiados[l.producto_id] = String(l.cantidad_contada ?? 0);
+    });
+    setReconteos(copiados);
+  }
+
   async function guardarReconteo() {
     if (!revisando) return false;
     const distintas = revisando.lineas.filter((l) => l.cantidad_contada !== l.stock_sistema);
@@ -224,6 +241,27 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
       <p><b>Tienda:</b> ${franquicia.nombre} &nbsp; <b>Fecha:</b> ${fecha(conteo.created_at)}</p>
       <table><thead><tr><th>Ubicación</th><th>SKU</th><th>Producto</th><th>Talla</th><th class="num">Conteo</th></tr></thead><tbody>
       ${conteo.lineas.map((l) => `<tr><td></td><td>${l.producto?.sku ?? ""}</td><td>${l.producto?.nombre ?? ""}</td><td>${l.producto?.talla ?? ""}</td><td></td></tr>`).join("")}
+      </tbody></table>`);
+  }
+
+  function imprimirActa(conteo: Conteo) {
+    const visibles = conteo.lineas.filter((linea) =>
+      linea.stock_sistema !== 0 || cantidadFinal(linea) !== 0
+    );
+    const diferencias = visibles.filter((linea) =>
+      cantidadFinal(linea) !== linea.stock_sistema
+    ).length;
+    imprimirDocumento(conteo.numero, `<h1>${conteo.numero} · Acta de conteo físico</h1>
+      <p><b>Tienda:</b> ${franquicia.nombre} &nbsp; <b>Inicio:</b> ${fecha(conteo.created_at)}</p>
+      <p><b>Contado por:</b> ${conteo.creador?.nombre_completo ?? "—"} &nbsp; <b>Aprobado por:</b> ${conteo.aprobador?.nombre_completo ?? "Pendiente"} ${conteo.aprobado_at ? `· ${fecha(conteo.aprobado_at)}` : ""}</p>
+      <p><b>Resolución:</b> ${conteo.nota ?? "Sin observación"}</p>
+      <p><b>${visibles.length}</b> líneas relevantes &nbsp; <b>${diferencias}</b> diferencia(s)</p>
+      <table><thead><tr><th>SKU</th><th>Producto</th><th>Talla</th><th class="num">Stock anterior</th><th class="num">Conteo final</th><th class="num">Ajuste</th></tr></thead><tbody>
+      ${visibles.length ? visibles.map((linea) => {
+        const final = cantidadFinal(linea);
+        const ajuste = final - linea.stock_sistema;
+        return `<tr><td>${linea.producto?.sku ?? ""}</td><td>${linea.producto?.nombre ?? ""}</td><td>${linea.producto?.talla ?? ""}</td><td class="num">${linea.stock_sistema}</td><td class="num">${final}</td><td class="num">${ajuste > 0 ? "+" : ""}${ajuste}</td></tr>`;
+      }).join("") : `<tr><td colspan="6">Todas las líneas quedaron en 0.</td></tr>`}
       </tbody></table>`);
   }
 
@@ -289,6 +327,7 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
           if (!diferencias.length) return <p className="ayuda">El conteo coincide con el stock del sistema en todos los productos. No hace falta un segundo conteo.</p>;
           return <>
             <p className="info-box">Hay {diferencias.length} producto(s) con diferencia. Registra el segundo conteo de cada uno antes de aprobar.</p>
+            <button type="button" className="secondary" onClick={copiarPrimerConteo}>Copiar el 1er conteo en todos</button>
             <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th className="num">Stock sistema</th><th className="num">1er conteo</th><th className="num">2do conteo</th></tr></thead><tbody>
               {diferencias.map((l) => <tr key={l.id}>
                 <td><strong>{l.producto?.sku}</strong></td><td>{l.producto?.nombre}</td>
@@ -307,13 +346,16 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
 
       <div className="card">
         <h4 style={{ marginTop: 0 }}>Historial de conteos de esta tienda</h4>
-        {cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Fecha</th><th>Iniciado por</th><th>Estado</th>{!soloLectura && <th></th>}</tr></thead><tbody>
+        {cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Fecha</th><th>Iniciado por</th><th>Estado</th><th></th></tr></thead><tbody>
           {conteos.map((c) => <tr key={c.id}>
             <td><strong>{c.numero}</strong></td><td>{fecha(c.created_at)}</td><td>{c.creador?.nombre_completo}</td>
             <td><span className={`badge estado-${c.estado}`}>{ETIQUETAS_ESTADO[c.estado] ?? c.estado}</span></td>
-            {!soloLectura && <td>{c.estado === "pendiente_revision" && <button className="secondary" onClick={() => abrirRevision(c)}>Revisar</button>}</td>}
+            <td><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {!soloLectura && c.estado === "pendiente_revision" && <button className="secondary" onClick={() => abrirRevision(c)}>Revisar</button>}
+              {c.estado !== "en_conteo" && <button className="secondary" onClick={() => imprimirActa(c)}>Imprimir acta</button>}
+            </div></td>
           </tr>)}
-          {!conteos.length && <tr><td colSpan={soloLectura ? 4 : 5} className="vacio">No hay conteos registrados en esta tienda.</td></tr>}
+          {!conteos.length && <tr><td colSpan={5} className="vacio">No hay conteos registrados en esta tienda.</td></tr>}
         </tbody></table></div>}
       </div>
     </>
