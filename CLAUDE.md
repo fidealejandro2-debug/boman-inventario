@@ -290,4 +290,5 @@ Lo mínimo que hay que saber sin abrirlo:
 1. Ejecuta los SQL **en orden** hasta `v19`. Si producción ya está en v11, ejecuta y valida sucesivamente v12, v13, v14, v15, v16, v17, v18 y v19.
 2. Antes de escribir un `.select()` sobre `movimientos`, revisa la sección de relaciones duplicadas.
 3. `npm run build` antes de dar algo por terminado — el build detecta los errores de tipos.
+4. **El panel de revisión de conteo (diferencias + 2do conteo + aprobar/rechazar) está duplicado en 3 archivos sin componente compartido:** `app/conteos/ConteosCliente.tsx`, `app/franquicia/ConteoFranquicia.tsx` y `app/control/ControlCliente.tsx`. Cualquier cambio a esa UI (botones, columnas, validaciones) hay que replicarlo en los tres o queda inconsistente — ya pasó una vez (commit `caee629` solo tocó los dos primeros, `70b0c04` corrigió el tercero). Antes de tocar esta pantalla, `grep -rn "cantidad_reconteo" app/` para confirmar que no se te olvida ninguno.
 4. Cambios de esquema → SQL numerado nuevo en `sql/`, nunca editar uno ya ejecutado.
