@@ -16,7 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
  */
 type Peticion =
   | { clase: "motivo"; texto: string; minimo: number; etiqueta?: string; valorInicial?: string }
-  | { clase: "confirmar"; texto: string; peligro?: boolean };
+  | { clase: "confirmar"; texto: string; peligro?: boolean }
+  | { clase: "aviso"; texto: string; titulo?: string; peligro?: boolean };
 
 type Abridor = (p: Peticion) => Promise<string | boolean | null>;
 
@@ -45,6 +46,16 @@ export async function confirmarDialogo(
   if (!abrirRemoto) return false;
   const r = await abrirRemoto({ clase: "confirmar", texto, peligro });
   return r === true;
+}
+
+/** Muestra un aviso o error con la apariencia común del sistema. */
+export async function mostrarAvisoDialogo(
+  texto: string,
+  titulo = "Atención",
+  peligro = false
+): Promise<void> {
+  if (!abrirRemoto) return;
+  await abrirRemoto({ clase: "aviso", texto, titulo, peligro });
 }
 
 /** Pide un texto libre, con un valor inicial. Sin minimo: no es un motivo. */
@@ -93,7 +104,7 @@ export default function DialogoAnfitrion() {
     if (!peticion) return;
     const t = setTimeout(() => campo.current?.focus(), 30);
     const alTeclado = (e: KeyboardEvent) => {
-      if (e.key === "Escape") cerrar(peticion.clase === "confirmar" ? false : null);
+      if (e.key === "Escape") cerrar(peticion.clase === "motivo" ? null : false);
     };
     window.addEventListener("keydown", alTeclado);
     return () => {
@@ -105,6 +116,7 @@ export default function DialogoAnfitrion() {
   if (!peticion) return null;
 
   const esMotivo = peticion.clase === "motivo";
+  const esAviso = peticion.clase === "aviso";
   const minimo = esMotivo ? peticion.minimo : 0;
   const faltan = minimo - valor.trim().length;
   const valido = !esMotivo || faltan <= 0;
@@ -129,7 +141,11 @@ export default function DialogoAnfitrion() {
         <div className="dlg-cabecera">
           <span className="dlg-marca">BOMAN</span>
           <span className="dlg-titulo">
-            {esMotivo ? "Motivo requerido" : "Confirma la acción"}
+            {esMotivo
+              ? "Motivo requerido"
+              : esAviso
+                ? peticion.titulo ?? "Atención"
+                : "Confirma la acción"}
           </span>
         </div>
 
@@ -165,20 +181,20 @@ export default function DialogoAnfitrion() {
         </div>
 
         <div className="dlg-acciones">
-          <button
+          {!esAviso && <button
             type="button"
             className="secondary"
             onClick={() => cerrar(esMotivo ? null : false)}
           >
             Cancelar
-          </button>
+          </button>}
           <button
             type="button"
             className={!esMotivo && peticion.peligro ? "peligro" : ""}
             onClick={aceptar}
             disabled={esMotivo && !valido && tocado}
           >
-            {esMotivo ? "Guardar motivo" : "Sí, continuar"}
+            {esMotivo ? "Guardar motivo" : esAviso ? "Entendido" : "Sí, continuar"}
           </button>
         </div>
       </div>

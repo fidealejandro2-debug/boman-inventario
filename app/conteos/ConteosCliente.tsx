@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/getPerfil";
 import { fecha } from "@/lib/utils";
 import { ETIQUETAS_ESTADO, imprimirDocumento, nuevaClaveIdempotencia } from "@/lib/erp";
-import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
+import { pedirMotivoDialogo, confirmarDialogo, mostrarAvisoDialogo } from "@/components/Dialogo";
 
 type Almacen = { id: string; nombre: string; tipo: string };
 type Producto = { id: string; sku: string; nombre: string; talla: string | null; categoria: string | null };
@@ -20,7 +20,7 @@ type Conteo = {
   conteo_responsable_id: string | null; conteo_actividad_at: string | null;
   origen: { nombre: string } | null;
   creador: { nombre_completo: string } | null;
-  responsable: { nombre_completo: string } | null; lineas: Linea[];
+  responsable: { nombre_completo: string; rol: string } | null; lineas: Linea[];
 };
 
 function cantidadActual(linea: Linea) {
@@ -59,9 +59,13 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
+  const [revisando, setRevisando] = useState<Conteo | null>(null);
+  const [reconteos, setReconteos] = useState<Record<string, string>>({});
+  const [notaRevision, setNotaRevision] = useState("");
 
   const rolGlobal = ["admin", "control", "gerencia"].includes(perfil.rol);
   const puedeContar = ["admin", "control", "bodega", "tienda"].includes(perfil.rol);
+  const puedeResolverComoFranquicia = ["franquiciado", "vendedor_franquicia"].includes(perfil.rol);
 
   async function cargar() {
     setCargando(true);
@@ -74,7 +78,7 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
         conteo_responsable_id, conteo_actividad_at,
         origen:almacenes!documentos_inventario_origen_id_fkey(nombre),
         creador:perfiles!documentos_inventario_creado_por_fkey(nombre_completo),
-        responsable:perfiles!documentos_inventario_conteo_responsable_id_fkey(nombre_completo),
+        responsable:perfiles!documentos_inventario_conteo_responsable_id_fkey(nombre_completo, rol),
         lineas:documento_inventario_lineas(
           id, producto_id, stock_sistema, cantidad_contada, cantidad_reconteo, observacion,
           producto:productos(id, sku, nombre, talla, categoria)
@@ -92,6 +96,12 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
   }
 
   useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    if (msg?.tipo !== "error") return;
+    const actual = msg;
+    void mostrarAvisoDialogo(msg.texto, "No se pudo completar la acción", true)
+      .then(() => setMsg((vigente) => vigente === actual ? null : vigente));
+  }, [msg]);
 
   const almacenesPropios = useMemo(() => rolGlobal ? almacenes : almacenes.filter((a) => permitidos.includes(a.id) || a.id === perfil.entidad_id), [almacenes, permitidos, perfil.entidad_id, rolGlobal]);
   const categoriasProductos = useMemo(() => Array.from(new Set(
@@ -180,7 +190,7 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
       version: apertura.version,
       conteo_responsable_id: apertura.responsable_id,
       conteo_actividad_at: apertura.actividad_at,
-      responsable: { nombre_completo: apertura.responsable_nombre },
+      responsable: { nombre_completo: apertura.responsable_nombre, rol: perfil.rol },
     });
     if (apertura.toma_control) {
       setMsg({ tipo: "ok", texto: "Tomaste el control del conteo. La reasignacion quedo auditada." });
@@ -227,6 +237,92 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
     setValores(siguientes);
   }
 
+  function puedeRevisar(conteo: Conteo) {
+    return conteo.estado === "pendiente_revision"
+      && puedeResolverComoFranquicia;
+  }
+
+  function abrirRevision(conteo: Conteo) {
+    const nuevos: Record<string, string> = {};
+    conteo.lineas.forEach((linea) => {
+      if (linea.cantidad_contada !== linea.stock_sistema) {
+        nuevos[linea.producto_id] = linea.cantidad_reconteo == null
+          ? ""
+          : String(linea.cantidad_reconteo);
+      }
+    });
+    setActivo(null);
+    setRevisando(conteo);
+    setReconteos(nuevos);
+    setNotaRevision("");
+    setMsg(null);
+  }
+
+  async function guardarReconteo() {
+    if (!revisando) return false;
+    const diferencias = revisando.lineas.filter((linea) =>
+      linea.cantidad_contada !== linea.stock_sistema
+    );
+    const items = diferencias
+      .filter((linea) => (reconteos[linea.producto_id] ?? "") !== "")
+      .map((linea) => ({
+        producto_id: linea.producto_id,
+        cantidad: Number(reconteos[linea.producto_id]),
+      }));
+    if (items.length !== diferencias.length
+      || items.some((item) => !Number.isInteger(item.cantidad) || item.cantidad < 0)) {
+      await mostrarAvisoDialogo("Registra un segundo conteo válido para cada diferencia.", "No se puede continuar", true);
+      return false;
+    }
+    const { error } = await supabase.rpc("guardar_reconteo_inventario", {
+      p_documento_id: revisando.id,
+      p_items: items,
+      p_nota: notaRevision.trim() || "Segundo conteo",
+    });
+    if (error) {
+      await mostrarAvisoDialogo(error.message, "No se pudo guardar el segundo conteo", true);
+      return false;
+    }
+    return true;
+  }
+
+  async function resolverConteo(aprobar: boolean) {
+    if (!revisando) return;
+    if (!notaRevision.trim()) {
+      await mostrarAvisoDialogo("Escribe la resolución o motivo.", "Falta la resolución", true);
+      return;
+    }
+    setProcesando(true);
+    setMsg(null);
+    if (aprobar && revisando.lineas.some((linea) =>
+      linea.cantidad_contada !== linea.stock_sistema
+    )) {
+      const guardado = await guardarReconteo();
+      if (!guardado) {
+        setProcesando(false);
+        return;
+      }
+    }
+    const { error } = await supabase.rpc("resolver_conteo_inventario", {
+      p_documento_id: revisando.id,
+      p_aprobar: aprobar,
+      p_nota: notaRevision.trim(),
+    });
+    setProcesando(false);
+    if (error) {
+      await mostrarAvisoDialogo(error.message, "No se pudo resolver el conteo", true);
+      return;
+    }
+    setRevisando(null);
+    setMsg({
+      tipo: "ok",
+      texto: aprobar
+        ? "Conteo aprobado: las diferencias se aplicaron al inventario."
+        : "Conteo devuelto para corregir.",
+    });
+    await cargar();
+  }
+
   function imprimirHojaCiega(conteo: Conteo) {
     imprimirDocumento(conteo.numero, `<h1>${conteo.numero} · Hoja de conteo ciego</h1>
       <p><b>Almacén:</b> ${conteo.origen?.nombre ?? ""} &nbsp; <b>Fecha:</b> ${fecha(conteo.created_at)}</p>
@@ -254,7 +350,7 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
   return (
     <>
       <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Conteos físicos</h2><p className="conteo">Conteo ciego, segundo conteo y aprobación independiente.</p></div>{puedeContar && <button onClick={() => setMostrarNuevo((v) => !v)}>{mostrarNuevo ? "Cancelar" : "+ Iniciar conteo"}</button>}</div>
-      {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
+      {msg?.tipo === "ok" && <div className="success">{msg.texto}</div>}
 
       {mostrarNuevo && <form className="card" onSubmit={crearConteo}>
         <h3 style={{ marginTop: 0 }}>Nuevo conteo</h3>
@@ -273,7 +369,48 @@ export default function ConteosCliente({ perfil }: { perfil: Perfil }) {
         <div className="acciones-documento"><button className="secondary" disabled={procesando || !lineasActivasFiltradas.length} onClick={completarVaciosConCero}>Completar visibles con 0</button><button className="secondary" disabled={procesando} onClick={() => guardarConteo(false)}>Guardar avance</button><button disabled={procesando} onClick={() => guardarConteo(true)}>Finalizar y enviar a Control</button><button className="chip-limpiar" onClick={() => setActivo(null)}>Cerrar</button></div>
       </section>}
 
-      <div className="card"><h3 style={{ marginTop: 0 }}>Historial de conteos</h3>{cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table><thead><tr><th>Número</th><th>Almacén</th><th>Fecha</th><th>Creado por</th><th>Responsable actual</th><th>Estado</th><th className="num">Líneas relevantes</th><th></th></tr></thead><tbody>{conteos.map((c) => { const responsableId = c.conteo_responsable_id ?? c.creado_por; const propio = responsableId === perfil.id; return <tr key={c.id}><td><strong>{c.numero}</strong></td><td>{c.origen?.nombre}</td><td>{fecha(c.created_at)}</td><td>{c.creador?.nombre_completo}</td><td>{c.responsable?.nombre_completo ?? c.creador?.nombre_completo}{c.estado === "en_conteo" && actividadReciente(c) && <div><span className="badge estado-en_conteo">En edición reciente</span></div>}</td><td><span className={`badge estado-${c.estado}`}>{ETIQUETAS_ESTADO[c.estado] ?? c.estado}</span></td><td className="num">{c.estado === "en_conteo" ? c.lineas.length : lineasResultado(c).length}</td><td>{c.estado === "en_conteo" && puedeContar ? propio ? <button className="secondary" disabled={procesando} onClick={() => abrirConteo(c)}>Continuar</button> : perfil.rol === "admin" ? <button className="peligro" disabled={procesando} onClick={() => abrirConteo(c, true)}>Tomar control</button> : <small>Asignado a otro usuario</small> : <button className="secondary" onClick={() => imprimirResultado(c)}>Ver resultado</button>}</td></tr>; })}{!conteos.length && <tr><td colSpan={8} className="vacio">No hay conteos registrados.</td></tr>}</tbody></table></div>}</div>
+      {revisando && <section className="card">
+        <div className="header-row">
+          <div><h3 style={{ margin: 0 }}>Revisar {revisando.numero}</h3><p className="conteo">{revisando.origen?.nombre} · contado por {revisando.creador?.nombre_completo}</p></div>
+          <button className="chip-limpiar" onClick={() => setRevisando(null)}>Cerrar</button>
+        </div>
+        {(() => {
+          const diferencias = revisando.lineas.filter((linea) => linea.cantidad_contada !== linea.stock_sistema);
+          if (!diferencias.length) return <p className="ayuda">El conteo coincide con el stock del sistema. No hace falta un segundo conteo.</p>;
+          return <><p className="info-box">Hay {diferencias.length} producto(s) con diferencia. Registra el segundo conteo de cada uno antes de aprobar.</p>
+            <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th className="num">Stock sistema</th><th className="num">1er conteo</th><th className="num">2do conteo</th></tr></thead><tbody>{diferencias.map((linea) => <tr key={linea.id}><td><strong>{linea.producto?.sku}</strong></td><td>{linea.producto?.nombre}</td><td className="num">{linea.stock_sistema}</td><td className="num">{linea.cantidad_contada}</td><td className="num"><input type="number" min={0} value={reconteos[linea.producto_id] ?? ""} onChange={(e) => setReconteos({ ...reconteos, [linea.producto_id]: e.target.value })} style={{ width: 90, textAlign: "right" }} /></td></tr>)}</tbody></table></div></>;
+        })()}
+        <div className="field"><label>Resolución / motivo</label><input value={notaRevision} onChange={(e) => setNotaRevision(e.target.value)} placeholder="Ej: Segundo conteo verificado físicamente." style={{ width: "100%" }} /></div>
+        <div className="acciones-documento"><button className="secondary" disabled={procesando} onClick={() => resolverConteo(false)}>Rechazar y volver a contar</button><button disabled={procesando} onClick={() => resolverConteo(true)}>{procesando ? "Procesando..." : "Aprobar y aplicar al inventario"}</button></div>
+      </section>}
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Historial de conteos</h3>
+        {cargando ? <div className="vacio">Cargando...</div> : <div className="tabla-scroll"><table>
+          <thead><tr><th>Número</th><th>Almacén</th><th>Fecha</th><th>Creado por</th><th>Responsable actual</th><th>Estado</th><th className="num">Líneas relevantes</th><th></th></tr></thead>
+          <tbody>{conteos.map((conteo) => {
+            const responsableId = conteo.conteo_responsable_id ?? conteo.creado_por;
+            const propio = responsableId === perfil.id;
+            return <tr key={conteo.id}>
+              <td><strong>{conteo.numero}</strong></td><td>{conteo.origen?.nombre}</td><td>{fecha(conteo.created_at)}</td><td>{conteo.creador?.nombre_completo}</td>
+              <td>{conteo.responsable?.nombre_completo ?? conteo.creador?.nombre_completo}{conteo.estado === "en_conteo" && actividadReciente(conteo) && <div><span className="badge estado-en_conteo">En edición reciente</span></div>}</td>
+              <td><span className={`badge estado-${conteo.estado}`}>{ETIQUETAS_ESTADO[conteo.estado] ?? conteo.estado}</span></td>
+              <td className="num">{conteo.estado === "en_conteo" ? conteo.lineas.length : lineasResultado(conteo).length}</td>
+              <td>{conteo.estado === "en_conteo" && puedeContar
+                ? propio
+                  ? <button className="secondary" disabled={procesando} onClick={() => abrirConteo(conteo)}>Continuar</button>
+                  : perfil.rol === "admin"
+                    ? <button className="peligro" disabled={procesando} onClick={() => abrirConteo(conteo, true)}>Tomar control</button>
+                    : ["admin", "control"].includes(conteo.responsable?.rol ?? "")
+                      ? <button className="secondary" disabled={procesando} onClick={() => abrirConteo(conteo, true)}>Recuperar mi conteo</button>
+                      : <small>Asignado a otro usuario</small>
+                : puedeRevisar(conteo)
+                  ? <button disabled={procesando} onClick={() => abrirRevision(conteo)}>Revisar y aprobar</button>
+                  : <button className="secondary" onClick={() => imprimirResultado(conteo)}>Ver resultado</button>}</td>
+            </tr>;
+          })}{!conteos.length && <tr><td colSpan={8} className="vacio">No hay conteos registrados.</td></tr>}</tbody>
+        </table></div>}
+      </div>
     </>
   );
 }
