@@ -85,6 +85,16 @@ body {
 
 a { color: inherit; }
 
+/* Muchas pantallas fijan el navy de marca como color de texto en linea
+   (style={{ color: "#1f3864" }}) en vez de una clase - son ~15 archivos con
+   el mismo literal. En vez de tocarlos uno por uno, se neutraliza aqui: se
+   engancha del propio valor del atributo style, asi que no toca los titulos
+   que SI deben quedarse en blanco fijo sobre fondo navy (portada, login,
+   dialogos), esos usan herencia de color, no este literal en linea. */
+[style*="1f3864" i] { color: var(--texto) !important; }
+[style*="6b7280" i], [style*="9ca3af" i], [style*="64748b" i] { color: var(--texto-secundario) !important; }
+[style*="991b1b" i] { color: var(--msg-error-fg) !important; }
+
 .container {
   width: auto;
   max-width: 1680px;
@@ -398,7 +408,7 @@ label {
   font-size: 12px;
   font-weight: 600;
   margin-bottom: 5px;
-  color: #42556c;
+  color: var(--texto-secundario);
 }
 
 .field {
@@ -482,13 +492,13 @@ label {
 }
 
 .chip-limpiar {
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background: var(--superficie-suave);
+  color: var(--texto-secundario);
+  border: 1px solid var(--borde);
   font-weight: 500;
 }
 
-.chip-limpiar:hover { background: #e5e7eb; }
+.chip-limpiar:hover { background: var(--borde); }
 
 /* ===== KPIs ===== */
 .kpis {
@@ -512,35 +522,35 @@ label {
   align-items: center;
   gap: 11px;
   padding: 12px 14px;
-  background: white;
-  border: 1px solid #dbe3ee;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
   border-radius: 9px;
-  color: #1f3864;
+  color: var(--texto);
   text-decoration: none;
   transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
-.accion-rapida:hover { transform: translateY(-1px); border-color: #2e75b6; box-shadow: 0 3px 10px rgba(31,56,100,.1); }
-.accion-rapida > span { font-size: 24px; width: 30px; text-align: center; color: #2e75b6; }
+.accion-rapida:hover { transform: translateY(-1px); border-color: var(--azul); box-shadow: 0 3px 10px color-mix(in srgb, var(--azul) 15%, transparent); }
+.accion-rapida > span { font-size: 24px; width: 30px; text-align: center; color: var(--azul); }
 .accion-rapida strong { display: block; font-size: 14px; }
-.accion-rapida small { display: block; color: #6b7280; font-size: 11px; margin-top: 2px; }
+.accion-rapida small { display: block; color: var(--texto-secundario); font-size: 11px; margin-top: 2px; }
 
 .kpi {
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
-  background: white;
+  background: var(--superficie);
   border: 1px solid var(--borde);
-  border-top: 3px solid #2e75b6;
+  border-top: 3px solid var(--azul);
   border-radius: 11px;
   padding: 15px 17px;
   box-shadow: 0 5px 18px rgba(15,23,42,.045);
 }
 
-.kpi .label { display: block; font-size: 12px; line-height: 1.3; color: #6b7280; text-transform: uppercase; letter-spacing: .4px; }
-.kpi .valor { display: block; min-width: 0; font-size: 28px; font-weight: 700; color: #1f3864; line-height: 1.2; overflow-wrap: anywhere; }
+.kpi .label { display: block; font-size: 12px; line-height: 1.3; color: var(--texto-secundario); text-transform: uppercase; letter-spacing: .4px; }
+.kpi .valor { display: block; min-width: 0; font-size: 28px; font-weight: 700; color: var(--texto); line-height: 1.2; overflow-wrap: anywhere; }
 .kpi.alerta { border-top-color: #dc2626; }
-.kpi.alerta .valor { color: #b91c1c; }
+.kpi.alerta .valor { color: var(--msg-error-fg); }
 .kpi.ok { border-top-color: #16a34a; }
 
 /* ===== Tabla ===== */
@@ -550,17 +560,17 @@ label {
   overflow-y: auto;
   border: 1px solid var(--borde);
   border-radius: 10px;
-  background: #fff;
+  background: var(--superficie);
   scrollbar-width: thin;
 }
 .tabla-scroll thead th { position: sticky; top: 0; z-index: 2; }
 
-tr.fila-alerta { background: #fef2f2 !important; }
-tr.fila-alerta td { color: #991b1b; }
+tr.fila-alerta { background: var(--msg-error-bg) !important; }
+tr.fila-alerta td { color: var(--msg-error-fg); }
 
 .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
-.vacio { text-align: center; color: #9ca3af; padding: 28px 0; }
+.vacio { text-align: center; color: var(--texto-secundario); padding: 28px 0; }
 
 .badge.bajo { background: var(--badge-rojo-bg); color: var(--badge-rojo-fg); }
 .badge.cero { background: var(--badge-gris-bg); color: var(--badge-gris-fg); }
@@ -579,14 +589,14 @@ tr.fila-alerta td { color: #991b1b; }
 
 .header-row h2 {
   margin: 0;
-  color: #173d63 !important;
+  color: var(--texto) !important;
   font-size: clamp(22px, 2vw, 29px);
   font-weight: 650;
   letter-spacing: -.035em;
   line-height: 1.15;
 }
 
-.conteo { font-size: 13px; color: #6b7280; }
+.conteo { font-size: 13px; color: var(--texto-secundario); }
 
 .tabs {
   position: sticky;
