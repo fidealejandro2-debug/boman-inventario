@@ -967,6 +967,9 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
 .badge.estado-recibido, .badge.estado-aplicado, .badge.estado-cerrado_con_diferencia { background: var(--badge-verde-bg); color: var(--badge-verde-fg); }
 .badge.estado-recibido_con_diferencia, .badge.estado-rechazado { background: var(--badge-rojo-bg); color: var(--badge-rojo-fg); }
 .badge.estado-en_conteo { background: var(--badge-cyan-bg); color: var(--badge-cyan-fg); }
+.badge.estado-registrado { background: var(--badge-amarillo-bg); color: var(--badge-amarillo-fg); }
+.badge.estado-confirmado { background: var(--badge-verde-bg); color: var(--badge-verde-fg); }
+.badge.estado-anulado { background: var(--badge-gris-bg); color: var(--badge-gris-fg); }
 .badge.venta_xml { background: var(--badge-rosa-bg); color: var(--badge-rosa-fg); }
 
 /* ===== Ventas desde XML SRI ===== */

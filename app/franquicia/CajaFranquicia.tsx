@@ -273,7 +273,12 @@ export default function CajaFranquicia({
         "Este movimiento viene de una venta. Se corrige anulando la venta, no la caja."
       );
     }
-    const motivo = await pedirMotivoDialogo("Motivo de la reversión:");
+    const depositoVinculado = depositos.find((d) => d.movimiento_id === m.id);
+    const motivo = await pedirMotivoDialogo(
+      depositoVinculado
+        ? "Este movimiento tiene un depósito registrado pendiente de confirmación. Al revertirlo, el depósito también quedará anulado.\n\nMotivo de la reversión:"
+        : "Motivo de la reversión:"
+    );
     if (!motivo?.trim()) return;
     setGuardando(true);
     setError(null);
@@ -869,6 +874,9 @@ export default function CajaFranquicia({
                         Confirmar
                       </button>
                     )}
+                    {!puedeConciliar && item.estado === "registrado" && (
+                      <small className="ayuda">¿Te equivocaste? Revierte el movimiento en el diario, abajo.</small>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -930,7 +938,7 @@ export default function CajaFranquicia({
                 <td className="num">{dinero(m.saldo_acumulado)}</td>
                 <td>
                   {m.estado === "vigente" && !m.venta_id
-                    && !depositos.some((deposito) => deposito.movimiento_id === m.id) && (
+                    && !depositos.some((deposito) => deposito.movimiento_id === m.id && deposito.estado === "confirmado") && (
                     <button
                       className="btn-mini secondary"
                       disabled={guardando}
