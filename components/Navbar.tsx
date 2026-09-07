@@ -210,6 +210,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/administracion/usuarios", etiqueta: "Usuarios", descripcion: "Roles, almacenes y accesos", visible: puedeAdministrar },
       { href: "/administracion/permisos", etiqueta: "Permisos por rol", descripcion: "Matriz de acceso del ERP", visible: puedeAdministrar },
       { href: "/administracion/franquicias", etiqueta: "Configurar franquicias", descripcion: "Locales y empresas titulares", visible: puedeAdministrar },
+      { href: "/administracion/contratos-bomansport", etiqueta: "Sincronización BomanSport", descripcion: "Importación de contratos desde Google Sheets", visible: puedeAdministrar },
     ] },
   ];
 

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/bomansport/importar-contratos",
+      "schedule": "0 10 * * *"
+    }
+  ]
+}

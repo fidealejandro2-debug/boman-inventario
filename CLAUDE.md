@@ -36,6 +36,9 @@ NEXT_PUBLIC_SUPABASE_URL=https://fpztguulwecbvkdokkef.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 NEXT_PUBLIC_SITE_URL=https://boman-inventario.vercel.app
 SUPABASE_SECRET_KEY=<secret key; solo servidor, nunca NEXT_PUBLIC_>
+BOMANSPORT_WEBAPP_URL=<URL del web app de Apps Script de BomanSport>
+BOMANSPORT_API_TOKEN=<API_TOKEN de las Propiedades del script de BomanSport>
+CRON_SECRET=<string aleatorio largo; autentica el cron/boton manual de v90>
 ```
 
 ⚠️ La URL va **limpia**, sin `/rest/v1` al final. Ese sufijo ya rompió el login una vez.
@@ -59,6 +62,8 @@ app/
   configuracion/inventario/                 mínimos/ubicaciones por almacén
   importar/                                 centro de Excel/CSV con flujos auditados
   administracion/usuarios/                       gestión de usuarios (admin)
+  administracion/contratos-bomansport/           sincronizacion de contratos BomanSport (admin, v90)
+  api/bomansport/importar-contratos/route.ts     GET (cron, bearer) + POST (manual) de la sincronizacion v90
   auth/callback/                                 procesa invitaciones
   establecer-clave/                             contraseña inicial
   globals.css
