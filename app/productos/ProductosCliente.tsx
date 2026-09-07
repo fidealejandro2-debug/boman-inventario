@@ -740,6 +740,7 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
                           nombre={p.nombre}
                           sku={p.sku}
                           portada={portadas.get(p.id)}
+                          puedeAgregarFoto
                           onAbrirGaleria={() => setFotosDe(p)}
                         />
                       </td>

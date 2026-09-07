@@ -9,11 +9,13 @@ export default function ProductoConImagen({
   sku,
   portada,
   onAbrirGaleria,
+  puedeAgregarFoto = false,
 }: {
   nombre: string;
   sku: string;
   portada?: PortadaProducto;
   onAbrirGaleria?: () => void;
+  puedeAgregarFoto?: boolean;
 }) {
   const referencia = useRef<HTMLSpanElement>(null);
   const [posicion, setPosicion] = useState<{ top: number; left: number } | null>(null);
@@ -49,7 +51,7 @@ export default function ProductoConImagen({
         >
           <img src={portada.url} alt="" loading="lazy" />
         </button>
-      ) : onAbrirGaleria ? (
+      ) : onAbrirGaleria && puedeAgregarFoto ? (
         <button
           type="button"
           className="producto-miniatura producto-sin-foto"

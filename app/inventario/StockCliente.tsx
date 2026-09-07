@@ -244,7 +244,8 @@ export default function StockCliente({ puedeEditarFotos = false }: { puedeEditar
                         nombre={f.producto}
                         sku={f.sku}
                         portada={portadas.get(f.producto_id)}
-                        onAbrirGaleria={puedeEditarFotos ? () => setFotosDe({
+                        puedeAgregarFoto={puedeEditarFotos}
+                        onAbrirGaleria={portadas.has(f.producto_id) || puedeEditarFotos ? () => setFotosDe({
                           id: f.producto_id, sku: f.sku, nombre: f.producto,
                         }) : undefined}
                       />
