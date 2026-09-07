@@ -1958,7 +1958,11 @@ button.btn-mini {
 }
 /* Selector de tema: pildora fija en la esquina, visible en toda la app. */
 .selector-tema {
-  position: fixed; top: 16px; right: 16px; z-index: 1300;
+  /* Abajo a la derecha, no arriba: casi toda pantalla tiene un boton de
+     accion arriba a la derecha (header-row) y el selector se lo tapaba -
+     bug real, reportado al usarlo. Ningun elemento fijo de la app ocupa
+     esa esquina inferior. */
+  position: fixed; bottom: 16px; right: 16px; z-index: 1300;
   display: flex; align-items: center; gap: 1px; padding: 3px;
   border-radius: 999px; background: var(--superficie); border: 1px solid var(--borde);
   box-shadow: var(--sombra);
@@ -1978,7 +1982,7 @@ button.btn-mini {
 .selector-tema button[aria-pressed="true"] { color: #fff; }
 @media (max-width: 640px) {
   .selector-tema .selector-etiqueta { display: none; }
-  .selector-tema { top: 10px; right: 10px; }
+  .selector-tema { bottom: 10px; right: 10px; }
 }
 
 @keyframes dlg-fondo-entra { from { opacity: 0; } to { opacity: 1; } }
