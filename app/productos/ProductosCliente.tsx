@@ -4,8 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import ImportarCatalogo from "./ImportarCatalogo";
-import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
+import {
+  pedirMotivoDialogo,
+  confirmarDialogo,
+  mostrarAvisoDialogo,
+} from "@/components/Dialogo";
 import GaleriaImagenes from "@/components/GaleriaImagenes";
+import ProductoConImagen from "@/components/ProductoConImagen";
+import {
+  cargarPortadasProductos,
+  type PortadaProducto,
+} from "@/lib/portadasProductos";
 
 type Producto = {
   id: string;
@@ -51,6 +60,7 @@ const VACIO = {
 export default function ProductosCliente() {
   const supabase = createClient();
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [portadas, setPortadas] = useState<Map<string, PortadaProducto>>(new Map());
   const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
   const [subcategoriasCatalogo, setSubcategoriasCatalogo] = useState<SubcategoriaProducto[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -59,6 +69,7 @@ export default function ProductosCliente() {
   const [busqueda, setBusqueda] = useState("");
   const [categoria, setCategoria] = useState("");
   const [subcategoria, setSubcategoria] = useState("");
+  const [filtroFoto, setFiltroFoto] = useState<"todas" | "con" | "sin">("todas");
   const [verInactivos, setVerInactivos] = useState(false);
 
   const [nuevo, setNuevo] = useState({ ...VACIO });
@@ -79,24 +90,46 @@ export default function ProductosCliente() {
 
   async function cargar() {
     setCargando(true);
-    const [productosRes, categoriasRes, subcategoriasRes] = await Promise.all([
+    const [productosRes, categoriasRes, subcategoriasRes, portadasRes] = await Promise.all([
       supabase
         .from("productos")
         .select("id, sku, nombre, categoria, categoria_id, subcategoria, subcategoria_id, talla, color, stock_minimo, precio, activo")
         .order("nombre"),
       supabase.from("categorias_productos").select("id, nombre, descripcion, activo").order("nombre"),
       supabase.from("subcategorias_productos").select("id, categoria_id, nombre, descripcion, activo").order("nombre"),
+      cargarPortadasProductos(supabase)
+        .then((data) => ({ data, error: null }))
+        .catch((error: Error) => ({ data: new Map<string, PortadaProducto>(), error })),
     ]);
 
-    const error = productosRes.error || categoriasRes.error || subcategoriasRes.error;
+    const error = productosRes.error || categoriasRes.error || subcategoriasRes.error || portadasRes.error;
     if (error) setMsg({ tipo: "error", texto: error.message });
     if (productosRes.data) setProductos(productosRes.data as Producto[]);
     if (categoriasRes.data) setCategoriasCatalogo(categoriasRes.data as CategoriaProducto[]);
     if (subcategoriasRes.data) setSubcategoriasCatalogo(subcategoriasRes.data as SubcategoriaProducto[]);
+    setPortadas(portadasRes.data);
     setCargando(false);
   }
 
   useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    if (msg?.tipo !== "error") return;
+    const actual = msg;
+    void mostrarAvisoDialogo(msg.texto, "No se pudo completar la acción", true)
+      .then(() => setMsg((vigente) => vigente === actual ? null : vigente));
+  }, [msg]);
+
+  async function cerrarFotos() {
+    setFotosDe(null);
+    try {
+      setPortadas(await cargarPortadasProductos(supabase));
+    } catch (e) {
+      setMsg({
+        tipo: "error",
+        texto: e instanceof Error ? e.message : "No se pudieron actualizar las portadas.",
+      });
+    }
+  }
 
   const categoriasActivas = useMemo(
     () => categoriasCatalogo.filter((c) => c.activo),
@@ -119,6 +152,8 @@ export default function ProductosCliente() {
       if (!verInactivos && !p.activo) return false;
       if (categoria && p.categoria_id !== categoria) return false;
       if (subcategoria && p.subcategoria_id !== subcategoria) return false;
+      if (filtroFoto === "con" && !portadas.has(p.id)) return false;
+      if (filtroFoto === "sin" && portadas.has(p.id)) return false;
       if (!q) return true;
       return (
         p.nombre.toLowerCase().includes(q) ||
@@ -129,7 +164,7 @@ export default function ProductosCliente() {
         (p.color ?? "").toLowerCase().includes(q)
       );
     });
-  }, [productos, busqueda, categoria, subcategoria, verInactivos]);
+  }, [productos, busqueda, categoria, subcategoria, filtroFoto, verInactivos, portadas]);
 
   const todosFiltradosSeleccionados = filtrados.length > 0 && filtrados.every((p) => seleccionados.has(p.id));
 
@@ -563,12 +598,20 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
             </select>
           </div>
           <div className="field">
+            <label>Fotografía</label>
+            <select value={filtroFoto} onChange={(e) => setFiltroFoto(e.target.value as typeof filtroFoto)}>
+              <option value="todas">Todas</option>
+              <option value="con">Con foto</option>
+              <option value="sin">Sin foto</option>
+            </select>
+          </div>
+          <div className="field">
             <label style={{ fontWeight: 500 }}>
               <input type="checkbox" checked={verInactivos} onChange={(e) => setVerInactivos(e.target.checked)} style={{ marginRight: 6 }} />
               Ver inactivos
             </label>
           </div>
-          <button className="chip-limpiar" onClick={() => { setBusqueda(""); setCategoria(""); setSubcategoria(""); setVerInactivos(false); }}>Limpiar</button>
+          <button className="chip-limpiar" onClick={() => { setBusqueda(""); setCategoria(""); setSubcategoria(""); setFiltroFoto("todas"); setVerInactivos(false); }}>Limpiar</button>
         </div>
 
         <div className="header-row">
@@ -618,7 +661,7 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
           </div>
         )}
 
-        {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
+        {msg?.tipo === "ok" && <div className="success">{msg.texto}</div>}
 
         {cargando ? <div className="vacio">Cargando catálogo...</div> : (
           <div className="tabla-scroll">
@@ -692,7 +735,14 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
                         <input type="checkbox" checked={seleccionados.has(p.id)} onChange={() => alternarSeleccion(p.id)} disabled={aplicandoMasivo} aria-label={`Seleccionar ${p.nombre}`} />
                       </td>
                       <td>{p.sku}</td>
-                      <td>{p.nombre}</td>
+                      <td>
+                        <ProductoConImagen
+                          nombre={p.nombre}
+                          sku={p.sku}
+                          portada={portadas.get(p.id)}
+                          onAbrirGaleria={() => setFotosDe(p)}
+                        />
+                      </td>
                       <td>
                         <div>{p.categoria ?? "-"}</div>
                         {p.subcategoria && <small style={{ color: "#6b7280" }}>{p.subcategoria}</small>}
@@ -701,7 +751,6 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
                       <td className="num">{p.stock_minimo}</td>
                       <td className="num">{p.precio != null ? `$${Number(p.precio).toFixed(2)}` : "-"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
-                        <button className="secondary" onClick={() => setFotosDe(p)} style={{ padding: "5px 10px", marginRight: 5 }}>Fotos</button>
                         <button className="secondary" onClick={() => abrirEdicion(p)} style={{ padding: "5px 10px", marginRight: 5 }}>Editar</button>
                         <button className="chip-limpiar" disabled={cambiandoEstado === p.id}
                           onClick={() => alternarActivo(p)} style={{ padding: "5px 10px" }}>
@@ -717,9 +766,9 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
           </div>
         )}
       </div>
-      {fotosDe && <div className="modal-operativo" onMouseDown={(e) => { if (e.target === e.currentTarget) setFotosDe(null); }}>
+      {fotosDe && <div className="modal-operativo" onMouseDown={(e) => { if (e.target === e.currentTarget) void cerrarFotos(); }}>
         <div className="modal-contenido ancho">
-          <div className="header-row"><div><h2 style={{ margin: 0 }}>{fotosDe.sku} · {fotosDe.nombre}</h2><p className="conteo">Fotografía el producto con el celular o elige varias imágenes.</p></div><button className="secondary" onClick={() => setFotosDe(null)}>Cerrar</button></div>
+          <div className="header-row"><div><h2 style={{ margin: 0 }}>{fotosDe.sku} · {fotosDe.nombre}</h2><p className="conteo">Fotografía el producto con el celular o elige varias imágenes.</p></div><button className="secondary" onClick={() => void cerrarFotos()}>Cerrar</button></div>
           <GaleriaImagenes entidadTipo="producto" entidadId={fotosDe.id} titulo={fotosDe.nombre} puedeEditar />
         </div>
       </div>}

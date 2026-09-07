@@ -2296,3 +2296,88 @@ button.advertencia:hover { background: #92400e; }
   .calidad-descuento { grid-template-columns: 1fr; }
   .calidad-modal .grid-form > .ancho-doble { grid-column: auto; }
 }
+
+/* Miniaturas y previsualizacion de productos (v88). El visor vive en un
+   portal sobre body para que no lo recorte el overflow de las tablas. */
+.producto-con-imagen {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  outline: none;
+}
+.producto-con-imagen.tiene-imagen { cursor: zoom-in; }
+.producto-nombre {
+  min-width: 0;
+  color: var(--texto);
+  font-weight: 600;
+  line-height: 1.3;
+}
+button.producto-miniatura {
+  display: grid;
+  flex: 0 0 42px;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  background: var(--superficie-suave);
+  color: var(--azul-fuerte);
+  box-shadow: none;
+}
+button.producto-miniatura:hover,
+.producto-con-imagen:focus button.producto-miniatura {
+  border-color: var(--azul);
+  background: var(--azul-suave);
+  transform: none;
+}
+.producto-miniatura img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+button.producto-sin-foto {
+  border-style: dashed;
+  font-size: 20px;
+  font-weight: 500;
+}
+.producto-previsualizacion {
+  position: fixed;
+  z-index: 5000;
+  display: grid;
+  width: 300px;
+  overflow: hidden;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 22px 55px rgba(8, 20, 38, .28);
+  pointer-events: none;
+  animation: producto-vista-entrar .14s ease-out;
+}
+.producto-previsualizacion img {
+  width: 100%;
+  height: 245px;
+  object-fit: contain;
+  background: #fff;
+}
+.producto-previsualizacion > span {
+  padding: 10px 12px 4px;
+  line-height: 1.35;
+}
+.producto-previsualizacion small {
+  padding: 0 12px 11px;
+  color: var(--texto-secundario);
+}
+@keyframes producto-vista-entrar {
+  from { opacity: 0; transform: translateY(-3px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (max-width: 720px) {
+  .producto-previsualizacion { width: min(300px, calc(100vw - 24px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .producto-previsualizacion { animation: none; }
+}

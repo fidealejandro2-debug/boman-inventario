@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
-import { pedirTextoDialogo } from "@/components/Dialogo";
+import { mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 
 type Imagen = {
   id: string;
@@ -103,6 +103,12 @@ export default function GaleriaImagenes({ entidadTipo, entidadId, titulo, puedeE
   }
 
   useEffect(() => { cargar(); }, [entidadId, entidadTipo]);
+  useEffect(() => {
+    if (!error) return;
+    const actual = error;
+    void mostrarAvisoDialogo(error, "No se pudo completar la acción", true)
+      .then(() => setError((vigente) => vigente === actual ? null : vigente));
+  }, [error]);
 
   async function subirArchivos(files: FileList | null) {
     if (!files?.length) return;
@@ -159,7 +165,7 @@ export default function GaleriaImagenes({ entidadTipo, entidadId, titulo, puedeE
   }
 
   async function archivar(imagen: Imagen) {
-    const motivo = await pedirTextoDialogo("Motivo para retirar esta foto:", "Foto reemplazada");
+    const motivo = await pedirMotivoDialogo("Motivo para retirar esta foto:", 5);
     if (!motivo?.trim()) return;
     setError(null); setMensaje(null);
     const { error: archivoError } = await supabase.rpc("archivar_imagen_entidad_v80", {
@@ -182,7 +188,6 @@ export default function GaleriaImagenes({ entidadTipo, entidadId, titulo, puedeE
       </div>}
     </div>
     {puedeEditar && <div className="field" style={{ margin: "10px 0" }}><label>Descripcion opcional para las nuevas fotos</label><input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej. Vista frontal, placa de serie o detalle del producto" /></div>}
-    {error && <div className="error-box">{error}</div>}
     {mensaje && <div className="success-box">{mensaje}</div>}
     {subiendo && <div className="vacio">Optimizando y subiendo foto…</div>}
     {cargando ? <div className="vacio">Cargando fotos…</div> : imagenes.length ?

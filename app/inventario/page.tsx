@@ -12,7 +12,7 @@ export default async function InventarioPage() {
     <>
       <Navbar perfil={perfil} />
       <div className="container">
-        <StockCliente />
+        <StockCliente puedeEditarFotos={perfil.rol === "admin"} />
       </div>
     </>
   );

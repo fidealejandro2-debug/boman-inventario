@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
+import GaleriaImagenes from "@/components/GaleriaImagenes";
+import ProductoConImagen from "@/components/ProductoConImagen";
+import {
+  cargarPortadasProductos,
+  type PortadaProducto,
+} from "@/lib/portadasProductos";
 
 type Fila = {
   producto_id: string;
@@ -30,9 +36,11 @@ type Fila = {
   bajo_minimo: boolean;
 };
 
-export default function StockCliente() {
-  const supabase = createClient();
+export default function StockCliente({ puedeEditarFotos = false }: { puedeEditarFotos?: boolean }) {
+  const supabase = useMemo(() => createClient(), []);
   const [filas, setFilas] = useState<Fila[]>([]);
+  const [portadas, setPortadas] = useState<Map<string, PortadaProducto>>(new Map());
+  const [fotosDe, setFotosDe] = useState<{ id: string; sku: string; nombre: string } | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,15 +53,27 @@ export default function StockCliente() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("vista_stock_operativo")
-        .select("*")
-        .order("producto");
+      const [{ data, error }, resultadoPortadas] = await Promise.all([
+        supabase.from("vista_stock_operativo").select("*").order("producto"),
+        cargarPortadasProductos(supabase)
+          .then((data) => ({ data, error: null }))
+          .catch((error: Error) => ({ data: new Map<string, PortadaProducto>(), error })),
+      ]);
       if (error) setError(error.message);
       else setFilas((data as Fila[]) ?? []);
+      setPortadas(resultadoPortadas.data);
+      if (resultadoPortadas.error) setError(resultadoPortadas.error.message);
       setCargando(false);
     })();
-  }, []);
+  }, [supabase]);
+
+  async function refrescarPortadas() {
+    try {
+      setPortadas(await cargarPortadasProductos(supabase));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron actualizar las fotos.");
+    }
+  }
 
   const categorias = useMemo(() => {
     const mapa = new Map<string, string>();
@@ -219,7 +239,16 @@ export default function StockCliente() {
                 {filtradas.map((f) => (
                   <tr key={`${f.producto_id}-${f.almacen_id}`} className={f.bajo_minimo && f.stock_fisico > 0 ? "fila-alerta" : ""}>
                     <td>{f.sku}</td>
-                    <td>{f.producto}</td>
+                    <td>
+                      <ProductoConImagen
+                        nombre={f.producto}
+                        sku={f.sku}
+                        portada={portadas.get(f.producto_id)}
+                        onAbrirGaleria={puedeEditarFotos ? () => setFotosDe({
+                          id: f.producto_id, sku: f.sku, nombre: f.producto,
+                        }) : undefined}
+                      />
+                    </td>
                     <td>
                       <div>{f.categoria ?? "-"}</div>
                       {f.subcategoria && <small style={{ color: "#6b7280" }}>{f.subcategoria}</small>}
@@ -251,6 +280,34 @@ export default function StockCliente() {
           </div>
         )}
       </div>
+
+      {fotosDe && (
+        <div className="modal-operativo" onMouseDown={(e) => {
+          if (e.target === e.currentTarget) {
+            setFotosDe(null);
+            void refrescarPortadas();
+          }
+        }}>
+          <div className="modal-contenido ancho">
+            <div className="header-row">
+              <div>
+                <h2 style={{ margin: 0 }}>{fotosDe.sku} · {fotosDe.nombre}</h2>
+                <p className="conteo">La portada aparecerá en Inventario y Productos.</p>
+              </div>
+              <button className="secondary" onClick={() => {
+                setFotosDe(null);
+                void refrescarPortadas();
+              }}>Cerrar</button>
+            </div>
+            <GaleriaImagenes
+              entidadTipo="producto"
+              entidadId={fotosDe.id}
+              titulo={fotosDe.nombre}
+              puedeEditar={puedeEditarFotos}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }
