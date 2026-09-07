@@ -11,6 +11,7 @@ import {
 } from "@/components/Dialogo";
 import GaleriaImagenes from "@/components/GaleriaImagenes";
 import ProductoConImagen from "@/components/ProductoConImagen";
+import EtiquetasProducto from "@/components/EtiquetasProducto";
 import {
   cargarPortadasProductos,
   type PortadaProducto,
@@ -87,6 +88,7 @@ export default function ProductosCliente() {
   const [subcategoriaMasiva, setSubcategoriaMasiva] = useState("");
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
   const [fotosDe, setFotosDe] = useState<Producto | null>(null);
+  const [etiquetasDe, setEtiquetasDe] = useState<Producto | null>(null);
 
   async function cargar() {
     setCargando(true);
@@ -753,6 +755,7 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
                       <td className="num">{p.precio != null ? `$${Number(p.precio).toFixed(2)}` : "-"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <button className="secondary" onClick={() => abrirEdicion(p)} style={{ padding: "5px 10px", marginRight: 5 }}>Editar</button>
+                        <button className="secondary" onClick={() => setEtiquetasDe(p)} style={{ padding: "5px 10px", marginRight: 5 }}>Etiquetas</button>
                         <button className="chip-limpiar" disabled={cambiandoEstado === p.id}
                           onClick={() => alternarActivo(p)} style={{ padding: "5px 10px" }}>
                           {cambiandoEstado === p.id ? "Procesando..." : p.activo ? "Desactivar" : "Activar"}
@@ -773,6 +776,7 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
           <GaleriaImagenes entidadTipo="producto" entidadId={fotosDe.id} titulo={fotosDe.nombre} puedeEditar />
         </div>
       </div>}
+      {etiquetasDe && <EtiquetasProducto producto={etiquetasDe} onCerrar={() => setEtiquetasDe(null)} />}
     </>
   );
 }

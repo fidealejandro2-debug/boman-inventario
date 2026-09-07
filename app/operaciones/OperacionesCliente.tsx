@@ -9,7 +9,8 @@ import LineasDocumentoEditor, {
   type LineaDocumentoEdicion,
   type ProductoDocumento,
 } from "@/components/LineasDocumentoEditor";
-import { pedirMotivoDialogo, confirmarDialogo } from "@/components/Dialogo";
+import BuscadorCodigoProducto from "@/components/BuscadorCodigoProducto";
+import { pedirMotivoDialogo, confirmarDialogo, mostrarAvisoDialogo } from "@/components/Dialogo";
 
 type Almacen = { id: string; nombre: string; tipo: string };
 type Linea = {
@@ -66,6 +67,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const [nota, setNota] = useState("");
   const [origenSolicitud, setOrigenSolicitud] = useState<Record<string, string>>({});
   const [recibiendo, setRecibiendo] = useState<Documento | null>(null);
+  const [productoRecepcionEscaneado, setProductoRecepcionEscaneado] = useState("");
   const [recepcion, setRecepcion] = useState<Record<string, { recibida: number; noConforme: number; noRecibida: number; observacion: string }>>({});
   const [notaRecepcion, setNotaRecepcion] = useState("");
   const [sinCodigo, setSinCodigo] = useState<{ descripcion: string; cantidad: number }[]>([]);
@@ -236,7 +238,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
         observacion: "",
       };
     });
-    setRecepcion(valores); setNotaRecepcion(""); setRecibiendo(documento);
+    setRecepcion(valores); setNotaRecepcion(""); setProductoRecepcionEscaneado(""); setRecibiendo(documento);
   }
 
   function actualizarClasificacion(
@@ -418,8 +420,17 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
           <div className="modal-contenido">
             <div className="header-row"><h3>Recibir {recibiendo.numero}</h3><button className="chip-limpiar" onClick={() => setRecibiendo(null)}>Cerrar</button></div>
             <div className="info-box"><strong>Clasifica el 100% de lo despachado.</strong> Conforme entra al stock disponible; no conforme entra a cuarentena; no recibida permanece en tránsito con incidencia.</div>
+            <BuscadorCodigoProducto compacto etiqueta="Verificar producto por escáner" onEncontrado={async (producto) => {
+              const linea = recibiendo.lineas.find((item) => item.producto_id === producto.producto_id);
+              if (!linea) {
+                await mostrarAvisoDialogo("El producto leído no pertenece a esta transferencia.", "Producto no esperado");
+                return;
+              }
+              setProductoRecepcionEscaneado(producto.producto_id);
+              setTimeout(() => document.querySelector<HTMLInputElement>(`input[data-recepcion-producto="${producto.producto_id}"]`)?.focus(), 0);
+            }} />
             <div className="tabla-scroll"><table><thead><tr><th>Producto</th><th className="num">Despachado</th><th className="num">Conforme</th><th className="num">No conforme</th><th className="num">No recibida</th><th className="num">Control</th><th>Observación</th></tr></thead><tbody>
-              {recibiendo.lineas.map((l) => { const valor = recepcion[l.producto_id]; const total = (valor?.recibida ?? 0) + (valor?.noConforme ?? 0) + (valor?.noRecibida ?? 0); const completo = total === (l.cantidad_despachada ?? 0); return <tr key={l.id} className={!completo ? "fila-alerta" : ""}><td><strong>{l.producto?.sku}</strong><br />{l.producto?.nombre}</td><td className="num">{l.cantidad_despachada}</td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.recibida ?? 0} onChange={(e) => actualizarClasificacion(l, "recibida", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.noConforme ?? 0} onChange={(e) => actualizarClasificacion(l, "noConforme", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.noRecibida ?? 0} onChange={(e) => actualizarClasificacion(l, "noRecibida", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><span className={`badge ${completo ? "ok" : "bajo"}`}>{total}/{l.cantidad_despachada}</span></td><td><input value={valor?.observacion ?? ""} onChange={(e) => actualizarClasificacion(l, "observacion", e.target.value)} /></td></tr>; })}
+              {recibiendo.lineas.map((l) => { const valor = recepcion[l.producto_id]; const total = (valor?.recibida ?? 0) + (valor?.noConforme ?? 0) + (valor?.noRecibida ?? 0); const completo = total === (l.cantidad_despachada ?? 0); return <tr key={l.id} className={`${!completo ? "fila-alerta " : ""}${productoRecepcionEscaneado === l.producto_id ? "fila-escaneada" : ""}`}><td><strong>{l.producto?.sku}</strong><br />{l.producto?.nombre}</td><td className="num">{l.cantidad_despachada}</td><td className="num"><input data-recepcion-producto={l.producto_id} type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.recibida ?? 0} onChange={(e) => actualizarClasificacion(l, "recibida", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.noConforme ?? 0} onChange={(e) => actualizarClasificacion(l, "noConforme", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><input type="number" min={0} max={l.cantidad_despachada ?? 0} value={valor?.noRecibida ?? 0} onChange={(e) => actualizarClasificacion(l, "noRecibida", Number(e.target.value) || 0)} style={{ width: 70 }} /></td><td className="num"><span className={`badge ${completo ? "ok" : "bajo"}`}>{total}/{l.cantidad_despachada}</span></td><td><input value={valor?.observacion ?? ""} onChange={(e) => actualizarClasificacion(l, "observacion", e.target.value)} /></td></tr>; })}
             </tbody></table></div>
             <div className="field"><label>Acta / evidencia inicial de recepción</label><textarea rows={3} value={notaRecepcion} onChange={(e) => setNotaRecepcion(e.target.value)} placeholder="Obligatoria cuando exista producto no conforme o no recibido" style={{ width: "100%" }} /></div>
             <button disabled={procesando === recibiendo.id} onClick={guardarRecepcion}>{procesando === recibiendo.id ? "Aplicando..." : "Confirmar recepción"}</button>

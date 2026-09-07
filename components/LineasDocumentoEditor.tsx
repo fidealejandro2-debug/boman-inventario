@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import BuscadorCodigoProducto from "@/components/BuscadorCodigoProducto";
+import { mostrarAvisoDialogo } from "@/components/Dialogo";
 
 export type ProductoDocumento = {
   id: string;
@@ -192,6 +194,19 @@ export default function LineasDocumentoEditor({
 
   return (
     <div className="lineas-editor">
+      <BuscadorCodigoProducto compacto onEncontrado={async (resuelto) => {
+        const producto = productosBuscables.find((item) => item.id === resuelto.producto_id);
+        if (!producto) {
+          await mostrarAvisoDialogo(
+            permitirDecimales
+              ? "El código corresponde a un producto que no puede consumirse como material de producción."
+              : "El producto leído no está habilitado para este documento.",
+            "Producto no disponible",
+          );
+          return;
+        }
+        agregar(producto);
+      }} />
       <div className="field buscador-producto-documento">
         <label>Agregar productos por nombre o código</label>
         <div className="buscador-producto-fila">

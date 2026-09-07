@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fecha } from "@/lib/utils";
 import { ETIQUETAS_ESTADO, imprimirDocumento, nuevaClaveIdempotencia } from "@/lib/erp";
 import { confirmarDialogo, mostrarAvisoDialogo } from "@/components/Dialogo";
+import BuscadorCodigoProducto from "@/components/BuscadorCodigoProducto";
 import { mensajeError } from "./lib";
 import type { Franquicia } from "./FranquiciaCliente";
 
@@ -277,6 +278,7 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
         <div className="field"><label>Acta / motivo</label><input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Ej: Conteo mensual" style={{ width: "100%" }} /></div>
         <label className="opcion-destacada"><input type="checkbox" checked={conteoCompleto} onChange={(e) => setConteoCompleto(e.target.checked)} /> Contar todo el catálogo habilitado en esta tienda</label>
         {!conteoCompleto && <div>
+          <BuscadorCodigoProducto compacto etiqueta="Escanear y seleccionar producto" onEncontrado={(producto) => { setSeleccionados((actual) => new Set(actual).add(producto.producto_id)); setBusqueda(producto.sku); }} />
           <div className="field"><label>Buscar por SKU, nombre o talla</label><input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ width: "100%" }} /></div>
           <div className="seleccion-productos-conteo">{productosFiltrados.map((p) => <label key={p.id}><input type="checkbox" checked={seleccionados.has(p.id)} onChange={(e) => { const s = new Set(seleccionados); e.target.checked ? s.add(p.id) : s.delete(p.id); setSeleccionados(s); }} /><span><strong>{p.sku}</strong> {p.nombre} {p.talla ?? ""}</span></label>)}</div>
           <p className="conteo">{seleccionados.size} producto(s) seleccionados.</p>
@@ -299,12 +301,13 @@ export default function ConteoFranquicia({ franquicia, soloLectura = false }: { 
           <button className="secondary" onClick={() => imprimirHoja(activo)}>Imprimir hoja</button>
         </div>
         <p className="info-box">El stock del sistema permanece oculto mientras cuentas. Al finalizar, cualquier campo vacío se registrará como <strong>0</strong> después de pedirte confirmación.</p>
+        <BuscadorCodigoProducto compacto etiqueta="Escanear producto contado" onEncontrado={async (producto) => { if (!activo.lineas.some((linea) => linea.producto_id === producto.producto_id)) { await mostrarAvisoDialogo("El producto leído no forma parte de este conteo.", "Producto fuera del conteo"); return; } setBusquedaConteo(producto.sku); setTimeout(() => document.querySelector<HTMLInputElement>(`input[data-conteo-producto="${producto.producto_id}"]`)?.focus(), 0); }} />
         <div className="field"><label>Buscar por SKU, nombre o talla</label><input value={busquedaConteo} onChange={(e) => setBusquedaConteo(e.target.value)} style={{ width: "100%" }} /></div>
         <p className="conteo"><strong>{lineasActivasFiltradas.length}</strong> de {activo.lineas.length} productos visibles · <strong>{pendientes}</strong> pendientes en total.</p>
         <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th>Talla</th><th className="num">Cantidad física</th><th>Observación</th></tr></thead><tbody>
           {lineasActivasFiltradas.map((l) => <tr key={l.id}>
             <td><strong>{l.producto?.sku}</strong></td><td>{l.producto?.nombre}</td><td>{l.producto?.talla ?? "-"}</td>
-            <td className="num"><input type="number" min={0} value={valores[l.producto_id] ?? ""} onChange={(e) => setValores({ ...valores, [l.producto_id]: e.target.value })} style={{ width: 90, textAlign: "right" }} /></td>
+            <td className="num"><input data-conteo-producto={l.producto_id} type="number" min={0} value={valores[l.producto_id] ?? ""} onChange={(e) => setValores({ ...valores, [l.producto_id]: e.target.value })} style={{ width: 90, textAlign: "right" }} /></td>
             <td><input value={observaciones[l.producto_id] ?? ""} onChange={(e) => setObservaciones({ ...observaciones, [l.producto_id]: e.target.value })} /></td>
           </tr>)}
           {!lineasActivasFiltradas.length && <tr><td colSpan={5} className="vacio">Sin productos con esa búsqueda.</td></tr>}

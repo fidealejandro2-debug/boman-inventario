@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 import GaleriaImagenes from "@/components/GaleriaImagenes";
 import ProductoConImagen from "@/components/ProductoConImagen";
+import BuscadorCodigoProducto from "@/components/BuscadorCodigoProducto";
 import {
   cargarPortadasProductos,
   type PortadaProducto,
@@ -159,6 +160,10 @@ export default function StockCliente({ puedeEditarFotos = false }: { puedeEditar
 
       <div className="card">
         <div className="filtros">
+          <BuscadorCodigoProducto onEncontrado={(producto) => {
+            setBusqueda(producto.sku);
+            setCategoria(""); setSubcategoria(""); setAlmacen(""); setSoloAlerta(false); setOcultarCero(false);
+          }} />
           <div className="field buscador">
             <label>Buscar</label>
             <input

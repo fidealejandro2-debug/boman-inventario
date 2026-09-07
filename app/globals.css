@@ -968,6 +968,26 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
 .selector-almacenes { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 5px; border: 1px solid var(--borde); border-radius: 7px; padding: 8px; max-height: 160px; overflow: auto; }
 .selector-almacenes label { font-size: 12px; font-weight: 500; display: flex; gap: 5px; align-items: center; }
 .selector-almacenes.compacto { min-width: 240px; }
+.buscador-codigo > div { display: flex; gap: 6px; }
+.buscador-codigo input { min-width: 230px; }
+.buscador-codigo button { padding-inline: 13px; }
+.buscador-codigo.compacto { margin-bottom: 10px; }
+.fila-escaneada td { background: #e0f2fe !important; box-shadow: inset 0 1px #38bdf8, inset 0 -1px #38bdf8; }
+.etiquetas-codigos { display: grid; gap: 9px; margin-top: 16px; }
+.etiqueta-codigo { display: grid; grid-template-columns: 190px minmax(180px,1fr) auto; gap: 14px; align-items: center; border: 1px solid var(--borde); border-radius: 11px; padding: 10px; background: var(--superficie); }
+.etiqueta-codigo > div:first-child { min-height: 78px; display: flex; align-items: center; justify-content: center; background: #fff; border-radius: 7px; padding: 4px; }
+.etiqueta-codigo img { display: block; max-width: 180px; max-height: 90px; object-fit: contain; }
+.etiqueta-codigo section { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.etiqueta-codigo section strong { color: var(--azul); font-size: 11px; text-transform: uppercase; }
+.etiqueta-codigo section b { overflow-wrap: anywhere; }
+.etiqueta-codigo section small { color: var(--texto-secundario); }
+@media (max-width: 720px) {
+  .buscador-codigo, .buscador-codigo input { width: 100%; min-width: 0; }
+  .buscador-codigo > div { width: 100%; }
+  .buscador-codigo input { flex: 1; }
+  .etiqueta-codigo { grid-template-columns: 1fr; }
+  .etiqueta-codigo .acciones-en-fila { justify-content: flex-start; }
+}
 .tabla-scroll input[type="number"] { width: 72px; }
 .aviso-offline { position: sticky; top: 0; z-index: 1000; padding: 9px 12px; text-align: center; background: #991b1b; color: white; font-size: 13px; font-weight: 700; }
 
