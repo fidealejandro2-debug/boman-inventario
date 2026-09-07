@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Aviso from "@/components/Aviso";
-import { confirmarDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
+import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import type { Perfil } from "@/lib/getPerfil";
 import { createClient } from "@/lib/supabase/client";
@@ -22,12 +22,19 @@ type ArchivoPreparado = {
 
 type Producto = { id: string; sku: string; nombre: string; talla: string | null; color: string | null; tipo_inventario: string | null };
 type Sustento = { codigo: string; nombre: string };
+type EmpresaPagadora = { id: string; codigo: string; razon_social: string };
+type ConfiguracionTesoreria = {
+  empresa_pagadora_predeterminada_id: string;
+  dias_credito_predeterminados: number;
+};
+type CondicionPago = { empresaPagadoraId: string; fechaVencimiento: string };
 type CategoriaProducto = { id: string; nombre: string };
 type SubcategoriaProducto = { id: string; categoria_id: string; nombre: string };
 type UnidadMedida = { codigo: string; nombre: string; simbolo: string };
 type AbreviaturaSku = { tipo: "categoria" | "entidad" | "variante"; nombre: string; nombre_normalizado: string; codigo: string };
 type Importacion = {
   id: string;
+  empresa_id: string;
   empresa_codigo: string;
   empresa: string;
   proveedor_id: string | null;
@@ -116,6 +123,16 @@ function fechaVisible(valor: string) {
   return fecha.format(new Date(`${valor}T12:00:00`));
 }
 
+function sumarDiasFecha(valor: string, dias: number) {
+  const [anio, mes, dia] = valor.split("-").map(Number);
+  const resultado = new Date(anio, mes - 1, dia + dias, 12);
+  return [
+    resultado.getFullYear(),
+    String(resultado.getMonth() + 1).padStart(2, "0"),
+    String(resultado.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
   const [archivos, setArchivos] = useState<ArchivoPreparado[]>([]);
@@ -123,6 +140,9 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
   const [origen, setOrigen] = useState<"archivos" | "carpeta">("archivos");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [sustentos, setSustentos] = useState<Sustento[]>([]);
+  const [empresasPagadoras, setEmpresasPagadoras] = useState<EmpresaPagadora[]>([]);
+  const [configuracionTesoreria, setConfiguracionTesoreria] = useState<ConfiguracionTesoreria | null>(null);
+  const [condicionesPago, setCondicionesPago] = useState<Record<string, CondicionPago>>({});
   const [categorias, setCategorias] = useState<CategoriaProducto[]>([]);
   const [subcategorias, setSubcategorias] = useState<SubcategoriaProducto[]>([]);
   const [unidades, setUnidades] = useState<UnidadMedida[]>([]);
@@ -159,7 +179,7 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
 
   async function cargarBandeja() {
     setCargando(true);
-    const [p, s, i, c, sc, u, ab] = await Promise.all([
+    const [p, s, i, c, sc, u, ab, ep, tc] = await Promise.all([
       consultarProductos(),
       supabase.from("sustentos_tributarios").select("codigo,nombre").eq("activo", true).order("codigo"),
       supabase.from("vista_compras_xml_pendientes_v65").select("*")
@@ -169,8 +189,12 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
       supabase.from("subcategorias_productos").select("id,categoria_id,nombre").eq("activo", true).order("nombre"),
       supabase.from("unidades_medida_produccion").select("codigo,nombre,simbolo").eq("activo", true).order("familia").order("nombre"),
       supabase.from("sku_abreviaturas_v67").select("tipo,nombre,nombre_normalizado,codigo").eq("activo", true).order("tipo").order("nombre"),
+      supabase.from("vista_empresas_tesoreria_v73").select("id,codigo,razon_social").order("codigo"),
+      supabase.from("tesoreria_configuracion")
+        .select("empresa_pagadora_predeterminada_id,dias_credito_predeterminados")
+        .limit(1).maybeSingle(),
     ]);
-    const baseError = p.error ?? s.error ?? i.error ?? c.error ?? sc.error ?? u.error ?? ab.error;
+    const baseError = p.error ?? s.error ?? i.error ?? c.error ?? sc.error ?? u.error ?? ab.error ?? ep.error ?? tc.error;
     if (baseError) {
       setError(`No se pudo abrir la bandeja. Verifica que v65, v66 y v67 estén instaladas: ${baseError.message}`);
       setCargando(false);
@@ -192,6 +216,9 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
     setSubcategorias((sc.data ?? []) as SubcategoriaProducto[]);
     setUnidades((u.data ?? []) as UnidadMedida[]);
     setAbreviaturas((ab.data ?? []) as AbreviaturaSku[]);
+    setEmpresasPagadoras((ep.data ?? []) as EmpresaPagadora[]);
+    const config = (tc.data ?? null) as ConfiguracionTesoreria | null;
+    setConfiguracionTesoreria(config);
     setImportaciones(documentos);
     setLineas(detalle);
     setAsignaciones(Object.fromEntries(detalle.filter((l) => l.producto_id).map((l) => [l.id, l.producto_id!] )));
@@ -202,6 +229,16 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
     setSustentoPorDocumento((actual) => Object.fromEntries(documentos.map((item) => [
       item.id,
       actual[item.id] ?? "06",
+    ])));
+    setCondicionesPago((actual) => Object.fromEntries(documentos.map((item) => [
+      item.id,
+      actual[item.id] ?? {
+        empresaPagadoraId: config?.empresa_pagadora_predeterminada_id || item.empresa_id,
+        fechaVencimiento: sumarDiasFecha(
+          item.fecha_emision,
+          Number(config?.dias_credito_predeterminados ?? 30),
+        ),
+      },
     ])));
     setCargando(false);
   }
@@ -486,21 +523,50 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
   }
 
   async function procesarDocumento(importacion: Importacion) {
+    const condicion = condicionesPago[importacion.id];
+    const pagadora = empresasPagadoras.find((empresa) => empresa.id === condicion?.empresaPagadoraId);
+    if (!condicion?.empresaPagadoraId || !pagadora) {
+      await mostrarAvisoDialogo(
+        "Selecciona la compañía que pagará esta factura.",
+        "Falta la compañía pagadora",
+        true,
+      );
+      return;
+    }
+    if (!condicion.fechaVencimiento || condicion.fechaVencimiento < importacion.fecha_emision) {
+      await mostrarAvisoDialogo(
+        "El vencimiento debe ser igual o posterior a la fecha de emisión.",
+        "Revisa el vencimiento",
+        true,
+      );
+      return;
+    }
     if (!await confirmarDialogo(
       `Se registrará la factura ${importacion.numero_documento} por ${dinero.format(importacion.total)}.\n\n` +
-      "Este paso la incorpora al libro de compras. ¿Continuar?"
+      `Pagará: ${pagadora.codigo} · ${pagadora.razon_social}\n` +
+      `Vencimiento: ${fechaVisible(condicion.fechaVencimiento)}\n\n` +
+      "Se incorporará al libro de compras y a Cuentas por pagar en una sola operación. ¿Continuar?"
     )) return;
     setProcesando(true);
     setError(null);
-    const { error: rpcError } = await supabase.rpc("procesar_compra_xml_v65", {
+    const { error: rpcError } = await supabase.rpc("procesar_compra_xml_cxp_v93", {
       p_importacion_id: importacion.id,
       p_sustento_codigo: sustentoPorDocumento[importacion.id] || "06",
+      p_empresa_pagadora_id: condicion.empresaPagadoraId,
+      p_fecha_vencimiento: condicion.fechaVencimiento,
       p_nota: notas[importacion.id] || `Registro de factura ${importacion.numero_documento}`,
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
-    if (rpcError) setError(rpcError.message);
-    else {
-      setAviso(`Factura ${importacion.numero_documento} registrada correctamente en el libro de compras.`);
+    if (rpcError) {
+      await mostrarAvisoDialogo(
+        rpcError.message,
+        "No se pudo registrar la compra y su cuenta por pagar",
+        true,
+      );
+    } else {
+      setAviso(
+        `Factura ${importacion.numero_documento} registrada en el libro de compras y en Cuentas por pagar.`,
+      );
       setAbierto(null);
       await cargarBandeja();
     }
@@ -628,7 +694,9 @@ export default function ImportarComprasXmlCliente({ perfil }: { perfil: Perfil }
                     })}</tbody>
                   </table></div>
                   <div className="grid-2" style={{ marginTop: 12 }}><div className="field"><label>Nota de homologación</label><input value={notas[item.id] ?? ""} onChange={(e) => setNotas((actual) => ({ ...actual, [item.id]: e.target.value }))} /></div><div className="field"><label>Sustento tributario</label><select value={sustentoPorDocumento[item.id] ?? "06"} onChange={(e) => setSustentoPorDocumento((actual) => ({ ...actual, [item.id]: e.target.value }))}>{sustentos.map((sustento) => <option key={sustento.codigo} value={sustento.codigo}>{sustento.codigo} · {sustento.nombre}</option>)}</select></div></div>
-                  <div className="acciones import-acciones"><button type="button" disabled={procesando} onClick={() => guardarHomologacion(item)}>Guardar homologación</button>{item.estado === "listo" && <button type="button" disabled={procesando} onClick={() => procesarDocumento(item)}>Registrar comprobante</button>}<button type="button" className="peligro" disabled={procesando || perfil.rol === "gerencia"} onClick={() => descartar(item)}>Descartar</button></div>
+                  {item.estado === "listo" && <div className="info-box" style={{ marginTop: 12 }}><strong>Condiciones de la cuenta por pagar</strong><span>Confirma quién desembolsará el dinero y cuándo vence la obligación. La factura y la cuenta se crearán juntas.</span></div>}
+                  {item.estado === "listo" && <div className="grid-2"><div className="field"><label>Compañía pagadora *</label><select required value={condicionesPago[item.id]?.empresaPagadoraId ?? ""} onChange={(e) => setCondicionesPago((actual) => ({ ...actual, [item.id]: { empresaPagadoraId: e.target.value, fechaVencimiento: actual[item.id]?.fechaVencimiento ?? item.fecha_emision } }))}><option value="">Seleccionar…</option>{empresasPagadoras.map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.codigo} · {empresa.razon_social}</option>)}</select></div><div className="field"><label>Fecha de vencimiento *</label><input required type="date" min={item.fecha_emision} value={condicionesPago[item.id]?.fechaVencimiento ?? ""} onChange={(e) => setCondicionesPago((actual) => ({ ...actual, [item.id]: { empresaPagadoraId: actual[item.id]?.empresaPagadoraId ?? configuracionTesoreria?.empresa_pagadora_predeterminada_id ?? item.empresa_id, fechaVencimiento: e.target.value } }))} /></div></div>}
+                  <div className="acciones import-acciones"><button type="button" disabled={procesando} onClick={() => guardarHomologacion(item)}>Guardar homologación</button>{item.estado === "listo" && <button type="button" disabled={procesando} onClick={() => procesarDocumento(item)}>Registrar compra y cuenta por pagar</button>}<button type="button" className="peligro" disabled={procesando || perfil.rol === "gerencia"} onClick={() => descartar(item)}>Descartar</button></div>
                 </div>}
               </article>;
             })}
