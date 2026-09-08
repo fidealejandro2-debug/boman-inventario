@@ -35,12 +35,13 @@ export default function ContratosBomansportCliente() {
   const [porEstado, setPorEstado] = useState<Record<string, number>>({});
   const [cargando, setCargando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
+  const [modoCierre, setModoCierre] = useState<string>("paralelo");
   const [erroresAbiertos, setErroresAbiertos] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
 
   async function cargar() {
     setCargando(true);
-    const [imp, estados, total] = await Promise.all([
+    const [imp, estados, total, cierre] = await Promise.all([
       supabase
         .from("bomansport_importaciones")
         .select("*, ejecutado_por_perfil:perfiles!bomansport_importaciones_ejecutado_por_fkey(nombre_completo)")
@@ -48,6 +49,7 @@ export default function ContratosBomansportCliente() {
         .limit(20),
       supabase.from("bomansport_contratos").select("estado"),
       supabase.from("bomansport_contratos").select("id", { count: "exact", head: true }),
+      supabase.from("bomansport_cierre_migracion_v103").select("modo").eq("id", true).maybeSingle(),
     ]);
     if (imp.error) setMsg({ tipo: "error", texto: imp.error.message });
     setImportaciones((imp.data ?? []) as unknown as Importacion[]);
@@ -57,6 +59,7 @@ export default function ContratosBomansportCliente() {
     });
     setPorEstado(conteo);
     setTotalContratos(total.count ?? 0);
+    if (!cierre.error && cierre.data?.modo) setModoCierre(cierre.data.modo);
     setCargando(false);
   }
 
@@ -95,10 +98,12 @@ export default function ContratosBomansportCliente() {
           <h2 style={{ color: "#1f3864", margin: 0 }}>Sincronización BomanSport</h2>
           <p className="conteo">Importa los contratos de la hoja de cálculo de BomanSport hacia Supabase.</p>
         </div>
-        <button disabled={sincronizando || hayEnCurso} onClick={sincronizarAhora}>
-          {sincronizando ? "Sincronizando..." : hayEnCurso ? "Ya hay una en curso..." : "Sincronizar ahora"}
+        <button disabled={sincronizando || hayEnCurso || modoCierre !== "paralelo"} onClick={sincronizarAhora}>
+          {modoCierre !== "paralelo" ? "Importación heredada cerrada" : sincronizando ? "Sincronizando..." : hayEnCurso ? "Ya hay una en curso..." : "Sincronizar ahora"}
         </button>
       </div>
+
+      {modoCierre !== "paralelo" && <div className="info-box">Supabase es la fuente principal. Esta pantalla conserva el historial, pero ya no admite nuevas importaciones desde Apps Script.</div>}
 
       {msg?.tipo === "ok" && <div className="success">{msg.texto}</div>}
       {msg?.tipo === "error" && <div className="error">{msg.texto}</div>}

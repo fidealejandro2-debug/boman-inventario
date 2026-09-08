@@ -36,6 +36,22 @@ async function adminDeSesion() {
 async function sincronizar(origen: Origen, ejecutadoPor: string | null) {
   const admin = createAdminClient();
 
+  // v103 convierte este importador en una contingencia controlada. Antes de
+  // instalarla la tabla no existe y se conserva el comportamiento anterior;
+  // una vez que Supabase es la fuente principal, ni el cron ni un clic manual
+  // pueden volver a sobrescribir datos desde el legado por accidente.
+  const { data: cierre, error: errorCierre } = await admin
+    .from("bomansport_cierre_migracion_v103")
+    .select("modo")
+    .eq("id", true)
+    .maybeSingle();
+  if (!errorCierre && cierre?.modo && cierre.modo !== "paralelo") {
+    const mensaje = `La importación heredada está deshabilitada: el modo actual es ${String(cierre.modo).replace("_", " ")}.`;
+    return origen === "cron"
+      ? { status: 200 as const, body: { ok: true, omitida: true, modo: cierre.modo, mensaje } }
+      : { status: 409 as const, body: { ok: false, omitida: true, modo: cierre.modo, error: mensaje } };
+  }
+
   const { data: enCurso } = await admin
     .from("bomansport_importaciones")
     .select("id")

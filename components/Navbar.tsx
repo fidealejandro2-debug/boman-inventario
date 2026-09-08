@@ -137,6 +137,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerCompras = tienePermiso(perfil, "compras.acceder");
   const puedeVerTesoreria = tienePermiso(perfil, "tesoreria.acceder");
   const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
+  const puedeVerCostosProduccion = tienePermiso(perfil, "produccion.costos.ver");
   const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
   const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
   // La caja de tienda propia usa el mismo permiso que la de franquicia, pero no
@@ -177,6 +178,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion/dashboard", etiqueta: "Dashboard de producción", descripcion: "Carga, capacidad, entregas y saldos de Boman Sport", visible: puedeVerProduccion },
+      { href: "/produccion/costos", etiqueta: "Costos y rentabilidad", descripcion: "Hoja de costo, margen y consolidado por contrato", visible: puedeVerCostosProduccion },
       { href: "/produccion/contratos", etiqueta: "Expedientes de contratos", descripcion: "Brief, diseños, tallas e historial completo", visible: puedeVerProduccion },
       { href: "/produccion", etiqueta: "Órdenes de producción", descripcion: "Rutas, etapas, lotes y costos", visible: puedeVerProduccion },
       { href: "/produccion/calidad", etiqueta: "Calidad y errores", descripcion: "Novedades, reprocesos y acciones correctivas", visible: puedeVerProduccion || puedeVerNomina },
@@ -213,6 +215,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/administracion/permisos", etiqueta: "Permisos por rol", descripcion: "Matriz de acceso del ERP", visible: puedeAdministrar },
       { href: "/administracion/franquicias", etiqueta: "Configurar franquicias", descripcion: "Locales y empresas titulares", visible: puedeAdministrar },
       { href: "/administracion/contratos-bomansport", etiqueta: "Sincronización BomanSport", descripcion: "Importación de contratos desde Google Sheets", visible: puedeAdministrar },
+      { href: "/administracion/cierre-bomansport", etiqueta: "Cierre BomanSport", descripcion: "Diagnóstico y transición definitiva a Vercel", visible: puedeAdministrar },
     ] },
   ];
 

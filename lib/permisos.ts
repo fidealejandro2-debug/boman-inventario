@@ -22,6 +22,8 @@ export type PermisoCodigo =
   | "produccion.calidad.registrar"
   | "produccion.calidad.resolver"
   | "produccion.calidad.descuento"
+  | "produccion.costos.ver"
+  | "produccion.costos.editar"
   | "contratos.acceder"
   | "contratos.editar"
   | "contratos.marcar_etapa"
@@ -59,6 +61,8 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "produccion.calidad.registrar",
   "produccion.calidad.resolver",
   "produccion.calidad.descuento",
+  "produccion.costos.ver",
+  "produccion.costos.editar",
   "contratos.acceder",
   "contratos.editar",
   "contratos.marcar_etapa",
