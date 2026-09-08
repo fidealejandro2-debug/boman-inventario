@@ -174,8 +174,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/compras", etiqueta: "Órdenes y recepciones", descripcion: "Proveedores, recepción y costos", visible: puedeVerCompras },
       { href: "/compras/importar-xml", etiqueta: "XML y homologación", descripcion: "Carga masiva de facturas recibidas", visible: puedeVerCompras },
     ] },
-    { id: "finanzas", etiqueta: "Finanzas", opciones: [
-      { href: "/cuentas-por-pagar", etiqueta: "Cuentas por pagar", descripcion: "Vencimientos, cheques y efectivo comprometido", visible: puedeVerTesoreria },
+    { id: "finanzas", etiqueta: "Tesorería", opciones: [
+      { href: "/cuentas-por-pagar", etiqueta: "Cartera y cheques", descripcion: "Cuentas por pagar, vencimientos y efectivo comprometido", visible: puedeVerTesoreria },
     ] },
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion/dashboard", etiqueta: "Dashboard de producción", descripcion: "Carga, capacidad, entregas y saldos de Boman Sport", visible: puedeVerProduccion },

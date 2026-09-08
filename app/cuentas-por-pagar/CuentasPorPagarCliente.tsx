@@ -6,6 +6,7 @@ import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV, fechaISOEcuador } from "@/lib/utils";
+import TesoreriaInstrumentosV104 from "./TesoreriaInstrumentosV104";
 
 type Empresa = { id: string; codigo: string; razon_social: string };
 type Configuracion = {
@@ -55,7 +56,7 @@ type FormPago = {
 };
 type FormCuenta = { empresaPagadoraId: string; fechaVencimiento: string; nota: string };
 type FormConfig = { empresaPagadoraId: string; diasCredito: string; aplicarPendientes: boolean; motivo: string };
-type Tab = "cartera" | "calendario";
+type Tab = "cartera" | "calendario" | "instrumentos";
 
 const DINERO = new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" });
 const ESTADO_CUENTA: Record<Cuenta["estado"], string> = {
@@ -267,7 +268,7 @@ export default function CuentasPorPagarCliente({ perfil }: { perfil: Perfil }) {
   return (
     <div className="cxp-page">
       <div className="header-row cxp-header">
-        <div><h2>Cuentas por pagar</h2><p className="conteo">Facturas de todas las compañías, desembolsos centralizados y cheques posfechados.</p></div>
+        <div><span className="eyebrow">FINANZAS</span><h2>Tesorería</h2><p className="conteo">Cuentas por pagar, desembolsos centralizados, cheques posfechados y efectivo comprometido.</p></div>
         <div className="acciones">
           <button type="button" className="secondary" onClick={exportar}>Exportar</button>
           {puedeEditar && <button type="button" onClick={() => setConfigurando(true)}>Configurar pagadora</button>}
@@ -290,15 +291,16 @@ export default function CuentasPorPagarCliente({ perfil }: { perfil: Perfil }) {
       <div className="tabs">
         <button type="button" className={`tab ${tab === "cartera" ? "activo" : ""}`} onClick={() => setTab("cartera")}>Cartera ({cuentasFiltradas.length})</button>
         <button type="button" className={`tab ${tab === "calendario" ? "activo" : ""}`} onClick={() => setTab("calendario")}>Calendario de efectivo ({calendario.length})</button>
+        <button type="button" className={`tab ${tab === "instrumentos" ? "activo" : ""}`} onClick={() => setTab("instrumentos")}>Cheques y bancos</button>
       </div>
-      <div className="filtros cxp-filtros">
+      {tab !== "instrumentos" && <div className="filtros cxp-filtros">
         <div className="field buscador"><label>Buscar</label><input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Proveedor, RUC, factura o compañía" /></div>
         <div className="field"><label>Estado</label><select value={estado} onChange={(e) => setEstado(e.target.value)}><option value="">Todos</option>{Object.entries(ESTADO_CUENTA).map(([valor, etiqueta]) => <option value={valor} key={valor}>{etiqueta}</option>)}</select></div>
         <div className="field"><label>Compañía pagadora</label><select value={pagadoraId} onChange={(e) => setPagadoraId(e.target.value)}><option value="">Todas</option>{empresas.map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.codigo} · {empresa.razon_social}</option>)}</select></div>
         {(busqueda || estado || pagadoraId) && <button type="button" className="chip-limpiar" onClick={() => { setBusqueda(""); setEstado(""); setPagadoraId(""); }}>Limpiar</button>}
-      </div>
+      </div>}
 
-      {cargando ? <div className="vacio">Cargando cartera…</div> : tab === "cartera" ? (
+      {tab === "instrumentos" ? <TesoreriaInstrumentosV104 perfil={perfil} /> : cargando ? <div className="vacio">Cargando cartera…</div> : tab === "cartera" ? (
         cuentasFiltradas.length === 0 ? <div className="vacio card">No hay cuentas por pagar para estos filtros.</div> :
         <div className="cxp-lista">{cuentasFiltradas.map((cuenta) => {
           const abierta = cuentaAbierta === cuenta.id;

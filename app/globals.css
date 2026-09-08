@@ -2222,6 +2222,13 @@ button.btn-mini {
 .cxp-cheque { margin: 2px 0 12px; padding: 13px; border: 1px solid var(--badge-morado-fg); border-radius: 10px; background: var(--badge-morado-bg); }
 .cxp-cheque > strong { display: block; margin-bottom: 10px; color: var(--badge-morado-fg); }
 .cxp-cheque .field { margin-bottom: 0; }
+.tesoreria-v104 { display: grid; gap: 16px; }
+.tesoreria-seccion { display: grid; gap: 14px; }
+.tesoreria-seccion h3 { margin: 0; }
+.tesoreria-cuentas { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 10px; }
+.tesoreria-cuentas .card-interna { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; }
+.tesoreria-cuentas .card-interna p,
+.tesoreria-cuentas .card-interna small { grid-column: 1 / -1; margin: 0; }
 
 @media (max-width: 1150px) {
   .cxp-kpis { grid-template-columns: repeat(3, 1fr); }

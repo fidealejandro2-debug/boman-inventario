@@ -239,7 +239,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         enlaces: [{ href: "/compras", etiqueta: "Órdenes y recepciones" }],
       },
       {
-        id: "tesoreria", titulo: "Finanzas", subtitulo: "Cuentas por pagar",
+        id: "tesoreria", titulo: "Tesorería", subtitulo: "Cartera y cheques",
         descripcion: `Controla vencimientos, pagos y cheques posfechados. Comprometido: ${DINERO.format(tesoreria.efectivo_comprometido)}.`,
         href: "/cuentas-por-pagar", icono: "CXP", tono: "morado", visible: puede("tesoreria.acceder"),
         pendiente: tesoreria.cuentas_vencidas, pendienteTexto: "facturas vencidas",
