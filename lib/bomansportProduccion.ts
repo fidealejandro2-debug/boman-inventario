@@ -64,10 +64,20 @@ export type FilaPrenda = {
 };
 
 /** datosTallasJson: array de {prenda,calidad,detalle,adultos:{talla:{H,M}},ninos:{talla:N}}.
- * Se expande a una fila por prenda-calidad-detalle-genero-talla, solo cantidad > 0
- * (contrato_prendas exige cantidad > 0). */
+ * Se expande a una fila por prenda-calidad-detalle-genero-talla, sumando
+ * cantidades cuando dos "lineas" del array caen en la misma combinacion
+ * (contrato_prendas tiene un unique sobre esas 5 columnas: dos lineas que
+ * coincidan ahi no pueden insertarse como filas separadas). Solo cantidad > 0
+ * (contrato_prendas tambien lo exige). */
 export function prendasDesdeTallas(datosTallasJson: unknown): FilaPrenda[] {
-  const filas: FilaPrenda[] = [];
+  const acumulado = new Map<string, FilaPrenda>();
+  function sumar(prenda: string, calidad: string, detalle: string, genero: "H" | "M" | "N", talla: string, cantidad: number) {
+    if (cantidad <= 0) return;
+    const clave = JSON.stringify([prenda, calidad, detalle, genero, talla]);
+    const existente = acumulado.get(clave);
+    if (existente) existente.cantidad += cantidad;
+    else acumulado.set(clave, { prenda, calidad, detalle, genero, talla, cantidad });
+  }
   for (const linea of parsearArray(datosTallasJson)) {
     const prenda = texto(linea.prenda);
     if (!prenda) continue;
@@ -78,18 +88,15 @@ export function prendasDesdeTallas(datosTallasJson: unknown): FilaPrenda[] {
       { H?: unknown; M?: unknown }
     >;
     for (const talla of Object.keys(adultos)) {
-      const h = numeroONull(adultos[talla]?.H) ?? 0;
-      const m = numeroONull(adultos[talla]?.M) ?? 0;
-      if (h > 0) filas.push({ prenda, calidad, detalle, genero: "H", talla, cantidad: h });
-      if (m > 0) filas.push({ prenda, calidad, detalle, genero: "M", talla, cantidad: m });
+      sumar(prenda, calidad, detalle, "H", talla, numeroONull(adultos[talla]?.H) ?? 0);
+      sumar(prenda, calidad, detalle, "M", talla, numeroONull(adultos[talla]?.M) ?? 0);
     }
     const ninos = (linea.ninos && typeof linea.ninos === "object" ? linea.ninos : {}) as Record<string, unknown>;
     for (const talla of Object.keys(ninos)) {
-      const n = numeroONull(ninos[talla]) ?? 0;
-      if (n > 0) filas.push({ prenda, calidad, detalle, genero: "N", talla, cantidad: n });
+      sumar(prenda, calidad, detalle, "N", talla, numeroONull(ninos[talla]) ?? 0);
     }
   }
-  return filas;
+  return Array.from(acumulado.values());
 }
 
 // ─── contrato_jugadores ──────────────────────────────────────────────────
