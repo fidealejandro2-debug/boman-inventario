@@ -13,6 +13,7 @@ export default async function InventarioPage() {
       <Navbar perfil={perfil} />
       <div className="container">
         <StockCliente
+          perfil={perfil}
           puedeEditarFotos={perfil.rol === "admin" || perfil.rol === "franquiciado"}
         />
       </div>

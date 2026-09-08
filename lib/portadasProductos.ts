@@ -19,14 +19,37 @@ type FilaPortada = {
  * petición de Storage por cada renglón visible.
  */
 export async function cargarPortadasProductos(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  productoIds?: string[],
 ): Promise<Map<string, PortadaProducto>> {
-  const { data, error } = await supabase
-    .from("vista_portadas_productos_v88")
-    .select("producto_id,imagen_id,storage_path,descripcion");
-  if (error) throw error;
+  if (productoIds?.length === 0) return new Map();
 
-  const filas = (data ?? []) as FilaPortada[];
+  const filas: FilaPortada[] = [];
+  if (productoIds) {
+    const unicos = Array.from(new Set(productoIds));
+    for (let inicio = 0; inicio < unicos.length; inicio += 100) {
+      const { data, error } = await supabase
+        .from("vista_portadas_productos_v88")
+        .select("producto_id,imagen_id,storage_path,descripcion")
+        .in("producto_id", unicos.slice(inicio, inicio + 100));
+      if (error) throw error;
+      filas.push(...((data ?? []) as FilaPortada[]));
+    }
+  } else {
+    let desde = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("vista_portadas_productos_v88")
+        .select("producto_id,imagen_id,storage_path,descripcion")
+        .range(desde, desde + 999);
+      if (error) throw error;
+      const pagina = (data ?? []) as FilaPortada[];
+      filas.push(...pagina);
+      if (pagina.length < 1000) break;
+      desde += 1000;
+    }
+  }
+
   const resultado = new Map<string, PortadaProducto>();
   for (let inicio = 0; inicio < filas.length; inicio += 100) {
     const lote = filas.slice(inicio, inicio + 100);
