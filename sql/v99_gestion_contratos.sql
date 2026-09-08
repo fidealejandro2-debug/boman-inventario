@@ -1,0 +1,253 @@
+-- ============================================================
+-- BOMAN INVENTARIO - v99: Gestion controlada de contratos
+-- Ejecutar despues de v97 (v98 puede instalarse antes o despues).
+-- ============================================================
+
+begin;
+
+do $$
+begin
+  if to_regprocedure('public.obtener_expediente_contrato_v97(uuid)') is null
+     or to_regclass('public.contratos') is null then
+    raise exception 'Falta instalar v79 y v97 antes de v99';
+  end if;
+end $$;
+
+create table if not exists public.contrato_gestion_operaciones_v99 (
+  id uuid primary key default gen_random_uuid(),
+  contrato_id uuid not null references public.contratos(id) on delete restrict,
+  cambios_solicitados jsonb not null,
+  cambios_aplicados jsonb not null default '{}'::jsonb,
+  motivo text not null check (length(btrim(motivo)) >= 10),
+  usuario_id uuid not null references public.perfiles(id) on delete restrict,
+  idempotency_key uuid not null unique,
+  resultado jsonb,
+  created_at timestamptz not null default now(),
+  check (jsonb_typeof(cambios_solicitados) = 'object'),
+  check (jsonb_typeof(cambios_aplicados) = 'object')
+);
+
+create index if not exists idx_contrato_gestion_v99_contrato
+  on public.contrato_gestion_operaciones_v99(contrato_id, created_at desc);
+
+alter table public.contrato_eventos
+  add column if not exists gestion_operacion_id uuid;
+alter table public.contrato_eventos
+  add column if not exists motivo_gestion_v99 text;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'contrato_eventos_gestion_operacion_v99_fkey'
+      and conrelid = 'public.contrato_eventos'::regclass
+  ) then
+    alter table public.contrato_eventos
+      add constraint contrato_eventos_gestion_operacion_v99_fkey
+      foreign key (gestion_operacion_id)
+      references public.contrato_gestion_operaciones_v99(id) on delete restrict;
+  end if;
+end $$;
+
+create index if not exists idx_contrato_eventos_gestion_v99
+  on public.contrato_eventos(gestion_operacion_id)
+  where gestion_operacion_id is not null;
+
+alter table public.contrato_gestion_operaciones_v99 enable row level security;
+revoke all on public.contrato_gestion_operaciones_v99 from public, anon, authenticated;
+
+create or replace function public.guardar_gestion_contrato_v99(
+  p_contrato_id uuid,
+  p_cambios jsonb,
+  p_motivo text,
+  p_idempotency_key uuid
+) returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_uid uuid := auth.uid();
+  v_antes public.contratos%rowtype;
+  v_despues public.contratos%rowtype;
+  v_operacion_id uuid;
+  v_resultado jsonb;
+  v_aplicados jsonb := '{}'::jsonb;
+  v_clave text;
+  v_quien text;
+  v_inicio date;
+  v_salida date;
+  v_entrega date;
+begin
+  if v_uid is null then
+    raise exception 'Debes iniciar sesion para gestionar contratos';
+  end if;
+  if not public.usuario_tiene_permiso_v35('contratos.editar') then
+    raise exception 'No tienes permiso para editar contratos';
+  end if;
+  if p_contrato_id is null then raise exception 'Selecciona un contrato'; end if;
+  if p_idempotency_key is null then
+    raise exception 'La clave de idempotencia es obligatoria';
+  end if;
+  if jsonb_typeof(coalesce(p_cambios, 'null'::jsonb)) <> 'object'
+     or p_cambios = '{}'::jsonb then
+    raise exception 'Selecciona al menos un cambio';
+  end if;
+  if length(btrim(coalesce(p_motivo, ''))) < 10 then
+    raise exception 'El motivo debe tener al menos 10 caracteres';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_idempotency_key::text, 99));
+  select resultado into v_resultado
+  from public.contrato_gestion_operaciones_v99
+  where idempotency_key = p_idempotency_key;
+  if found then return v_resultado; end if;
+
+  for v_clave in select jsonb_object_keys(p_cambios) loop
+    if v_clave not in (
+      'fecha_inicio_produccion', 'fecha_salida_produccion', 'fecha_entrega',
+      'prioridad', 'tipo_contrato', 'estado', 'disenador', 'autor_mockup',
+      'observacion', 'maquila', 'orden_dia',
+      'muestras_tpu_faltan', 'muestras_dtf_faltan'
+    ) then
+      raise exception 'El campo % no se puede editar desde Gestion de contratos', v_clave;
+    end if;
+  end loop;
+
+  select * into v_antes from public.contratos
+  where id = p_contrato_id for update;
+  if not found then raise exception 'El contrato no existe'; end if;
+
+  if p_cambios ? 'prioridad'
+     and coalesce(p_cambios->>'prioridad', '') not in ('Normal', 'Urgente') then
+    raise exception 'La prioridad no es valida';
+  end if;
+  if p_cambios ? 'tipo_contrato'
+     and coalesce(p_cambios->>'tipo_contrato', '') not in
+       ('Normal', 'Equipo Profesional', 'Mercadería', 'Emergente') then
+    raise exception 'El tipo de contrato no es valido';
+  end if;
+  if p_cambios ? 'estado'
+     and coalesce(p_cambios->>'estado', '') not in (
+       'Ingresado', 'Por imprimir', 'Impreso', 'Sublimación', 'Cortado',
+       'En costura o maquila', 'Estampado', 'Terminado', 'Estampado final',
+       'Pendiente entrega', 'Entregado'
+     ) then
+    raise exception 'El estado de produccion no es valido';
+  end if;
+  if p_cambios ? 'orden_dia'
+     and nullif(btrim(p_cambios->>'orden_dia'), '') is not null
+     and (p_cambios->>'orden_dia')::numeric < 0 then
+    raise exception 'El orden del dia no puede ser negativo';
+  end if;
+
+  v_inicio := case when p_cambios ? 'fecha_inicio_produccion'
+    then nullif(p_cambios->>'fecha_inicio_produccion', '')::date
+    else v_antes.fecha_inicio_produccion end;
+  v_salida := case when p_cambios ? 'fecha_salida_produccion'
+    then nullif(p_cambios->>'fecha_salida_produccion', '')::date
+    else v_antes.fecha_salida_produccion end;
+  v_entrega := case when p_cambios ? 'fecha_entrega'
+    then nullif(p_cambios->>'fecha_entrega', '')::date
+    else v_antes.fecha_entrega end;
+  if v_inicio is not null and v_entrega is not null and v_entrega < v_inicio then
+    raise exception 'La entrega no puede ser anterior al inicio de produccion';
+  end if;
+  if v_inicio is not null and v_salida is not null and v_salida < v_inicio then
+    raise exception 'La salida no puede ser anterior al inicio de produccion';
+  end if;
+
+  update public.contratos set
+    fecha_inicio_produccion = v_inicio,
+    fecha_salida_produccion = v_salida,
+    fecha_entrega = v_entrega,
+    prioridad = case when p_cambios ? 'prioridad' then p_cambios->>'prioridad' else prioridad end,
+    tipo_contrato = case when p_cambios ? 'tipo_contrato' then p_cambios->>'tipo_contrato' else tipo_contrato end,
+    estado = case when p_cambios ? 'estado' then p_cambios->>'estado' else estado end,
+    disenador = case when p_cambios ? 'disenador' then nullif(btrim(p_cambios->>'disenador'), '') else disenador end,
+    autor_mockup = case when p_cambios ? 'autor_mockup' then nullif(btrim(p_cambios->>'autor_mockup'), '') else autor_mockup end,
+    observacion = case when p_cambios ? 'observacion' then nullif(btrim(p_cambios->>'observacion'), '') else observacion end,
+    maquila = case when p_cambios ? 'maquila' then nullif(btrim(p_cambios->>'maquila'), '') else maquila end,
+    orden_dia = case when p_cambios ? 'orden_dia' then nullif(btrim(p_cambios->>'orden_dia'), '')::numeric else orden_dia end,
+    muestras_tpu_faltan = case when p_cambios ? 'muestras_tpu_faltan' then (p_cambios->>'muestras_tpu_faltan')::boolean else muestras_tpu_faltan end,
+    muestras_dtf_faltan = case when p_cambios ? 'muestras_dtf_faltan' then (p_cambios->>'muestras_dtf_faltan')::boolean else muestras_dtf_faltan end,
+    actualizado_por = v_uid
+  where id = p_contrato_id
+  returning * into v_despues;
+
+  select coalesce(p.nombre_completo, v_uid::text) into v_quien
+  from public.perfiles p where p.id = v_uid;
+
+  insert into public.contrato_gestion_operaciones_v99(
+    contrato_id, cambios_solicitados, motivo, usuario_id, idempotency_key
+  ) values (
+    p_contrato_id, p_cambios, btrim(p_motivo), v_uid, p_idempotency_key
+  ) returning id into v_operacion_id;
+
+  if v_antes.fecha_inicio_produccion is distinct from v_despues.fecha_inicio_produccion then v_aplicados := v_aplicados || jsonb_build_object('fecha_inicio_produccion', v_despues.fecha_inicio_produccion); end if;
+  if v_antes.fecha_salida_produccion is distinct from v_despues.fecha_salida_produccion then v_aplicados := v_aplicados || jsonb_build_object('fecha_salida_produccion', v_despues.fecha_salida_produccion); end if;
+  if v_antes.fecha_entrega is distinct from v_despues.fecha_entrega then v_aplicados := v_aplicados || jsonb_build_object('fecha_entrega', v_despues.fecha_entrega); end if;
+  if v_antes.prioridad is distinct from v_despues.prioridad then v_aplicados := v_aplicados || jsonb_build_object('prioridad', v_despues.prioridad); end if;
+  if v_antes.tipo_contrato is distinct from v_despues.tipo_contrato then v_aplicados := v_aplicados || jsonb_build_object('tipo_contrato', v_despues.tipo_contrato); end if;
+  if v_antes.estado is distinct from v_despues.estado then v_aplicados := v_aplicados || jsonb_build_object('estado', v_despues.estado); end if;
+  if v_antes.disenador is distinct from v_despues.disenador then v_aplicados := v_aplicados || jsonb_build_object('disenador', v_despues.disenador); end if;
+  if v_antes.autor_mockup is distinct from v_despues.autor_mockup then v_aplicados := v_aplicados || jsonb_build_object('autor_mockup', v_despues.autor_mockup); end if;
+  if v_antes.observacion is distinct from v_despues.observacion then v_aplicados := v_aplicados || jsonb_build_object('observacion', v_despues.observacion); end if;
+  if v_antes.maquila is distinct from v_despues.maquila then v_aplicados := v_aplicados || jsonb_build_object('maquila', v_despues.maquila); end if;
+  if v_antes.orden_dia is distinct from v_despues.orden_dia then v_aplicados := v_aplicados || jsonb_build_object('orden_dia', v_despues.orden_dia); end if;
+  if v_antes.muestras_tpu_faltan is distinct from v_despues.muestras_tpu_faltan then v_aplicados := v_aplicados || jsonb_build_object('muestras_tpu_faltan', v_despues.muestras_tpu_faltan); end if;
+  if v_antes.muestras_dtf_faltan is distinct from v_despues.muestras_dtf_faltan then v_aplicados := v_aplicados || jsonb_build_object('muestras_dtf_faltan', v_despues.muestras_dtf_faltan); end if;
+
+  if v_aplicados = '{}'::jsonb then
+    raise exception 'Los datos enviados no producen ningun cambio';
+  end if;
+
+  insert into public.contrato_eventos(
+    contrato_id, campo, valor_anterior, valor_nuevo, quien, perfil_id,
+    gestion_operacion_id, motivo_gestion_v99
+  )
+  select p_contrato_id, e.key,
+    case e.key
+      when 'fecha_inicio_produccion' then v_antes.fecha_inicio_produccion::text
+      when 'fecha_salida_produccion' then v_antes.fecha_salida_produccion::text
+      when 'fecha_entrega' then v_antes.fecha_entrega::text
+      when 'prioridad' then v_antes.prioridad
+      when 'tipo_contrato' then v_antes.tipo_contrato
+      when 'estado' then v_antes.estado
+      when 'disenador' then v_antes.disenador
+      when 'autor_mockup' then v_antes.autor_mockup
+      when 'observacion' then v_antes.observacion
+      when 'maquila' then v_antes.maquila
+      when 'orden_dia' then v_antes.orden_dia::text
+      when 'muestras_tpu_faltan' then v_antes.muestras_tpu_faltan::text
+      when 'muestras_dtf_faltan' then v_antes.muestras_dtf_faltan::text
+    end,
+    case when e.value = 'null'::jsonb then null
+         when jsonb_typeof(e.value) = 'string' then e.value #>> '{}'
+         else e.value::text end,
+    v_quien, v_uid, v_operacion_id, btrim(p_motivo)
+  from jsonb_each(v_aplicados) e;
+
+  v_resultado := jsonb_build_object(
+    'duplicado', false, 'operacion_id', v_operacion_id,
+    'contrato_id', p_contrato_id, 'cambios', v_aplicados,
+    'updated_at', v_despues.updated_at
+  );
+  update public.contrato_gestion_operaciones_v99
+  set cambios_aplicados = v_aplicados, resultado = v_resultado
+  where id = v_operacion_id;
+  return v_resultado;
+end;
+$fn$;
+
+alter table public.contrato_gestion_operaciones_v99 owner to postgres;
+alter function public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid) owner to postgres;
+revoke all on function public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid) from public, anon;
+grant execute on function public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid) to authenticated;
+
+comment on table public.contrato_gestion_operaciones_v99 is
+  'Cabecera inmutable de cada edicion controlada: motivo, usuario, idempotencia y campos modificados.';
+
+commit;
+notify pgrst, 'reload schema';
