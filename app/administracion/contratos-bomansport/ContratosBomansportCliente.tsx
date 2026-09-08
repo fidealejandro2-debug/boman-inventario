@@ -99,7 +99,12 @@ export default function ContratosBomansportCliente() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const hayEnCurso = importaciones.some((i) => i.estado === "en_curso");
+  // Mismo margen de 10 minutos que ya usa el servidor para no bloquearse a si
+  // mismo: si una corrida quedo en "en_curso" porque Vercel mato la funcion a
+  // medio camino (maxDuration), no debe dejar el boton deshabilitado para siempre.
+  const hayEnCurso = importaciones.some(
+    (i) => i.estado === "en_curso" && Date.now() - new Date(i.iniciado_en).getTime() < 10 * 60 * 1000
+  );
 
   async function sincronizarAhora() {
     setSincronizando(true);

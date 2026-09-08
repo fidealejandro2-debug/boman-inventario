@@ -472,13 +472,31 @@ async function sincronizar(origen: Origen, ejecutadoPor: string | null) {
   // no esta instalada en Supabase (o falla), la sincronizacion base de arriba
   // -que ya funcionaba antes de v94- no debe romperse por esto.
   try {
-    const numerosATransformar = new Set(paraEscribir.map((c) => c.numero));
+    // Con miles de contratos historicos, migrar TODOS los que faltan en v79 de
+    // una sola corrida puede pasarse del maxDuration de Vercel (60s) y matar
+    // la funcion a medio insertar, dejando el log en "en_curso" para siempre.
+    // Se prioriza lo que de verdad cambio hoy (paraEscribir) y el resto del
+    // backfill se completa solo, unos cuantos por corrida, en los proximos
+    // clics de "Sincronizar ahora" (numerosFaltantesEnV79 se recalcula cada
+    // vez comparando contra lo que ya existe en contratos).
+    const LIMITE_BACKFILL_V79 = 150;
+    const numerosCreadosActualizados = paraEscribir.map((c) => c.numero);
+    const numerosFaltantesEnV79: string[] = [];
     for (let i = 0; i < numerosSinCambio.length; i += 300) {
       const lote = numerosSinCambio.slice(i, i + 300);
       const { data } = await admin.from("contratos").select("numero").in("numero", lote);
       const presentes = new Set((data ?? []).map((r) => r.numero as string));
-      lote.forEach((n) => { if (!presentes.has(n)) numerosATransformar.add(n); });
+      lote.forEach((n) => { if (!presentes.has(n)) numerosFaltantesEnV79.push(n); });
     }
+    const cupoBackfill = Math.max(0, LIMITE_BACKFILL_V79 - numerosCreadosActualizados.length);
+    const numerosBackfill = numerosFaltantesEnV79.slice(0, cupoBackfill);
+    if (numerosFaltantesEnV79.length > numerosBackfill.length) {
+      errores.push({
+        numero: "(v79)",
+        mensaje: `Quedan ${numerosFaltantesEnV79.length - numerosBackfill.length} contrato(s) históricos por migrar a producción; se completan solos en las próximas corridas.`,
+      });
+    }
+    const numerosATransformar = new Set([...numerosCreadosActualizados, ...numerosBackfill]);
     const contratosATransformar = validos.filter((c) => numerosATransformar.has(c.numero));
 
     if (contratosATransformar.length) {
