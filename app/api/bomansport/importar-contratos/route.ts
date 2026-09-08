@@ -170,6 +170,44 @@ async function reemplazarHijosContratos(admin: AdminClient, contratos: { id: str
  * eventos, mas el valor vigente (disenador/autor_mockup/observacion/maquila)
  * en la cabecera de contratos. Corre aparte de la sincronizacion de
  * contratos: si esto falla, los contratos ya escritos no se pierden. */
+/** Aplica disenador/autor_mockup/observacion/maquila vigentes en lotes. Antes
+ * era un .update() por contrato -con cientos o miles de contratos eso es una
+ * ida y vuelta a Supabase por cada uno, secuencial, y es lo que se pasaba del
+ * maxDuration de Vercel dejando la corrida en "en_curso" para siempre. Ahora
+ * se lee el valor actual de los 4 campos en lotes, se combina con lo nuevo
+ * (un campo ausente en `campos` conserva el valor que ya tenia -Asignaciones/
+ * Observaciones/Maquila se leen completas cada vez, asi que si el valor no
+ * aparece esta corrida es porque de verdad no existe en el origen) y se sube
+ * todo junto en un solo upsert por lote. */
+async function aplicarVigente(admin: AdminClient, actualizaciones: { id: string; campos: Record<string, unknown> }[]) {
+  if (!actualizaciones.length) return;
+  const ids = actualizaciones.map((a) => a.id);
+  const actuales = new Map<string, Record<string, unknown>>();
+  for (let i = 0; i < ids.length; i += 300) {
+    const lote = ids.slice(i, i + 300);
+    const { data, error } = await admin
+      .from("contratos")
+      .select("id, disenador, autor_mockup, observacion, maquila")
+      .in("id", lote);
+    if (error) throw new Error(`contratos (lectura vigente): ${error.message}`);
+    (data ?? []).forEach((r) => actuales.set(r.id as string, r));
+  }
+  const filas = actualizaciones.map(({ id, campos }) => {
+    const base = actuales.get(id) ?? {};
+    return {
+      id,
+      disenador: campos.disenador ?? base.disenador ?? null,
+      autor_mockup: campos.autor_mockup ?? base.autor_mockup ?? null,
+      observacion: campos.observacion ?? base.observacion ?? null,
+      maquila: campos.maquila ?? base.maquila ?? null,
+    };
+  });
+  for (let i = 0; i < filas.length; i += 500) {
+    const { error } = await admin.from("contratos").upsert(filas.slice(i, i + 500), { onConflict: "id" });
+    if (error) throw new Error(`contratos (vigente): ${error.message}`);
+  }
+}
+
 async function transformarProduccionV79(
   admin: AdminClient,
   base: string,
@@ -289,9 +327,7 @@ async function transformarProduccionV79(
     }
     await insertarLotes("contrato_etapas", filasEtapas);
     await insertarLotes("contrato_eventos", filasEventos);
-    for (const { id, campos } of actualizacionesVigente) {
-      await admin.from("contratos").update(campos).eq("id", id);
-    }
+    await aplicarVigente(admin, actualizacionesVigente);
 
     await cerrar({
       estado: "ok",
