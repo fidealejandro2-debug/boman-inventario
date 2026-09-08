@@ -179,6 +179,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion/dashboard", etiqueta: "Dashboard de producción", descripcion: "Carga, capacidad, entregas y saldos de Boman Sport", visible: puedeVerProduccion },
+      { href: "/produccion/cronograma", etiqueta: "Cronograma y capacidad", descripcion: "Carga diaria por prenda vs. capacidad del taller", visible: puedeVerProduccion },
+      { href: "/produccion/reportes", etiqueta: "Reportes de producción", descripcion: "Producción por día, prenda, diseñador o contrato", visible: puedeVerProduccion },
       { href: "/produccion/costos", etiqueta: "Costos y rentabilidad", descripcion: "Hoja de costo, margen y consolidado por contrato", visible: puedeVerCostosProduccion },
       { href: "/produccion/cobros", etiqueta: "Presupuestos y cobros", descripcion: "Abonos, saldos e historial financiero", visible: puedeVerFinanzasContratos },
       { href: "/produccion/contratos", etiqueta: "Expedientes de contratos", descripcion: "Brief, diseños, tallas e historial completo", visible: puedeVerProduccion },
