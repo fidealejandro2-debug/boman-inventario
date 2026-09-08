@@ -80,7 +80,13 @@ function filaContratoV79(c: ContratoTipado, avisos: string[]) {
     vendedor: c.vendedor,
     vendedor_responsable: c.vendedor_responsable,
     canal: c.canal || null,
-    ...(c.fecha_ingreso ? { fecha_ingreso: c.fecha_ingreso } : {}),
+    // Siempre presente (nunca omitido condicionalmente): un upsert por lotes
+    // arma un solo INSERT para todas las filas, y si unas traen esta clave y
+    // otras no, PostgREST rellena las que faltan con NULL explícito en vez
+    // de aplicar el default de la columna -exactamente lo que rompió el
+    // batch completo (fecha_ingreso not null) cuando algunos contratos no
+    // traían "Fecha Ingreso" válida en la hoja.
+    fecha_ingreso: c.fecha_ingreso ?? new Date().toISOString(),
     fecha_inicio_produccion: fechaInicio,
     fecha_salida_produccion: c.fecha_salida_produccion,
     fecha_entrega: c.fecha_entrega,
