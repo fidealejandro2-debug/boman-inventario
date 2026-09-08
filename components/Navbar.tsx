@@ -138,6 +138,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerTesoreria = tienePermiso(perfil, "tesoreria.acceder");
   const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
   const puedeVerCostosProduccion = tienePermiso(perfil, "produccion.costos.ver");
+  const puedeVerFinanzasContratos = tienePermiso(perfil, "contratos.finanzas.ver");
   const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
   const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
   // La caja de tienda propia usa el mismo permiso que la de franquicia, pero no
@@ -179,6 +180,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion/dashboard", etiqueta: "Dashboard de producción", descripcion: "Carga, capacidad, entregas y saldos de Boman Sport", visible: puedeVerProduccion },
       { href: "/produccion/costos", etiqueta: "Costos y rentabilidad", descripcion: "Hoja de costo, margen y consolidado por contrato", visible: puedeVerCostosProduccion },
+      { href: "/produccion/cobros", etiqueta: "Presupuestos y cobros", descripcion: "Abonos, saldos e historial financiero", visible: puedeVerFinanzasContratos },
       { href: "/produccion/contratos", etiqueta: "Expedientes de contratos", descripcion: "Brief, diseños, tallas e historial completo", visible: puedeVerProduccion },
       { href: "/produccion", etiqueta: "Órdenes de producción", descripcion: "Rutas, etapas, lotes y costos", visible: puedeVerProduccion },
       { href: "/produccion/calidad", etiqueta: "Calidad y errores", descripcion: "Novedades, reprocesos y acciones correctivas", visible: puedeVerProduccion || puedeVerNomina },
