@@ -128,3 +128,24 @@
 .filaAdic label{display:grid;gap:5px}
 .filaAdic label>span{font-size:.75rem;font-weight:800;color:var(--texto-secundario)}
 @media(max-width:650px){.prendasGrid{grid-template-columns:1fr}.filaAdic{grid-template-columns:1fr}}
+
+/* Matriz de tallas por prenda y calidad (como el legado) */
+.bloquePrenda{border:1px solid var(--borde);border-radius:11px;margin-bottom:14px;overflow:hidden}
+.bloquePrenda>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 13px;background:var(--azul);color:#fff}
+.bloquePrenda>header strong{font-size:.92rem}
+.bloquePrenda>p{margin:12px 13px}
+.lineaTalla{padding:12px 13px;border-top:1px solid var(--borde)}
+.lineaCab{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) auto auto;gap:8px;align-items:center;margin-bottom:10px}
+.badgeTallas{padding:5px 10px;border-radius:99px;background:var(--superficie-suave);border:1px solid var(--borde);font-size:.78rem;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tablasTalla{display:grid;grid-template-columns:1.35fr 1fr;gap:14px;align-items:start}
+.subTitulo{font-size:.72rem;font-weight:900;color:var(--texto-secundario);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+.tablaTalla{width:100%;border-collapse:collapse;font-size:.8rem}
+.tablaTalla th,.tablaTalla td{border:1px solid var(--borde);padding:0;text-align:center}
+.tablaTalla thead th{background:var(--azul);color:#fff;padding:5px 4px;font-size:.72rem;letter-spacing:.2px}
+.tablaTalla tbody th{background:var(--superficie-suave);padding:4px 7px;text-align:left;font-weight:700;font-size:.78rem}
+.tablaTalla tbody th input{width:100%;border:0;background:transparent;padding:5px 6px;font-size:.76rem;font-weight:700}
+.tablaTalla td input{width:100%;border:0;background:transparent;padding:6px 4px;text-align:center;font-variant-numeric:tabular-nums}
+.tablaTalla td input:focus{outline:2px solid var(--azul);outline-offset:-2px;border-radius:3px}
+.celdaTotal{background:#fffbeb;font-weight:800;font-variant-numeric:tabular-nums;padding:5px 4px!important}
+.filaTotal th,.filaTotal td{background:var(--superficie-suave);font-weight:900;padding:6px 4px!important;font-variant-numeric:tabular-nums}
+@media(max-width:900px){.tablasTalla{grid-template-columns:1fr}.lineaCab{grid-template-columns:1fr 1fr}}

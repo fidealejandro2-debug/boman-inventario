@@ -82,12 +82,62 @@ const ADICIONALES:{clave:keyof Adic;titulo:string;opciones:string[];etiquetaCant
 ];
 type Adic={medias:string;polainas:string;antideslizantes:string;banda_capitan:string;banderin:string;bandera:string;bolsos:string};
 type AdicCant=Record<keyof Adic,number>;
-type Form={cab:Cab;prendasSel:string[];adic:Adic;adicCant:AdicCant;medidasBandera:string;prendas:Prenda[];jugadores:Jugador[];archivos:Archivo[];specs:Spec[];facturacion:Fact[]};
+// ── TALLAS ────────────────────────────────────────────────────────────────
+// El legado captura las tallas como una MATRIZ por prenda+calidad (filas de
+// talla x columnas H/M para adultos, N para niños) con 3 tallas especiales de
+// adulto y 2 de niño que el usuario nombra a mano. "prendas" (una fila por
+// combinacion con cantidad > 0) es solo el formato de guardado: se deriva de
+// aqui, nunca se edita a mano.
+const ESP_ADULTO=3, ESP_NINO=2;
+type Linea={id:string;prenda:string;calidad:string;detalle:string;adultos:Record<string,{H:number;M:number}>;ninos:Record<string,number>;espA:{nombre:string;H:number;M:number}[];espN:{nombre:string;N:number}[]};
+const lineaNueva=(prenda:string,calidad=""):Linea=>({id:uuid(),prenda,calidad,detalle:"",adultos:{},ninos:{},espA:Array.from({length:ESP_ADULTO},()=>({nombre:"",H:0,M:0})),espN:Array.from({length:ESP_NINO},()=>({nombre:"",N:0}))});
+function totalLinea(l:Linea){
+ let h=0,m=0,n=0;
+ for(const t of ADULTOS){h+=l.adultos[t]?.H||0;m+=l.adultos[t]?.M||0}
+ for(const e of l.espA){if(e.nombre.trim()){h+=e.H||0;m+=e.M||0}}
+ for(const t of NINOS)n+=l.ninos[t]||0;
+ for(const e of l.espN)if(e.nombre.trim())n+=e.N||0;
+ return {h,m,n,total:h+m+n};
+}
+function expandirLineas(lineas:Linea[]):Prenda[]{
+ const out:Prenda[]=[];
+ for(const l of lineas){
+  if(!l.prenda)continue;
+  const add=(genero:Prenda["genero"],talla:string,cantidad:number)=>{if(cantidad>0)out.push({id:`${l.id}|${genero}|${talla}`,prenda:l.prenda,calidad:l.calidad,detalle:l.detalle,genero,talla,cantidad})};
+  for(const t of ADULTOS){add("H",t,l.adultos[t]?.H||0);add("M",t,l.adultos[t]?.M||0)}
+  for(const e of l.espA){const nom=e.nombre.trim();if(nom){add("H",nom,e.H||0);add("M",nom,e.M||0)}}
+  for(const t of NINOS)add("N",t,l.ninos[t]||0);
+  for(const e of l.espN){const nom=e.nombre.trim();if(nom)add("N",nom,e.N||0)}
+ }
+ return out;
+}
+// Reposicion: reconstruye la matriz desde las filas planas del contrato origen.
+function lineasDesdePrendas(filas:{prenda?:unknown;calidad?:unknown;detalle?:unknown;genero?:unknown;talla?:unknown;cantidad?:unknown}[]):Linea[]{
+ const mapa=new Map<string,Linea>();
+ for(const f of filas){
+  const prenda=texto(f.prenda);if(!prenda)continue;
+  const calidad=texto(f.calidad),detalle=texto(f.detalle),talla=texto(f.talla);
+  const genero=texto(f.genero)as Prenda["genero"],cant=Number(f.cantidad)||0;
+  const clave=`${prenda}|${calidad}|${detalle}`;
+  let l=mapa.get(clave);
+  if(!l){l=lineaNueva(prenda,calidad);l.detalle=detalle;mapa.set(clave,l)}
+  if(genero==="N"){
+   if(NINOS.includes(talla))l.ninos[talla]=(l.ninos[talla]||0)+cant;
+   else{const slot=l.espN.find(e=>e.nombre===talla)||l.espN.find(e=>!e.nombre);if(slot){slot.nombre=talla;slot.N+=cant}}
+  }else{
+   const g=genero==="M"?"M":"H";
+   if(ADULTOS.includes(talla)){const c=l.adultos[talla]||{H:0,M:0};c[g]+=cant;l.adultos[talla]=c}
+   else{const slot=l.espA.find(e=>e.nombre===talla)||l.espA.find(e=>!e.nombre);if(slot){slot.nombre=talla;slot[g]+=cant}}
+  }
+ }
+ return Array.from(mapa.values());
+}
+type Form={cab:Cab;prendasSel:string[];lineas:Linea[];adic:Adic;adicCant:AdicCant;medidasBandera:string;prendas:Prenda[];jugadores:Jugador[];archivos:Archivo[];specs:Spec[];facturacion:Fact[]};
 const adicInicial=():Adic=>ADICIONALES.reduce((a,x)=>({...a,[x.clave]:x.opciones[0]}),{} as Adic);
 const adicCantInicial=():AdicCant=>ADICIONALES.reduce((a,x)=>({...a,[x.clave]:0}),{} as AdicCant);
 
 const cabInicial=(nombre:string):Cab=>({vendedor:nombre,canal:"",cliente:"",telefono:"",whatsapp:"",email:"",tipo_contrato:"Normal",fecha_entrega:"",fecha_inicio_produccion:"",prioridad:"Normal",arqueros:0,total_manual:0,reposicion:false,contrato_origen_reposicion_id:"",nombre_tecnica:"",numero_tecnica:"",sellos_tpu:"No",ubicacion_tpu:"",bordado:"",colores:"",instrucciones:"",presupuesto:0,abono:0,forma_entrega:"Retiro en tienda",direccion:"",vendedor_responsable:nombre,autorizado:false,adicionales:""});
-const inicial=(nombre:string):Form=>({cab:cabInicial(nombre),prendasSel:[],adic:adicInicial(),adicCant:adicCantInicial(),medidasBandera:"",prendas:[],jugadores:[],archivos:[],specs:[],facturacion:[]});
+const inicial=(nombre:string):Form=>({cab:cabInicial(nombre),prendasSel:[],lineas:[],adic:adicInicial(),adicCant:adicCantInicial(),medidasBandera:"",prendas:[],jugadores:[],archivos:[],specs:[],facturacion:[]});
 const texto=(v:unknown)=>String(v??"").trim();
 // Compatibilidad al cargar una reposición: el jsonb `spec` guardado puede venir con la
 // forma nueva {campos,observacion}, con la vieja {indicaciones:"…"} o con cualquier otra.
@@ -129,12 +179,23 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
  useEffect(()=>{const raw=localStorage.getItem(BORRADOR);if(!raw)return;try{const d=JSON.parse(raw) as Form;if(d?.cab&&Array.isArray(d.prendas))void confirmarDialogo("Hay un borrador guardado en este dispositivo. ¿Deseas recuperarlo?").then(si=>si?setForm({...d,archivos:(d.archivos||[]).filter(x=>x.url)}):localStorage.removeItem(BORRADOR))}catch{localStorage.removeItem(BORRADOR)}},[]);
  useEffect(()=>{const t=setTimeout(()=>{const seguro={...form,archivos:form.archivos.filter(x=>x.url).map(({file,preview,...x})=>x)};localStorage.setItem(BORRADOR,JSON.stringify(seguro))},900);return()=>clearTimeout(t)},[form]);
 
+ // "prendas" es el formato de guardado (una fila por combinacion con cantidad
+ // > 0) y se deriva SIEMPRE de la matriz: asi la tabla de tallas es la unica
+ // fuente y no hay dos sitios donde editar lo mismo.
+ useEffect(()=>{
+  setForm(f=>{
+   const derivadas=expandirLineas(f.lineas);
+   const igual=derivadas.length===f.prendas.length&&derivadas.every((d,i)=>{const a=f.prendas[i];return a&&a.prenda===d.prenda&&a.calidad===d.calidad&&a.detalle===d.detalle&&a.genero===d.genero&&a.talla===d.talla&&a.cantidad===d.cantidad});
+   return igual?f:{...f,prendas:derivadas};
+  });
+ },[form.lineas]);
+
  function errorPaso(n=paso){const c=form.cab;if(n===0&&(!texto(c.vendedor)||!texto(c.cliente)||!texto(c.canal)||!texto(c.telefono)))return"Completa vendedor, canal de venta, cliente/equipo y teléfono.";if(n===1&&(!c.fecha_entrega||!c.tipo_contrato||!c.prioridad))return"Completa tipo, prioridad y fecha de entrega.";if(n===2&&!form.prendasSel.length)return"Selecciona al menos una prenda del pedido.";if(n===5&&(!form.prendas.length||total<1))return"Agrega al menos una línea de talla con cantidad.";if(n===4&&(!c.nombre_tecnica||!c.numero_tecnica||!c.sellos_tpu))return"Completa las técnicas de nombre, número y TPU.";if(n===6&&(!texto(c.vendedor_responsable)||!c.autorizado))return"Confirma el vendedor responsable y la autorización de producción.";if(n===6&&Number(c.abono)>Number(c.presupuesto))return"El abono no puede superar el presupuesto.";return""}
  async function irSiguiente(){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true);setPaso(x=>Math.min(6,x+1))}
  async function abrirPaso(i:number){if(i>paso){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true)}setPaso(i)}
 
  async function buscarAnterior(){if(texto(busqueda).length<2)return mostrarAvisoDialogo("Escribe al menos 2 caracteres.","Buscar reposición");setBuscando(true);const{data,error}=await supabase.rpc("buscar_contratos_reposicion_v108",{p_busqueda:busqueda});setBuscando(false);if(error)return mostrarAvisoDialogo(error.message,"No se pudo buscar",true);setCoincidencias((data as any[])||[])}
- async function cargarReposicion(id:string){const{data,error}=await supabase.rpc("obtener_plantilla_contrato_v108",{p_contrato_id:id});if(error)return mostrarAvisoDialogo(error.message,"No se pudo cargar",true);const d:any=data,c=d.contrato||{};setForm(f=>({...f,cab:{...f.cab,tipo_contrato:c.tipo_contrato||"Normal",prioridad:c.prioridad||"Normal",reposicion:true,contrato_origen_reposicion_id:id,nombre_tecnica:c.nombre_tecnica||"",numero_tecnica:c.numero_tecnica||"",sellos_tpu:c.sellos_tpu||"No",ubicacion_tpu:c.ubicacion_tpu||"",bordado:c.bordado||"",colores:Array.isArray(c.colores_generales)?c.colores_generales.map((x:any)=>x.nombre||x).join(", "):"",adicionales:c.adicionales?.detalle||""},prendas:(d.prendas||[]).map((x:any)=>({...x,id:uuid()})),jugadores:(d.jugadores||[]).map((x:any)=>({...x,id:uuid()})),archivos:(d.archivos||[]).map((x:any)=>({...x,id:uuid()})),specs:(d.especificaciones||[]).map((x:any)=>({id:uuid(),prenda_clave:x.prenda_clave,variante_calidad:x.variante_calidad||"",mockup:texto(x.variante_mockup),...leerSpec(x.spec)})),facturacion:(d.facturacion||[]).map((x:any)=>({...x,id:uuid()}))}));setBusqueda("");setCoincidencias([]);await mostrarAvisoDialogo("Se copiaron prendas, jugadores, diseños y especificaciones. Cliente, fechas y valores siguen siendo los del nuevo contrato.","Reposición preparada")}
+ async function cargarReposicion(id:string){const{data,error}=await supabase.rpc("obtener_plantilla_contrato_v108",{p_contrato_id:id});if(error)return mostrarAvisoDialogo(error.message,"No se pudo cargar",true);const d:any=data,c=d.contrato||{};setForm(f=>({...f,cab:{...f.cab,tipo_contrato:c.tipo_contrato||"Normal",prioridad:c.prioridad||"Normal",reposicion:true,contrato_origen_reposicion_id:id,nombre_tecnica:c.nombre_tecnica||"",numero_tecnica:c.numero_tecnica||"",sellos_tpu:c.sellos_tpu||"No",ubicacion_tpu:c.ubicacion_tpu||"",bordado:c.bordado||"",colores:Array.isArray(c.colores_generales)?c.colores_generales.map((x:any)=>x.nombre||x).join(", "):"",adicionales:c.adicionales?.detalle||""},prendasSel:Array.from(new Set(((d.prendas||[]) as {prenda?:unknown}[]).map(x=>texto(x.prenda)).filter(Boolean))),lineas:lineasDesdePrendas((d.prendas||[]) as never[]),prendas:[],jugadores:(d.jugadores||[]).map((x:any)=>({...x,id:uuid()})),archivos:(d.archivos||[]).map((x:any)=>({...x,id:uuid()})),specs:(d.especificaciones||[]).map((x:any)=>({id:uuid(),prenda_clave:x.prenda_clave,variante_calidad:x.variante_calidad||"",mockup:texto(x.variante_mockup),...leerSpec(x.spec)})),facturacion:(d.facturacion||[]).map((x:any)=>({...x,id:uuid()}))}));setBusqueda("");setCoincidencias([]);await mostrarAvisoDialogo("Se copiaron prendas, jugadores, diseños y especificaciones. Cliente, fechas y valores siguen siendo los del nuevo contrato.","Reposición preparada")}
 
  function agregarPrenda(){setForm(f=>({...f,prendas:[...f.prendas,{id:uuid(),prenda:"Camiseta Jugador",calidad:"Amateur",detalle:"",genero:"H",talla:"M",cantidad:1}]}))}
  function agregarJugador(){setForm(f=>({...f,jugadores:[...f.jugadores,{id:uuid(),nombre:"",numero:"",categoria:"Hombre",talla_superior:"M",talla_inferior:"M",manga:"Corta",calidad:"Amateur",modelo_arquero:"",tipo_uniforme:"Uniforme completo",detalle:"",mockup:""}]}))}
@@ -162,7 +223,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
    {paso===2&&<PasoPrendas form={form} setForm={setForm} setCab={setCab} total={total} supabase={supabase}/>}
    {paso===3&&<PasoArchivos form={form} seleccionar={seleccionar} cambiar={cambiar} quitar={quitar}/>} 
    {paso===4&&<PasoTecnica form={form} setCab={setCab} agregar={agregarSpec} cambiar={cambiar} quitar={quitar}/>} 
-   {paso===5&&<PasoJugadores form={form} importar={importarJugadores} plantilla={plantillaJugadores} agregar={agregarJugador} agregarPrenda={agregarPrenda} cambiar={cambiar} quitar={quitar}/>} 
+   {paso===5&&<PasoJugadores form={form} importar={importarJugadores} plantilla={plantillaJugadores} agregar={agregarJugador} setForm={setForm} cambiar={cambiar} quitar={quitar}/>} 
    {paso===6&&<PasoCierre form={form} setCab={setCab} saldo={saldo} agregar={agregarFact} cambiar={cambiar} quitar={quitar}/>} 
    <footer className={estilos.acciones}><button className="secondary" disabled={paso===0||guardando} onClick={()=>setPaso(x=>x-1)}>Anterior</button><span>Paso {paso+1} de 7 · borrador automático</span>{paso<6?<button onClick={()=>void irSiguiente()}>Continuar</button>:<><button className="secondary" onClick={()=>setPreview(true)}>Revisar</button><button onClick={()=>void guardar()} disabled={guardando}>{guardando?"Subiendo y registrando…":"Registrar contrato"}</button></>}</footer>
   </section>
@@ -257,7 +318,7 @@ function TarjetaSpec({spec,prendas,mockups,cambiar,quitar}:{spec:Spec;prendas:st
   <label className={estilos.obsSpec}><span>Observación libre</span><textarea rows={2} value={spec.observacion} onChange={e=>cambiar<Spec>("specs",spec.id,{observacion:e.target.value})} placeholder="Lo que se salga de lo estándar para esta prenda…"/></label>
  </article>;
 }
-function PasoJugadores({form,importar,plantilla,agregar,agregarPrenda,cambiar,quitar}:{form:Form;importar:(f:File)=>void;plantilla:()=>void;agregar:()=>void;agregarPrenda:()=>void;cambiar:Cambiar;quitar:Quitar}){return <><Titulo titulo="Jugadores y personalización" texto="Ingreso manual o carga desde Excel." accion={agregar} etiqueta="+ Jugador"><button className="secondary" onClick={plantilla}>Plantilla Excel</button><label className={estilos.botonArchivo}>Cargar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files?.[0]&&importar(e.target.files[0])}/></label></Titulo>{form.jugadores.map((j,i)=><div className={estilos.filaJugador} key={j.id}><b>{i+1}</b><input placeholder="Nombre" value={j.nombre} onChange={e=>cambiar<Jugador>("jugadores",j.id,{nombre:e.target.value})}/><input placeholder="Número" value={j.numero} onChange={e=>cambiar<Jugador>("jugadores",j.id,{numero:e.target.value})}/><select value={j.categoria} onChange={e=>cambiar<Jugador>("jugadores",j.id,{categoria:e.target.value})}><option>Hombre</option><option>Mujer</option><option>Niño</option><option>Niña</option></select><input placeholder="Talla sup." value={j.talla_superior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_superior:e.target.value})}/><input placeholder="Talla inf." value={j.talla_inferior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_inferior:e.target.value})}/><select value={j.calidad} onChange={e=>cambiar<Jugador>("jugadores",j.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input placeholder="Detalle" value={j.detalle} onChange={e=>cambiar<Jugador>("jugadores",j.id,{detalle:e.target.value})}/><button className="secondary" onClick={()=>quitar("jugadores",j.id)}>Quitar</button></div>)}{!form.jugadores.length&&<Vacio texto="Este contrato no tiene nómina de jugadores."/>}<div className={estilos.tituloBloque}>TALLAS POR PRENDA Y CALIDAD</div><p className={estilos.avisoInfo}>Para cada prenda seleccionada agrega una línea por calidad. Ingresa las cantidades por talla y género (H/M para adultos, N para niños).</p>{!form.prendasSel.length&&<Vacio texto="Selecciona las prendas en el paso Prendas para ver las secciones de tallas."/>}{form.prendasSel.length>0&&<><div className={estilos.tituloAccion}><div><h3 style={{margin:0}}>Líneas de talla</h3><p>Prendas elegidas: {form.prendasSel.map(etiquetaPrenda).join(" · ")}</p></div><div><button onClick={agregarPrenda}>+ Agregar línea</button></div></div>{form.prendas.map(x=><div className={estilos.filaPrenda} key={x.id}><select value={x.prenda} onChange={e=>cambiar<Prenda>("prendas",x.id,{prenda:e.target.value})}>{prendasConTalla(form.prendasSel).map(p=><option key={p} value={p}>{etiquetaPrenda(p)}</option>)}</select><select value={x.calidad} onChange={e=>cambiar<Prenda>("prendas",x.id,{calidad:e.target.value})}>{CALIDADES.map(p=><option key={p}>{p}</option>)}</select><input placeholder="Detalle / variante" value={x.detalle} onChange={e=>cambiar<Prenda>("prendas",x.id,{detalle:e.target.value})}/><select value={x.genero} onChange={e=>cambiar<Prenda>("prendas",x.id,{genero:e.target.value as Prenda["genero"],talla:e.target.value==="N"?NINOS[0]:"M"})}><option value="H">Hombre</option><option value="M">Mujer</option><option value="N">Niño/a</option></select><select value={x.talla} onChange={e=>cambiar<Prenda>("prendas",x.id,{talla:e.target.value})}>{(x.genero==="N"?NINOS:ADULTOS).map(t=><option key={t}>{t}</option>)}</select><input type="number" min={1} value={x.cantidad} onChange={e=>cambiar<Prenda>("prendas",x.id,{cantidad:Number(e.target.value)})}/><button className="secondary" onClick={()=>quitar("prendas",x.id)}>Quitar</button></div>)}{!form.prendas.length&&<Vacio texto="Aún no agregas líneas de talla."/>}</>}</>}
+function PasoJugadores({form,importar,plantilla,agregar,setForm,cambiar,quitar}:{form:Form;importar:(f:File)=>void;plantilla:()=>void;agregar:()=>void;setForm:SetForm;cambiar:Cambiar;quitar:Quitar}){return <><Titulo titulo="Jugadores y personalización" texto="Ingreso manual o carga desde Excel." accion={agregar} etiqueta="+ Jugador"><button className="secondary" onClick={plantilla}>Plantilla Excel</button><label className={estilos.botonArchivo}>Cargar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files?.[0]&&importar(e.target.files[0])}/></label></Titulo>{form.jugadores.map((j,i)=><div className={estilos.filaJugador} key={j.id}><b>{i+1}</b><input placeholder="Nombre" value={j.nombre} onChange={e=>cambiar<Jugador>("jugadores",j.id,{nombre:e.target.value})}/><input placeholder="Número" value={j.numero} onChange={e=>cambiar<Jugador>("jugadores",j.id,{numero:e.target.value})}/><select value={j.categoria} onChange={e=>cambiar<Jugador>("jugadores",j.id,{categoria:e.target.value})}><option>Hombre</option><option>Mujer</option><option>Niño</option><option>Niña</option></select><input placeholder="Talla sup." value={j.talla_superior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_superior:e.target.value})}/><input placeholder="Talla inf." value={j.talla_inferior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_inferior:e.target.value})}/><select value={j.calidad} onChange={e=>cambiar<Jugador>("jugadores",j.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input placeholder="Detalle" value={j.detalle} onChange={e=>cambiar<Jugador>("jugadores",j.id,{detalle:e.target.value})}/><button className="secondary" onClick={()=>quitar("jugadores",j.id)}>Quitar</button></div>)}{!form.jugadores.length&&<Vacio texto="Este contrato no tiene nómina de jugadores."/>}<div className={estilos.tituloBloque}>TALLAS POR PRENDA Y CALIDAD</div><p className={estilos.avisoInfo}>Para cada prenda seleccionada agrega una línea por calidad. Ingresa las cantidades de Hombres (H), Mujeres (M) y Niños por talla.</p><SeccionTallas form={form} setForm={setForm}/></>}
 function PasoCierre({form,setCab,saldo,agregar,cambiar,quitar}:{form:Form;setCab:SetCab;saldo:number;agregar:()=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Producción, valores y cierre</h2><div className={estilos.grid}><Campo titulo="Presupuesto total (USD)"><input type="number" min={0} step=".01" value={form.cab.presupuesto} onChange={e=>setCab("presupuesto",Number(e.target.value))}/></Campo><Campo titulo="Abono recibido (USD)"><input type="number" min={0} step=".01" value={form.cab.abono} onChange={e=>setCab("abono",Number(e.target.value))}/></Campo><div className={estilos.saldo}><span>Saldo pendiente</span><strong>${saldo.toFixed(2)}</strong></div><Campo titulo="Forma de entrega"><select value={form.cab.forma_entrega} onChange={e=>setCab("forma_entrega",e.target.value)}><option value="">Seleccionar…</option>{FORMAS_ENTREGA.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Dirección"><input value={form.cab.direccion} onChange={e=>setCab("direccion",e.target.value)}/></Campo><Campo titulo="Instrucciones especiales" ancho><textarea rows={4} value={form.cab.instrucciones} onChange={e=>setCab("instrucciones",e.target.value)}/></Campo><Campo titulo="Vendedor responsable *"><input value={form.cab.vendedor_responsable} onChange={e=>setCab("vendedor_responsable",e.target.value)}/></Campo></div><Titulo titulo="Detalle de facturación" accion={agregar} etiqueta="+ Línea"/>{form.facturacion.map(x=><div className={estilos.filaFact} key={x.id}><input value={x.concepto} onChange={e=>cambiar<Fact>("facturacion",x.id,{concepto:e.target.value})}/><select value={x.calidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input type="number" min={1} value={x.cantidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{cantidad:Number(e.target.value)})}/><label className={estilos.check}><input type="checkbox" checked={x.obsequio} onChange={e=>cambiar<Fact>("facturacion",x.id,{obsequio:e.target.checked})}/> Obsequio</label><button className="secondary" onClick={()=>quitar("facturacion",x.id)}>Quitar</button></div>)}<label className={estilos.autoriza}><input type="checkbox" checked={form.cab.autorizado} onChange={e=>setCab("autorizado",e.target.checked)}/><span><strong>Confirmo que revisé todos los datos.</strong> Autorizo el envío de este contrato a producción.</span></label></>}
 function Titulo({titulo,texto,accion,etiqueta,children}:{titulo:string;texto?:string;accion:()=>void;etiqueta:string;children?:ReactNode}){return <div className={estilos.tituloAccion}><div><h2>{titulo}</h2>{texto&&<p>{texto}</p>}</div><div>{children}<button onClick={accion}>{etiqueta}</button></div></div>}
 function Vacio({texto}:{texto:string}){return <div className={estilos.vacio}>{texto}</div>}
@@ -494,4 +555,58 @@ function BloqueTallas({grupo}:{grupo:GrupoTallas}){
    </tbody></table>
   </div>)}
  </div>;
+}
+
+type SetForm=React.Dispatch<React.SetStateAction<Form>>;
+function SeccionTallas({form,setForm}:{form:Form;setForm:SetForm}){
+ const prendas=prendasConTalla(form.prendasSel);
+ const setLinea=(id:string,cambio:Partial<Linea>)=>setForm(f=>({...f,lineas:f.lineas.map(l=>l.id===id?{...l,...cambio}:l)}));
+ const agregar=(prenda:string)=>setForm(f=>({...f,lineas:[...f.lineas,lineaNueva(prenda)]}));
+ const quitar=(id:string)=>setForm(f=>({...f,lineas:f.lineas.filter(l=>l.id!==id)}));
+ if(!prendas.length)return <Vacio texto="Selecciona las prendas en el paso Prendas para ver las secciones de tallas."/>;
+ return <>{prendas.map(prenda=>{
+  const suyas=form.lineas.filter(l=>l.prenda===prenda);
+  return <section className={estilos.bloquePrenda} key={prenda}>
+   <header><strong>🎽 {etiquetaPrenda(prenda)}</strong><button className="secondary" onClick={()=>agregar(prenda)}>+ Agregar calidad</button></header>
+   {!suyas.length&&<p className={estilos.pista}>Sin líneas: agrega una calidad para cargar sus tallas.</p>}
+   {suyas.map(l=>{
+    const t=totalLinea(l);
+    const setAdulto=(talla:string,g:"H"|"M",v:number)=>setLinea(l.id,{adultos:{...l.adultos,[talla]:{...(l.adultos[talla]||{H:0,M:0}),[g]:Math.max(0,v)}}});
+    const setEspA=(i:number,campo:"nombre"|"H"|"M",v:string|number)=>setLinea(l.id,{espA:l.espA.map((e,j)=>j===i?{...e,[campo]:campo==="nombre"?String(v):Math.max(0,Number(v))}:e)});
+    const setNino=(talla:string,v:number)=>setLinea(l.id,{ninos:{...l.ninos,[talla]:Math.max(0,v)}});
+    const setEspN=(i:number,campo:"nombre"|"N",v:string|number)=>setLinea(l.id,{espN:l.espN.map((e,j)=>j===i?{...e,[campo]:campo==="nombre"?String(v):Math.max(0,Number(v))}:e)});
+    return <div className={estilos.lineaTalla} key={l.id}>
+     <div className={estilos.lineaCab}>
+      <select value={l.calidad} onChange={e=>setLinea(l.id,{calidad:e.target.value})}><option value="">— Calidad —</option>{CALIDADES.map(c=><option key={c}>{c}</option>)}</select>
+      <input placeholder="Detalle/variante (opcional)" value={l.detalle} onChange={e=>setLinea(l.id,{detalle:e.target.value})}/>
+      <span className={estilos.badgeTallas}>H:{t.h} M:{t.m} N:{t.n}</span>
+      <button className="secondary" onClick={()=>quitar(l.id)}>Quitar</button>
+     </div>
+     <div className={estilos.tablasTalla}>
+      <div><div className={estilos.subTitulo}>ADULTOS</div>
+       <table className={estilos.tablaTalla}><thead><tr><th>Talla</th><th>H</th><th>M</th><th>Total</th></tr></thead><tbody>
+        {ADULTOS.map(talla=>{const c=l.adultos[talla]||{H:0,M:0};return <tr key={talla}><th>{talla}</th>
+         <td><input type="number" min={0} value={c.H||0} onChange={e=>setAdulto(talla,"H",Number(e.target.value))}/></td>
+         <td><input type="number" min={0} value={c.M||0} onChange={e=>setAdulto(talla,"M",Number(e.target.value))}/></td>
+         <td className={estilos.celdaTotal}>{(c.H||0)+(c.M||0)||""}</td></tr>})}
+        {l.espA.map((e,i)=><tr key={`ea${i}`}><th><input placeholder={`Esp. adulto ${i+1}`} value={e.nombre} onChange={ev=>setEspA(i,"nombre",ev.target.value)}/></th>
+         <td><input type="number" min={0} value={e.H} onChange={ev=>setEspA(i,"H",ev.target.value)}/></td>
+         <td><input type="number" min={0} value={e.M} onChange={ev=>setEspA(i,"M",ev.target.value)}/></td>
+         <td className={estilos.celdaTotal}>{e.nombre.trim()?(e.H+e.M)||"":""}</td></tr>)}
+        <tr className={estilos.filaTotal}><th>TOTAL</th><td>{t.h}</td><td>{t.m}</td><td>{t.h+t.m}</td></tr>
+       </tbody></table>
+      </div>
+      <div><div className={estilos.subTitulo}>NIÑOS</div>
+       <table className={estilos.tablaTalla}><thead><tr><th>Talla</th><th>Cantidad</th></tr></thead><tbody>
+        {NINOS.map(talla=><tr key={talla}><th>{talla}</th><td><input type="number" min={0} value={l.ninos[talla]||0} onChange={e=>setNino(talla,Number(e.target.value))}/></td></tr>)}
+        {l.espN.map((e,i)=><tr key={`en${i}`}><th><input placeholder={`Esp. niño ${i+1}`} value={e.nombre} onChange={ev=>setEspN(i,"nombre",ev.target.value)}/></th>
+         <td><input type="number" min={0} value={e.N} onChange={ev=>setEspN(i,"N",ev.target.value)}/></td></tr>)}
+        <tr className={estilos.filaTotal}><th>TOTAL</th><td>{t.n}</td></tr>
+       </tbody></table>
+      </div>
+     </div>
+    </div>;
+   })}
+  </section>;
+ })}</>;
 }
