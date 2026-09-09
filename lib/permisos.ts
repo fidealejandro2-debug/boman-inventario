@@ -48,7 +48,8 @@ export type PermisoCodigo =
   | "notificaciones.publicar"
   | "mantenimiento.acceder"
   | "mantenimiento.editar"
-  | "importaciones.acceder";
+  | "importaciones.acceder"
+  | "productos.crear";
 
 export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "inventario.acceder",
@@ -90,6 +91,7 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "mantenimiento.acceder",
   "mantenimiento.editar",
   "importaciones.acceder",
+  "productos.crear",
 ];
 
 export type Perfil = {

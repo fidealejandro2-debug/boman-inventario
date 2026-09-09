@@ -34,13 +34,20 @@ type LineaAjuste = {
   stock: number;
 };
 
+type AbreviaturaSku = { nombre: string; codigo: string };
+type CategoriaProducto = { id: string; nombre: string; activo: boolean };
+type SubcategoriaProducto = { id: string; categoria_id: string; nombre: string; activo: boolean };
+
 export default function InventarioFranquicia({
   franquicia,
   soloLectura = false,
+  puedeCrearProducto = false,
 }: {
   franquicia: Franquicia;
   /** Admin y Control revisan el stock del local; ajustarlo es del titular. */
   soloLectura?: boolean;
+  /** productos.crear: por defecto solo franquiciado/vendedor_franquicia. */
+  puedeCrearProducto?: boolean;
 }) {
   const supabase = createClient();
   const [stock, setStock] = useState<Fila[]>([]);
@@ -71,6 +78,76 @@ export default function InventarioFranquicia({
   const [minimos, setMinimos] = useState<
     Record<string, { stock_minimo: string; stock_maximo: string }>
   >({});
+
+  // Crear producto nuevo (v109): SKU sugerido con las mismas abreviaturas que
+  // ya usa administracion (BS-IN-PR-03), nunca texto libre.
+  const [mostrarCrearProducto, setMostrarCrearProducto] = useState(false);
+  const [categoriasCatalogo, setCategoriasCatalogo] = useState<CategoriaProducto[]>([]);
+  const [subcategoriasCatalogo, setSubcategoriasCatalogo] = useState<SubcategoriaProducto[]>([]);
+  const [abreviaturas, setAbreviaturas] = useState<{ categoria: AbreviaturaSku[]; entidad: AbreviaturaSku[]; variante: AbreviaturaSku[] }>({ categoria: [], entidad: [], variante: [] });
+  const [nuevoProducto, setNuevoProducto] = useState({
+    nombre: "", categoria_id: "", subcategoria_id: "", talla: "", color: "",
+    categoria_codigo: "", entidad_codigo: "", variante_codigo: "",
+    anio_codigo: String(new Date().getFullYear()).slice(-2), talla_codigo: "",
+  });
+  const [creandoProducto, setCreandoProducto] = useState(false);
+
+  useEffect(() => {
+    if (!puedeCrearProducto) return;
+    Promise.all([
+      supabase.from("categorias_productos").select("id, nombre, activo").order("nombre"),
+      supabase.from("subcategorias_productos").select("id, categoria_id, nombre, activo").order("nombre"),
+      supabase.rpc("sku_abreviaturas_disponibles_v109"),
+    ]).then(([cat, sub, abr]) => {
+      if (cat.data) setCategoriasCatalogo(cat.data as CategoriaProducto[]);
+      if (sub.data) setSubcategoriasCatalogo(sub.data as SubcategoriaProducto[]);
+      if (abr.data) setAbreviaturas(abr.data as typeof abreviaturas);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puedeCrearProducto]);
+
+  const esContrato = nuevoProducto.categoria_codigo === "CTR";
+  const skuPreview = nuevoProducto.categoria_codigo && nuevoProducto.entidad_codigo
+    ? esContrato
+      ? `${nuevoProducto.categoria_codigo}-${nuevoProducto.entidad_codigo}-UN`
+      : nuevoProducto.variante_codigo && nuevoProducto.anio_codigo
+        ? `${nuevoProducto.categoria_codigo}-${nuevoProducto.entidad_codigo}-${nuevoProducto.variante_codigo}-${nuevoProducto.anio_codigo}`
+          + (nuevoProducto.talla_codigo ? `-${nuevoProducto.talla_codigo.toUpperCase()}` : "")
+        : ""
+    : "";
+
+  async function crearProducto() {
+    if (!nuevoProducto.nombre.trim()) return setError("El nombre del producto es obligatorio.");
+    if (!nuevoProducto.categoria_id) return setError("Selecciona una categoría del catálogo.");
+    if (!skuPreview) return setError("Completa categoría, entidad y variante para armar el código SKU.");
+    setCreandoProducto(true);
+    setError(null);
+    const { data, error } = await supabase.rpc("crear_producto_franquicia_v109", {
+      p_producto: {
+        nombre: nuevoProducto.nombre.trim(),
+        categoria_id: nuevoProducto.categoria_id,
+        subcategoria_id: nuevoProducto.subcategoria_id || null,
+        talla: nuevoProducto.talla.trim() || null,
+        color: nuevoProducto.color.trim() || null,
+        categoria_codigo: nuevoProducto.categoria_codigo,
+        entidad_codigo: nuevoProducto.entidad_codigo,
+        variante_codigo: nuevoProducto.variante_codigo,
+        anio_codigo: nuevoProducto.anio_codigo,
+        talla_codigo: nuevoProducto.talla_codigo,
+      },
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setCreandoProducto(false);
+    if (error) return setError(mensajeError(error));
+    const resultado = data as { sku?: string } | null;
+    confirmar("Producto creado", `Se creó con el código ${resultado?.sku ?? ""}. Administración recibió un aviso para revisarlo.`);
+    setNuevoProducto({
+      nombre: "", categoria_id: "", subcategoria_id: "", talla: "", color: "",
+      categoria_codigo: "", entidad_codigo: "", variante_codigo: "",
+      anio_codigo: String(new Date().getFullYear()).slice(-2), talla_codigo: "",
+    });
+    setMostrarCrearProducto(false);
+  }
 
   async function cargar() {
     setCargando(true);
@@ -289,6 +366,11 @@ export default function InventarioFranquicia({
         <button onClick={solicitarSugerido} disabled={guardando || soloLectura || sugerido <= 0}>
           Solicitar reposicion sugerida ({sugerido})
         </button>
+        {puedeCrearProducto && (
+          <button className="secondary" onClick={() => setMostrarCrearProducto(!mostrarCrearProducto)}>
+            {mostrarCrearProducto ? "Cancelar producto nuevo" : "Crear producto nuevo"}
+          </button>
+        )}
         <input
           type="search"
           placeholder="Buscar por código o nombre…"
@@ -458,6 +540,130 @@ export default function InventarioFranquicia({
           </p>
           <button onClick={guardarMinimos} disabled={guardando || !Object.keys(minimos).length}>
             {guardando ? "Guardando..." : `Guardar cambios (${Object.keys(minimos).length})`}
+          </button>
+        </div>
+      )}
+
+      {mostrarCrearProducto && (
+        <div className="card-interna">
+          <h4>Crear producto nuevo</h4>
+          <p className="ayuda">
+            El código se arma solo, con las mismas abreviaturas que usa administración
+            (categoría-entidad-variante-año). Si no encuentras la abreviatura que
+            necesitas, créalo igual con la más parecida: administración recibe un
+            aviso para revisarlo y corregirlo si hace falta.
+          </p>
+          <div className="form-grid">
+            <label className="ancho-total">
+              Nombre del producto
+              <input
+                type="text"
+                value={nuevoProducto.nombre}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })}
+              />
+            </label>
+            <label>
+              Categoría
+              <select
+                value={nuevoProducto.categoria_id}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, categoria_id: e.target.value, subcategoria_id: "" })}
+              >
+                <option value="">Selecciona…</option>
+                {categoriasCatalogo.filter((c) => c.activo).map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Subcategoría (opcional)
+              <select
+                value={nuevoProducto.subcategoria_id}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, subcategoria_id: e.target.value })}
+              >
+                <option value="">Sin subcategoría</option>
+                {subcategoriasCatalogo.filter((s) => s.activo && s.categoria_id === nuevoProducto.categoria_id).map((s) => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Talla (opcional)
+              <input type="text" value={nuevoProducto.talla} onChange={(e) => setNuevoProducto({ ...nuevoProducto, talla: e.target.value })} />
+            </label>
+            <label>
+              Color (opcional)
+              <input type="text" value={nuevoProducto.color} onChange={(e) => setNuevoProducto({ ...nuevoProducto, color: e.target.value })} />
+            </label>
+          </div>
+
+          <h4 style={{ marginTop: 12 }}>Código SKU</h4>
+          <div className="form-grid">
+            <label>
+              Categoría SKU
+              <select
+                value={nuevoProducto.categoria_codigo}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, categoria_codigo: e.target.value })}
+              >
+                <option value="">Selecciona…</option>
+                {abreviaturas.categoria.map((a) => (
+                  <option key={a.codigo} value={a.codigo}>{a.nombre} ({a.codigo})</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Entidad/marca SKU
+              <select
+                value={nuevoProducto.entidad_codigo}
+                onChange={(e) => setNuevoProducto({ ...nuevoProducto, entidad_codigo: e.target.value })}
+              >
+                <option value="">Selecciona…</option>
+                {abreviaturas.entidad.map((a) => (
+                  <option key={a.codigo} value={a.codigo}>{a.nombre} ({a.codigo})</option>
+                ))}
+              </select>
+            </label>
+            {!esContrato && (
+              <>
+                <label>
+                  Variante SKU
+                  <select
+                    value={nuevoProducto.variante_codigo}
+                    onChange={(e) => setNuevoProducto({ ...nuevoProducto, variante_codigo: e.target.value })}
+                  >
+                    <option value="">Selecciona…</option>
+                    {abreviaturas.variante.map((a) => (
+                      <option key={a.codigo} value={a.codigo}>{a.nombre} ({a.codigo})</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Año (2 dígitos)
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={nuevoProducto.anio_codigo}
+                    onChange={(e) => setNuevoProducto({ ...nuevoProducto, anio_codigo: e.target.value.replace(/\D/g, "").slice(0, 2) })}
+                  />
+                </label>
+                <label>
+                  Talla del código (opcional)
+                  <input
+                    type="text"
+                    maxLength={8}
+                    value={nuevoProducto.talla_codigo}
+                    onChange={(e) => setNuevoProducto({ ...nuevoProducto, talla_codigo: e.target.value.toUpperCase() })}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+
+          <p className="ayuda">
+            Código resultante: <strong>{skuPreview || "— completa los campos de arriba —"}</strong>
+          </p>
+
+          <button onClick={crearProducto} disabled={creandoProducto || !skuPreview}>
+            {creandoProducto ? "Creando…" : "Crear producto"}
           </button>
         </div>
       )}

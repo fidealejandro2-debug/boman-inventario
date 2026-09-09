@@ -89,10 +89,14 @@ export default function ProductosCliente() {
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
   const [fotosDe, setFotosDe] = useState<Producto | null>(null);
   const [etiquetasDe, setEtiquetasDe] = useState<Producto | null>(null);
+  const [creadosFranquicia, setCreadosFranquicia] = useState<
+    { id: string; sku: string; nombre: string; almacen: string | null; created_at: string }[]
+  >([]);
+  const [revisando, setRevisando] = useState<string | null>(null);
 
   async function cargar() {
     setCargando(true);
-    const [productosRes, categoriasRes, subcategoriasRes, portadasRes] = await Promise.all([
+    const [productosRes, categoriasRes, subcategoriasRes, portadasRes, franquiciaRes] = await Promise.all([
       supabase
         .from("productos")
         .select("id, sku, nombre, categoria, categoria_id, subcategoria, subcategoria_id, talla, color, stock_minimo, precio, activo")
@@ -102,6 +106,11 @@ export default function ProductosCliente() {
       cargarPortadasProductos(supabase)
         .then((data) => ({ data, error: null }))
         .catch((error: Error) => ({ data: new Map<string, PortadaProducto>(), error })),
+      supabase
+        .from("productos_creados_franquicia_v109")
+        .select("id, sku, created_at, almacenes(nombre), productos(nombre)")
+        .is("revisado_at", null)
+        .order("created_at", { ascending: false }),
     ]);
 
     const error = productosRes.error || categoriasRes.error || subcategoriasRes.error || portadasRes.error;
@@ -110,7 +119,23 @@ export default function ProductosCliente() {
     if (categoriasRes.data) setCategoriasCatalogo(categoriasRes.data as CategoriaProducto[]);
     if (subcategoriasRes.data) setSubcategoriasCatalogo(subcategoriasRes.data as SubcategoriaProducto[]);
     setPortadas(portadasRes.data);
+    if (franquiciaRes.data) {
+      setCreadosFranquicia(
+        (franquiciaRes.data as unknown as { id: string; sku: string; created_at: string; almacenes: { nombre: string } | null; productos: { nombre: string } | null }[]).map((f) => ({
+          id: f.id, sku: f.sku, nombre: f.productos?.nombre ?? f.sku,
+          almacen: f.almacenes?.nombre ?? null, created_at: f.created_at,
+        }))
+      );
+    }
     setCargando(false);
+  }
+
+  async function marcarRevisado(id: string) {
+    setRevisando(id);
+    const { error } = await supabase.rpc("marcar_revisado_producto_franquicia_v109", { p_id: id });
+    setRevisando(null);
+    if (error) return setMsg({ tipo: "error", texto: error.message });
+    setCreadosFranquicia((actual) => actual.filter((f) => f.id !== id));
   }
 
   useEffect(() => { cargar(); }, []);
@@ -463,6 +488,32 @@ Motivo del cambio (mínimo 10 caracteres):`))?.trim();
           </button>
         </div>
       </div>
+
+      {creadosFranquicia.length > 0 && (
+        <div className="card" style={{ borderLeft: "3px solid #d97706" }}>
+          <h3 style={{ margin: "0 0 8px" }}>Creados por franquicia sin revisar ({creadosFranquicia.length})</h3>
+          <div className="tabla-scroll">
+            <table>
+              <thead><tr><th>SKU</th><th>Producto</th><th>Local</th><th>Creado</th><th></th></tr></thead>
+              <tbody>
+                {creadosFranquicia.map((f) => (
+                  <tr key={f.id}>
+                    <td><strong>{f.sku}</strong></td>
+                    <td>{f.nombre}</td>
+                    <td>{f.almacen ?? "—"}</td>
+                    <td>{new Date(f.created_at).toLocaleString("es-EC")}</td>
+                    <td>
+                      <button className="secondary" disabled={revisando === f.id} onClick={() => void marcarRevisado(f.id)}>
+                        {revisando === f.id ? "Guardando…" : "Marcar revisado"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {mostrarImportacion && (
         <ImportarCatalogo

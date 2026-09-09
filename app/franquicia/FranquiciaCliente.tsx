@@ -220,7 +220,11 @@ export default function FranquiciaCliente({
             </>
           )}
           {tabActiva === "inventario" && puedeInventario && (
-            <InventarioFranquicia franquicia={franquicia} soloLectura={esRevision || !editaInventario} />
+            <InventarioFranquicia
+              franquicia={franquicia}
+              soloLectura={esRevision || !editaInventario}
+              puedeCrearProducto={tienePermiso(perfil, "productos.crear")}
+            />
           )}
           {tabActiva === "cartera" && puedeCobros && <CarteraFranquicia franquicia={franquicia} soloLectura={esRevision} />}
           {tabActiva === "conteo" && puedeConteo && <ConteoFranquicia franquicia={franquicia} soloLectura={esRevision} />}
