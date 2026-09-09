@@ -162,7 +162,7 @@ begin
   ) select jsonb_build_object('total',(select count(*)from f),'pagina',v_pag,'por_pagina',v_lim,
     'estados',coalesce((select jsonb_agg(e order by e)from(select distinct estado e from public.contratos where btrim(estado)<>'')q),'[]'::jsonb),
     'filas',coalesce((select jsonb_agg(jsonb_build_object('id',id,'numero',numero,'cliente',cliente,'vendedor',vendedor,'disenador',disenador,'estado',estado,'prioridad',prioridad,'fecha_ingreso',fecha_ingreso,'fecha_inicio',fecha_inicio_produccion,'fecha_entrega',fecha_entrega,'total_prendas',total_prendas,'presupuesto',presupuesto,'abono',abono,'saldo',greatest(presupuesto-abono,0),'mockup_drive_id',mockup_drive_id,'mockup_url',mockup_url,'updated_at',updated_at)order by fecha_entrega desc nulls last,numero desc)from p),'[]'::jsonb)
-  into v_r;return v_r;
+  ) into v_r;return v_r;
 end;$fn$;
 
 create or replace function public.obtener_plantilla_contrato_v108(p_contrato_id uuid)
