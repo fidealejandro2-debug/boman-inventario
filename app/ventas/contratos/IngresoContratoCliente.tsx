@@ -191,6 +191,16 @@ function cuentaGrupo(arr:Jugador[],desde:number){
  for(let k=desde;k<arr.length;k++){if(grupoPrendaJugador(arr[k].tipo_uniforme)!==g||arr[k].calidad!==cal)break;n++}
  return n;
 }
+// Importacion desde Excel: el legado tolera encabezados escritos de varias
+// formas y normaliza tallas mal escritas antes de validar, avisando fila por
+// fila. Sin esto, un Excel con "XXL" o "Talla Sup" entra vacio y en silencio.
+const normTexto=(v:unknown)=>String(v??"").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+function matchCI(val:string,lista:string[]){const nv=normTexto(val);if(!nv)return undefined;return lista.find(x=>normTexto(x)===nv)||lista.find(x=>normTexto(x).startsWith(nv))}
+const CATEGORIAS_EXCEL:Record<string,string>={hombre:"Hombre",h:"Hombre",mujer:"Mujer",m:"Mujer",nino:"Niño",n:"Niño",nina:"Niña"};
+const ALIAS_TALLA:Record<string,string>={XXL:"2XL",XXXL:"3XL",XXXXL:"4XL","2XLL":"2XL",EG:"XL",EEG:"2XL"};
+// Se conservan los espacios internos para que "28 (4)" (tallas de niño) coincida.
+function normTalla(t:unknown){const tr=String(t??"").trim().toUpperCase();return ALIAS_TALLA[tr.replace(/\s+/g,"")]||tr}
+function colExcel(fila:Record<string,unknown>,...nombres:string[]){for(const k of Object.keys(fila))if(nombres.includes(normTexto(k)))return String(fila[k]??"").trim();return ""}
 // ── FACTURACION ───────────────────────────────────────────────────────────
 // El legado no deja guardar si el detalle de facturacion no CUADRA con las
 // prendas del contrato: cada concepto equivale a n unidades de una categoria
@@ -358,8 +368,69 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
  function agregarFact(){setForm(f=>({...f,facturacion:[...f.facturacion,{id:uuid(),concepto:"Uniforme completo",calidad:f.prendas[0]?.calidad||"Amateur",cantidad:1,obsequio:false}]}))}
  function seleccionar(tipo:"mockup"|"logo",files:FileList|null){if(!files)return;const limite=tipo==="mockup"?10:20;const nuevos=Array.from(files).slice(0,limite).map(file=>({id:uuid(),tipo,file,preview:file.type.startsWith("image/")?URL.createObjectURL(file):undefined,descripcion:file.name.replace(/\.[^.]+$/,""),color:"",prenda:"",posicion:"",tecnica:"",calidad_aplicable:"Todas",observacion:""}));setForm(f=>({...f,archivos:[...f.archivos,...nuevos]}))}
 
- async function importarJugadores(file:File){try{const XLSX=await import("xlsx");const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(wb.Sheets[wb.SheetNames[0]],{defval:""});if(!rows.length)throw new Error("La hoja no contiene filas");const jugadores:Jugador[]=rows.map(r=>({id:uuid(),nombre:texto(r.Nombre||r.NOMBRE),numero:texto(r.Numero||r.Número||r.NUMERO),categoria:texto(r.Categoria||r.Categoría)||"Hombre",talla_superior:texto(r.Talla_superior||r["Talla camiseta"]),talla_inferior:texto(r.Talla_inferior||r["Talla pantaloneta"]),manga:texto(r.Manga)||"Corta",calidad:texto(r.Calidad)||"Amateur",modelo_arquero:texto(r.Modelo_arquero),tipo_uniforme:texto(r.Tipo_uniforme)||"Uniforme completo",detalle:texto(r.Detalle),mockup:texto(r.Mockup)}));setForm(f=>({...f,jugadores}));await mostrarAvisoDialogo(`Se cargaron ${jugadores.length} jugador(es).`,"Excel procesado")}catch(e){await mostrarAvisoDialogo(e instanceof Error?e.message:"No se pudo leer el archivo","Excel inválido",true)}}
- async function plantillaJugadores(){const XLSX=await import("xlsx");const ws=XLSX.utils.json_to_sheet([{Nombre:"",Numero:"",Categoria:"Hombre",Talla_superior:"M",Talla_inferior:"M",Manga:"Corta",Calidad:"Amateur",Modelo_arquero:"",Tipo_uniforme:"Uniforme completo",Detalle:"",Mockup:"Mockup 1"}]);ws["!cols"]=[24,10,14,16,16,12,18,18,24,28,16].map(wch=>({wch}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Jugadores");XLSX.writeFile(wb,"plantilla_jugadores_boman.xlsx")}
+ async function importarJugadores(file:File){
+  try{
+   const XLSX=await import("xlsx");
+   const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+   const filas=XLSX.utils.sheet_to_json<Record<string,unknown>>(wb.Sheets[wb.SheetNames[0]],{defval:""});
+   if(!filas.length)throw new Error("El archivo no tiene filas de datos.");
+   const avisos:string[]=[];const jugadores:Jugador[]=[];
+   const mockupsActuales=mockupsDe(form).map(m=>m.descripcion);
+   filas.forEach((fila,i)=>{
+    const nFila=i+2; // +1 encabezado, +1 indice base 0
+    const nombre=colExcel(fila,"nombre");
+    const numero=colExcel(fila,"número","numero","#");
+    const supRaw=colExcel(fila,"talla superior","t.sup","talla sup","talla camiseta","t.cam","talla cam","talla");
+    const infRaw=colExcel(fila,"talla inferior","t.inf","talla inf","talla pantaloneta","talla pant","t.pant","talla pant.");
+    // Solo se ignora la fila si esta TOTALMENTE vacia: una camiseta sin nombre
+    // ni numero pero con talla es valida (camiseta generica de esa talla).
+    if(!nombre&&!numero&&!supRaw&&!infRaw)return;
+    const quien=nombre||(numero?`#${numero}`:"sin nombre");
+    const j:Jugador={id:uuid(),nombre,numero,categoria:"Hombre",talla_superior:"",talla_inferior:"",manga:"Corta",calidad:"",modelo_arquero:"N/A",tipo_uniforme:"",detalle:colExcel(fila,"detalle/variante","detalle variante","detalle","variante"),mockup:""};
+
+    const catRaw=colExcel(fila,"categoría","categoria","categ.","categ");
+    const cat=CATEGORIAS_EXCEL[normTexto(catRaw)];
+    if(cat)j.categoria=cat; else if(catRaw)avisos.push(`Fila ${nFila}: categoría "${catRaw}" no reconocida, se dejó "Hombre"`);
+
+    const tallasValidas=[...ADULTOS,...NINOS];
+    const sup=normTalla(supRaw),inf=normTalla(infRaw||supRaw);
+    if(supRaw){
+     if(tallasValidas.includes(sup))j.talla_superior=sup;
+     else avisos.push(`⛔ Fila ${nFila} — ${quien}: la TALLA SUPERIOR "${supRaw}" está mal escrita → se subió SIN talla. Corrígela en el Excel (usa XS, S, M, L, XL, 2XL, 3XL, 4XL) y vuelve a subir.`);
+    }
+    if(inf&&tallasValidas.includes(inf))j.talla_inferior=inf;
+    else if(infRaw)avisos.push(`⛔ Fila ${nFila} — ${quien}: la TALLA INFERIOR "${infRaw}" está mal escrita → se subió SIN talla.`);
+
+    const cal=colExcel(fila,"calidad");const calM=matchCI(cal,CALIDADES);
+    if(calM)j.calidad=calM; else if(cal)avisos.push(`Fila ${nFila}: calidad "${cal}" no reconocida`);
+    const arq=colExcel(fila,"mod. arquero","mod arquero","modelo arquero","arquero");
+    const arqM=matchCI(arq,MODELOS_ARQUERO.flatMap(g=>g.modelos));
+    if(arqM)j.modelo_arquero=arqM; else if(arq)avisos.push(`Fila ${nFila}: modelo arquero "${arq}" no reconocido`);
+    const tu=colExcel(fila,"tipo uniforme","tipo de uniforme");const tuM=matchCI(tu,TIPOS_UNIFORME);
+    if(tuM)j.tipo_uniforme=tuM; else if(tu)avisos.push(`Fila ${nFila}: tipo de uniforme "${tu}" no reconocido`);
+    const manga=colExcel(fila,"manga");const mangaM=matchCI(manga,["Corta","Larga"]);
+    if(mangaM)j.manga=mangaM; else if(manga)avisos.push(`Fila ${nFila}: manga "${manga}" no reconocida (usa Corta o Larga)`);
+    const mk=colExcel(fila,"mockup","mock");
+    if(mk){j.mockup=mk;if(!mockupsActuales.includes(mk))mockupsActuales.push(mk)}
+    jugadores.push(j);
+   });
+   if(!jugadores.length)throw new Error("Ninguna fila tenía datos utilizables.");
+   // El legado ordena solo al terminar de cargar.
+   setForm(f=>({...f,jugadores:ordenarJugadores(jugadores)}));
+   await mostrarAvisoDialogo(
+    `Se cargaron ${jugadores.length} jugador(es).`+(avisos.length?`\n\nRevisa ${avisos.length} aviso(s):\n• ${avisos.join("\n• ")}`:""),
+    avisos.length?"Excel procesado con avisos":"Excel procesado", avisos.length>0);
+  }catch(e){await mostrarAvisoDialogo(e instanceof Error?e.message:"No se pudo leer el archivo","Excel inválido",true)}
+ }
+ async function plantillaJugadores(){
+  // Los encabezados son EXACTAMENTE los que reconoce colExcel al importar: si
+  // aqui dijeran "Talla_superior" y alla se busca "talla superior", la plantilla
+  // propia se subiria vacia.
+  const XLSX=await import("xlsx");
+  const ws=XLSX.utils.json_to_sheet([{"Nombre":"","Número":"","Categoría":"Hombre","Talla superior":"M","Talla inferior":"M","Manga":"Corta","Calidad":"Semiprofesional","Mod. arquero":"","Tipo uniforme":"Uniforme completo","Detalle/variante":"","Mockup":"Mockup 1"}]);
+  ws["!cols"]=[24,10,14,16,16,12,18,18,24,28,16].map(wch=>({wch}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Jugadores");XLSX.writeFile(wb,"plantilla_jugadores_boman.xlsx");
+ }
 
  async function guardar(){const falla=[0,1,2,4,6].map(errorPaso).find(Boolean);if(falla)return mostrarAvisoDialogo(falla,"Contrato incompleto",true);if(!await confirmarDialogo(`Se registrará un contrato nuevo con ${total} prendas y saldo de $${saldo.toFixed(2)}. ¿Continuar?`))return;setGuardando(true);try{const archivos:any[]=[];for(let orden=0;orden<form.archivos.length;orden++){const a=form.archivos[orden];if(!a.file){archivos.push({...a,orden});continue}const key=uuid();const prep=await supabase.rpc("preparar_archivo_contrato_v108",{p_nombre_archivo:a.file.name,p_mime_type:a.file.type,p_tamano_bytes:a.file.size,p_idempotency_key:key});if(prep.error)throw prep.error;const path=(prep.data as any).path;const subida=await supabase.storage.from("contratos-archivos").upload(path,a.file,{contentType:a.file.type,upsert:false});if(subida.error)throw subida.error;archivos.push({...a,file:undefined,preview:undefined,pendiente_id:(prep.data as any).id,url:supabase.storage.from("contratos-archivos").getPublicUrl(path).data.publicUrl,orden})}
   const mapa=new Map<string,Prenda>();for(const x of form.prendas){const k=[x.prenda,x.calidad,x.detalle,x.genero,x.talla].join("¦");const anterior=mapa.get(k);mapa.set(k,{...x,cantidad:(anterior?.cantidad||0)+Number(x.cantidad)})}
