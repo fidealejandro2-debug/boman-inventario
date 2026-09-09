@@ -92,6 +92,7 @@ export default function CajaFranquicia({
   franquicia,
   soloLectura = false,
   esAdmin = false,
+  puedeReabrir = false,
   puedeConciliar = false,
 }: {
   /**
@@ -104,6 +105,8 @@ export default function CajaFranquicia({
   soloLectura?: boolean;
   /** Admin puede reabrir un dia cerrado aunque este en modo revision (el backend ya se lo permite). */
   esAdmin?: boolean;
+  /** Solo el titular de la franquicia o Administracion autorizan una reapertura. */
+  puedeReabrir?: boolean;
   /** Administración y Control pueden confirmar que el depósito llegó al banco. */
   puedeConciliar?: boolean;
 }) {
@@ -334,6 +337,13 @@ export default function CajaFranquicia({
   }
 
   async function reabrirCaja(cierre: Cierre) {
+    if (!puedeReabrir) {
+      return mostrarAvisoDialogo(
+        "Solo el franquiciado titular o un administrador pueden autorizar la reapertura de una caja cerrada.",
+        "Reapertura restringida",
+        true
+      );
+    }
     const motivo = (await pedirMotivoDialogo("Motivo de reapertura (minimo 10 caracteres). La accion queda auditada:"))?.trim();
     if (!motivo) return;
     if (motivo.length < 10) return setError("El motivo debe tener al menos 10 caracteres.");
@@ -358,11 +368,14 @@ export default function CajaFranquicia({
     return totales;
   }, [depositos]);
 
-  const cierresConEfectivo = useMemo(() => cierres.filter((cierre) =>
+  const cierresPendientes = useMemo(() => cierres.filter((cierre) =>
     cierre.estado === "cerrado"
-      && cierre.fecha < hoyLocalISO()
       && Number(cierre.efectivo_contado) - (depositadoPorCierre.get(cierre.id) ?? 0) >= 0.01
   ), [cierres, depositadoPorCierre]);
+  const cierresConEfectivo = useMemo(
+    () => cierresPendientes.filter((cierre) => cierre.fecha < hoyLocalISO()),
+    [cierresPendientes]
+  );
 
   const cierreDeposito = cierres.find((item) => item.id === deposito.cierreId);
   const disponibleDeposito = cierreDeposito
@@ -467,13 +480,14 @@ export default function CajaFranquicia({
         className={`card-interna fq-caja-cierre ${soloLectura ? "fq-caja-supervision" : ""}`}
       >
         <div className="fq-caja-cabecera">
-          <h4>Cierre diario de efectivo</h4>
+          <h4>Cierre general del local</h4>
           {soloLectura && <span className="badge fq-badge-supervision">Vista de supervisión</span>}
         </div>
         <p className="ayuda">
           El sistema toma solamente los cobros y pagos en efectivo para calcular lo
-          esperado. Transferencias y tarjetas quedan en el total del dia, pero no en
-          el dinero que debe estar fisicamente en caja.
+          esperado. Este consolidado se confirma una vez terminados los turnos del día.
+          Transferencias y tarjetas quedan en el total, pero no en el dinero que debe
+          estar físicamente en caja.
         </p>
         <div className={`form-grid ${soloLectura ? "fq-fecha-revision" : ""}`}>
           <label>
@@ -551,7 +565,7 @@ export default function CajaFranquicia({
             <span className="label">Diferencia</span>
           </div>
         </div>
-        {soloLectura && cierreSeleccionado?.estado === "cerrado" && esAdmin ? (
+        {soloLectura && cierreSeleccionado?.estado === "cerrado" && puedeReabrir ? (
           <div className="filtros">
             <span className="badge ok">Dia cerrado</span>
             <span>
@@ -563,7 +577,7 @@ export default function CajaFranquicia({
               disabled={guardando}
               onClick={() => reabrirCaja(cierreSeleccionado)}
             >
-              Reabrir con motivo
+              Autorizar reapertura
             </button>
           </div>
         ) : soloLectura ? (
@@ -578,13 +592,15 @@ export default function CajaFranquicia({
               Contado {dinero(cierreSeleccionado.efectivo_contado)} · diferencia{" "}
               {dinero(cierreSeleccionado.diferencia)}
             </span>
-            <button
-              className="secondary"
-              disabled={guardando}
-              onClick={() => reabrirCaja(cierreSeleccionado)}
-            >
-              Reabrir con motivo
-            </button>
+            {puedeReabrir && (
+              <button
+                className="secondary"
+                disabled={guardando}
+                onClick={() => reabrirCaja(cierreSeleccionado)}
+              >
+                Autorizar reapertura
+              </button>
+            )}
           </div>
         ) : (
           <button onClick={cerrarCaja} disabled={guardando}>
@@ -713,7 +729,7 @@ export default function CajaFranquicia({
                   <td className="num">{dinero(c.efectivo_contado)}</td>
                   <td className="num"><strong>{dinero(c.diferencia)}</strong></td>
                   <td>
-                    {c.estado === "cerrado" && (
+                    {c.estado === "cerrado" && puedeReabrir && (
                       <button
                         className="btn-mini secondary"
                         disabled={guardando}
@@ -767,19 +783,26 @@ export default function CajaFranquicia({
                   }}
                 >
                   <option value="">Selecciona un cierre</option>
-                  {cierresConEfectivo.map((cierre) => {
+                  {cierresPendientes.map((cierre) => {
                     const restante = Number(cierre.efectivo_contado)
                       - (depositadoPorCierre.get(cierre.id) ?? 0);
+                    const disponibleManana = cierre.fecha >= hoyLocalISO();
                     return (
-                      <option key={cierre.id} value={cierre.id}>
+                      <option key={cierre.id} value={cierre.id} disabled={disponibleManana}>
                         {cierre.fecha.split("-").reverse().join("/")} · pendiente {dinero(restante)}
+                        {disponibleManana ? ` · disponible desde ${diaSiguienteISO(cierre.fecha).split("-").reverse().join("/")}` : ""}
                       </option>
                     );
                   })}
                 </select>
-                {!cierresConEfectivo.length && (
+                {!cierresPendientes.length && (
                   <small className="ayuda">
-                    No hay cierres anteriores con efectivo pendiente de depositar.
+                    No hay cierres con efectivo pendiente de depositar.
+                  </small>
+                )}
+                {!!cierresPendientes.length && !cierresConEfectivo.length && (
+                  <small className="ayuda">
+                    El cierre de hoy sí está registrado. Se habilita mañana para no modificar un día ya cerrado.
                   </small>
                 )}
               </label>

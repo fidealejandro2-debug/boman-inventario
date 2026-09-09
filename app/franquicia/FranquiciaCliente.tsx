@@ -128,7 +128,7 @@ export default function FranquiciaCliente({
   const pestanas: { id: Pestana; etiqueta: string; visible: boolean }[] = [
     { id: "ventas", etiqueta: "Venta rápida", visible: puedeVender },
     { id: "factura", etiqueta: "Factura XML", visible: puedeVender },
-    { id: "caja", etiqueta: "Caja", visible: puedeCaja },
+    { id: "caja", etiqueta: "Caja", visible: puedeCaja || puedeTurnos },
     { id: "cartera", etiqueta: "Crédito y cobros", visible: puedeCobros },
     { id: "mensual", etiqueta: "Mensual", visible: puedeCaja },
     { id: "inventario", etiqueta: "Inventario", visible: puedeInventario },
@@ -184,10 +184,6 @@ export default function FranquiciaCliente({
               </button>
             ))}
           </div>
-          {puedeTurnos && ["ventas", "factura", "caja", "cartera"].includes(tabActiva ?? "") && (
-            <TurnoCajaFranquicia franquicia={franquicia} soloLectura={esRevision} />
-          )}
-
           {tabActiva === "ventas" && puedeVender && (
             <VentasFranquicia
               franquicia={franquicia}
@@ -203,13 +199,25 @@ export default function FranquiciaCliente({
               puedeCredito={tienePermiso(perfil, "franquicia.cobros")}
             />
           )}
-          {tabActiva === "caja" && puedeCaja && (
-            <CajaFranquicia
-              franquicia={franquicia}
-              soloLectura={esRevision}
-              esAdmin={rol === "admin"}
-              puedeConciliar={["admin", "control"].includes(rol)}
-            />
+          {tabActiva === "caja" && (puedeCaja || puedeTurnos) && (
+            <>
+              {puedeTurnos && (
+                <TurnoCajaFranquicia
+                  franquicia={franquicia}
+                  soloLectura={esRevision}
+                  puedeAutorizarReapertura={rol === "franquiciado" || rol === "admin"}
+                />
+              )}
+              {puedeCaja && (
+                <CajaFranquicia
+                  franquicia={franquicia}
+                  soloLectura={esRevision}
+                  esAdmin={rol === "admin"}
+                  puedeReabrir={rol === "franquiciado" || rol === "admin"}
+                  puedeConciliar={["admin", "control"].includes(rol)}
+                />
+              )}
+            </>
           )}
           {tabActiva === "inventario" && puedeInventario && (
             <InventarioFranquicia franquicia={franquicia} soloLectura={esRevision || !editaInventario} />
