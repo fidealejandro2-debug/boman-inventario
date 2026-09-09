@@ -259,6 +259,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     { id: "ventas", etiqueta: "Ventas", opciones: [
       { href: "/ventas", etiqueta: "Facturas XML", descripcion: "Conciliación SRI e inventario", visible: puedeVerVentas },
       { href: "/ventas/contratos", etiqueta: "Ingreso de contratos", descripcion: "Nuevo pedido, brief, tallas y diseños", visible: tienePermiso(perfil, "contratos.editar") && modoBoman },
+      { href: "/ventas/seguimiento", etiqueta: "Panel de vendedores", descripcion: "Entregas, mockups, prendas y saldos", visible: tienePermiso(perfil, "contratos.acceder") && modoBoman },
+      { href: "/ventas/entregas", etiqueta: "Despachos y entregas", descripcion: "Entregas parciales, evidencias y reversión", visible: (tienePermiso(perfil, "contratos.entregar") || tienePermiso(perfil, "contratos.revertir_entrega")) && modoBoman },
       { href: "/tienda", etiqueta: "Caja de tienda", descripcion: "Ingresos, egresos y cierre diario", visible: puedeVerCajaTienda },
     ] },
     { id: "compras", etiqueta: "Compras", opciones: [

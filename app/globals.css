@@ -410,6 +410,9 @@ button.secondary {
 
 button.secondary:hover { color: var(--azul-fuerte); background: var(--azul-suave); border-color: color-mix(in srgb, var(--azul) 45%, var(--borde)); }
 
+button.danger { background: #b91c1c; }
+button.danger:hover { background: #991b1b; }
+
 label {
   display: block;
   font-size: 12px;
