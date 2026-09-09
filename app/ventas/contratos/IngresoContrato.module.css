@@ -149,3 +149,14 @@
 .celdaTotal{background:#fffbeb;font-weight:800;font-variant-numeric:tabular-nums;padding:5px 4px!important}
 .filaTotal th,.filaTotal td{background:var(--superficie-suave);font-weight:900;padding:6px 4px!important;font-variant-numeric:tabular-nums}
 @media(max-width:900px){.tablasTalla{grid-template-columns:1fr}.lineaCab{grid-template-columns:1fr 1fr}}
+.factOk{padding:9px 12px;border:1px solid #10b981;background:#ecfdf5;color:#065f46;border-radius:8px;font-size:.82rem;font-weight:700}
+.factMal{display:grid;gap:3px;padding:10px 12px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:8px;font-size:.82rem}
+
+/* Nomina de jugadores: 12 columnas como el legado */
+.tablaJug{display:grid;gap:5px;overflow-x:auto;padding-bottom:4px}
+.jugCab,.jugFila{display:grid;grid-template-columns:26px minmax(120px,1.3fr) 56px 84px 76px 76px 74px 108px 128px 132px minmax(110px,1fr) 116px 34px;gap:5px;align-items:center;min-width:1240px}
+.jugCab{position:sticky;top:0;background:var(--azul);color:#fff;padding:6px 4px;border-radius:7px;font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.2px}
+.jugCab span{padding:0 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jugFila>b{text-align:center;font-size:.75rem;color:var(--texto-secundario)}
+.jugFila input,.jugFila select{font-size:.78rem;padding:5px 6px;min-width:0}
+.jugFila button{padding:5px 8px;font-size:.8rem}

@@ -82,6 +82,136 @@ const ADICIONALES:{clave:keyof Adic;titulo:string;opciones:string[];etiquetaCant
 ];
 type Adic={medias:string;polainas:string;antideslizantes:string;banda_capitan:string;banderin:string;bandera:string;bolsos:string};
 type AdicCant=Record<keyof Adic,number>;
+// ── JUGADORES: catalogos y automatismos del legado ────────────────────────
+const MODELOS_ARQUERO:{grupo:string;modelos:string[]}[]=[
+ {grupo:"ONC",modelos:["ONC25001","ONC25002","ONC25003","ONC25004","ONC25005","ONC25006","ONC25007"]},
+ {grupo:"BM",modelos:Array.from({length:55},(_,i)=>"BM25"+String(i+1).padStart(3,"0"))},
+ {grupo:"MAC",modelos:["MAC25001","MAC25002","MAC25003"]},
+ {grupo:"TAC",modelos:["TAC25001","TAC25002","TAC25003"]},
+ {grupo:"HLA",modelos:["HLA25001","HLA25002","HLA25003"]},
+ {grupo:"QU",modelos:["QU25001","QU25002","QU25003","QU25004"]},
+ {grupo:"Otro",modelos:["Modelo personalizado"]},
+];
+// Que prendas implica cada tipo de uniforme (claves en minusculas, igual que
+// el legado). "Exterior" se reparte en Chompa (talla superior) + Pantalon.
+const TIPO_A_PRENDAS:Record<string,string[]>={
+ "uniforme completo":["Camiseta Jugador","Pantaloneta Jugador"],
+ "uniforme completo (falda short)":["Camiseta Jugador","Falda Short"],
+ "bvd + pantaloneta":["BVDS","Pantaloneta Jugador"],
+ "bvd con falda short":["BVDS","Falda Short"],
+ "polo + pantaloneta":["Camiseta Polo","Pantaloneta Jugador"],
+ "camiseta + bermuda":["Camiseta Jugador","Bermudas"],
+ "polo + bermuda":["Camiseta Polo","Bermudas"],
+ "bvd + bermuda":["BVDS","Bermudas"],
+ "solo bermuda":["Bermudas"],
+ "camiseta + exterior":["Camiseta Jugador","Chompa","Pantalón"],
+ "polo + exterior":["Camiseta Polo","Chompa","Pantalón"],
+ "solo camiseta":["Camiseta Jugador"],"solo polo":["Camiseta Polo"],
+ "solo pantaloneta":["Pantaloneta Jugador"],"solo falda short":["Falda Short"],
+ "solo pantalón":["Pantalón"],"solo bvd":["BVDS"],
+ "chompa":["Chompa"],"chompa de frío":["Chompa de Frío"],"chompa retro":["Chompas Retro"],
+ "buzo de compresión":["Buzo de Compresión"],"chaleco":["Chaleco"],
+ "exterior completo":["Chompa","Pantalón"],
+ "arquero completo":["Camiseta Arquero","Pantaloneta Arquero"],
+ "personalizado":["Camiseta Jugador"],
+ "":["Camiseta Jugador","Pantaloneta Jugador"],
+};
+// Estas toman la talla INFERIOR del jugador; el resto, la superior.
+const PRENDAS_TALLA_INFERIOR=new Set(["Pantaloneta Jugador","Pantaloneta Arquero","Falda Short","Pantalón","Bermudas","Licra"]);
+const ORDEN_TIPO_UNIFORME=["Uniforme completo","Uniforme completo (Falda Short)","Arquero completo","Camiseta + Bermuda","Camiseta + Exterior","Solo camiseta","Polo + Bermuda","Polo + Pantaloneta","Polo + Exterior","Solo Polo","BVD + Bermuda","BVD + Pantaloneta","BVD con Falda Short","Solo BVD","Solo pantaloneta","Solo Falda Short","Solo bermuda","Solo pantalón","Chompa","Chompa de Frío","Chaleco","Exterior completo","Personalizado"];
+const ORDEN_GENERO:Record<string,number>={"Hombre":0,"Mujer":1,"Niño":2,"Niña":2};
+// Competicion primero: va en otra maquina.
+const ORDEN_CALIDAD=["Competición","Profesional","Semiprofesional","Estándar","Amateur"];
+const ORDEN_MANGA:Record<string,number>={"Corta":0,"":0,"Larga":1};
+function ordenTalla(t:string){const i=ADULTOS.indexOf(t);if(i>=0)return i;const j=NINOS.indexOf(t);return j>=0?100+j:200}
+function ordenarJugadores(js:Jugador[]):Jugador[]{
+ const idx=(arr:string[],v:string)=>{const i=arr.indexOf(v);return i<0?arr.length:i};
+ return [...js].sort((a,b)=>
+  idx(ORDEN_TIPO_UNIFORME,a.tipo_uniforme)-idx(ORDEN_TIPO_UNIFORME,b.tipo_uniforme)
+  ||idx(ORDEN_CALIDAD,a.calidad)-idx(ORDEN_CALIDAD,b.calidad)
+  ||(ORDEN_GENERO[a.categoria]??9)-(ORDEN_GENERO[b.categoria]??9)
+  ||(ORDEN_MANGA[a.manga]??0)-(ORDEN_MANGA[b.manga]??0)
+  ||ordenTalla(a.talla_superior)-ordenTalla(b.talla_superior)
+  ||a.nombre.localeCompare(b.nombre,"es"));
+}
+// Recalcula la matriz de tallas desde la nomina, con las mismas reglas del
+// legado: modelo de arquero remapea a prendas de arquero, manga larga cuenta
+// como prenda "M/L" aparte, y "Personalizado" suma segun que tallas se
+// llenaron. Reemplaza lo que hubiera: es un recalculo, no una suma encima.
+function tallasDesdeJugadores(jugadores:Jugador[]):Linea[]{
+ const mapa=new Map<string,Linea>();
+ for(const j of jugadores){
+  const cal=texto(j.calidad);
+  const tallaSup=texto(j.talla_superior),tallaInfRaw=texto(j.talla_inferior);
+  const tallaInf=tallaInfRaw||tallaSup;
+  const tipo=texto(j.tipo_uniforme).toLowerCase();
+  const arq=texto(j.modelo_arquero),mangaLarga=texto(j.manga)==="Larga";
+  let prendas=tipo==="personalizado"
+   ?[...(tallaSup?["Camiseta Jugador"]:[]),...(tallaInfRaw?["Pantaloneta Jugador"]:[])]
+   :(TIPO_A_PRENDAS[tipo]||TIPO_A_PRENDAS["uniforme completo"]);
+  if(arq&&arq!=="N/A")prendas=prendas.map(p=>p==="Camiseta Jugador"?"Camiseta Arquero":p==="Pantaloneta Jugador"?"Pantaloneta Arquero":p);
+  if(mangaLarga)prendas=prendas.map(p=>p==="Camiseta Jugador"?"Camiseta Jugador M/L":p==="Camiseta Arquero"?"Camiseta Arquero M/L":p==="Camiseta Polo"?"Camiseta Polo M/L":p);
+  for(const prenda of prendas){
+   const talla=PRENDAS_TALLA_INFERIOR.has(prenda)?tallaInf:tallaSup;
+   if(!talla)continue;
+   const clave=`${prenda}|${cal}`;
+   let l=mapa.get(clave);
+   if(!l){l=lineaNueva(prenda,cal);mapa.set(clave,l)}
+   const esNino=NINOS.includes(talla)||j.categoria==="Niño"||j.categoria==="Niña";
+   if(esNino){
+    if(NINOS.includes(talla))l.ninos[talla]=(l.ninos[talla]||0)+1;
+    else{const slot=l.espN.find(e=>e.nombre===talla)||l.espN.find(e=>!e.nombre);if(slot){slot.nombre=talla;slot.N+=1}}
+   }else{
+    const g:"H"|"M"=j.categoria==="Mujer"?"M":"H";
+    if(ADULTOS.includes(talla)){const c=l.adultos[talla]||{H:0,M:0};c[g]+=1;l.adultos[talla]=c}
+    else{const slot=l.espA.find(e=>e.nombre===talla)||l.espA.find(e=>!e.nombre);if(slot){slot.nombre=talla;slot[g]+=1}}
+   }
+  }
+ }
+ return Array.from(mapa.values());
+}
+// ── FACTURACION ───────────────────────────────────────────────────────────
+// El legado no deja guardar si el detalle de facturacion no CUADRA con las
+// prendas del contrato: cada concepto equivale a n unidades de una categoria
+// (un "Uniforme completo" = 1 Camiseta + 1 Pantaloneta), y se compara categoria
+// por categoria y calidad por calidad. Los conceptos con c:null (bandera,
+// medias, cinta...) se listan pero no se validan: no tienen talla contra la
+// cual cuadrar.
+const CAT_PRENDA_FACT:Record<string,string>={"Camiseta Jugador":"Camiseta","Camiseta Jugador M/L":"Camiseta","Camiseta Polo":"Polo","Camiseta Polo M/L":"Polo","Camiseta Arquero":"Camiseta Arquero","Camiseta Arquero M/L":"Camiseta Arquero","Pantaloneta Jugador":"Pantaloneta","Pantaloneta Arquero":"Pantaloneta Arquero","Falda Short":"Falda","Pantalón":"Pantalón","Pantalon":"Pantalón","Bermudas":"Bermuda","BVDS":"BVD","Chompa":"Chompa","Exterior Completo":"Chompa","Chompa de Frío":"Chompa de Frío","Chompa Frío 3/4":"Chompa Frío 3/4","Rompevientos":"Chompa de Lluvia","Chompas Retro":"Retro","Chompa Deportiva":"Chompa","Hoodie":"Hoodie","Chaleco":"Chaleco","Buzo de Compresión":"Buzo de Compresión","Bolsos":"Bolso"};
+const catFact=(p:string)=>CAT_PRENDA_FACT[p]||String(p||"");
+const CONCEPTOS_FACT:{l:string;c:Record<string,number>|null}[]=[
+ {l:"Uniforme completo",c:{"Camiseta":1,"Pantaloneta":1}},{l:"Uniforme completo futbol",c:{"Camiseta":1,"Pantaloneta":1}},
+ {l:"Uniforme completo basquet",c:{"Camiseta":1,"Pantaloneta":1}},{l:"Uniforme completo con bermuda",c:{"Camiseta":1,"Bermuda":1}},
+ {l:"Uniforme completo con bermuda (polo)",c:{"Polo":1,"Bermuda":1}},{l:"Uniforme completo (Falda Short)",c:{"Camiseta":1,"Falda":1}},
+ {l:"Uniforme completo (BVD)",c:{"BVD":1,"Pantaloneta":1}},{l:"Arquero completo",c:{"Camiseta Arquero":1,"Pantaloneta Arquero":1}},
+ {l:"Camiseta Arquero",c:{"Camiseta Arquero":1}},{l:"Pantaloneta Arquero",c:{"Pantaloneta Arquero":1}},
+ {l:"Camiseta",c:{"Camiseta":1}},{l:"Camiseta Polo",c:{"Polo":1}},{l:"Pantaloneta",c:{"Pantaloneta":1}},
+ {l:"Falda Short",c:{"Falda":1}},{l:"Pantalón",c:{"Pantalón":1}},{l:"Bermuda",c:{"Bermuda":1}},{l:"BVD",c:{"BVD":1}},
+ {l:"Chompa (exterior)",c:{"Chompa":1}},{l:"Buzo",c:{"Chompa":1}},{l:"Chompa de Frío",c:{"Chompa de Frío":1}},
+ {l:"Chompa Frío 3/4",c:{"Chompa Frío 3/4":1}},{l:"Chompa de lluvia",c:{"Chompa de Lluvia":1}},{l:"Buzo Retro",c:{"Retro":1}},
+ {l:"Hoodie",c:{"Hoodie":1}},{l:"Buzo de Compresión",c:{"Buzo de Compresión":1}},{l:"Chaleco",c:{"Chaleco":1}},
+ {l:"Exterior completo",c:{"Chompa":1,"Pantalón":1}},{l:"Solo pantalón",c:{"Pantalón":1}},{l:"Solo chompa",c:{"Chompa":1}},
+ {l:"Bolso",c:{"Bolso":1}},{l:"Bandera",c:null},{l:"Banderín",c:null},{l:"Cinta Capitán",c:null},
+ {l:"Medias",c:null},{l:"Polainas",c:null},{l:"Antideslizantes",c:null},
+];
+const SEP_FACT="␟";
+function comprobarFacturacion(prendas:Prenda[],facturacion:Fact[]){
+ const real:Record<string,number>={};
+ for(const l of prendas){if(l.cantidad<=0)continue;const k=`${catFact(l.prenda)}${SEP_FACT}${l.calidad}`;real[k]=(real[k]||0)+l.cantidad}
+ const fact:Record<string,number>={};
+ for(const f of facturacion){
+  const def=CONCEPTOS_FACT.find(x=>x.l===f.concepto);
+  if(!def||!def.c||f.cantidad<=0)continue;
+  for(const cat of Object.keys(def.c)){const k=`${cat}${SEP_FACT}${f.calidad}`;fact[k]=(fact[k]||0)+def.c[cat]*f.cantidad}
+ }
+ const faltan:string[]=[],sobran:string[]=[];
+ for(const k of new Set([...Object.keys(real),...Object.keys(fact)])){
+  const d=(real[k]||0)-(fact[k]||0);if(!d)continue;
+  const [cat,cal]=k.split(SEP_FACT);const etq=`${cat} (${cal||"sin calidad"})`;
+  if(d>0)faltan.push(`${d} ${etq}`);else sobran.push(`${-d} ${etq}`);
+ }
+ return {ok:!faltan.length&&!sobran.length,faltan,sobran,hayPrendas:Object.keys(real).length>0};
+}
 // ── TALLAS ────────────────────────────────────────────────────────────────
 // El legado captura las tallas como una MATRIZ por prenda+calidad (filas de
 // talla x columnas H/M para adultos, N para niños) con 3 tallas especiales de
@@ -190,7 +320,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
   });
  },[form.lineas]);
 
- function errorPaso(n=paso){const c=form.cab;if(n===0&&(!texto(c.vendedor)||!texto(c.cliente)||!texto(c.canal)||!texto(c.telefono)))return"Completa vendedor, canal de venta, cliente/equipo y teléfono.";if(n===1&&(!c.fecha_entrega||!c.tipo_contrato||!c.prioridad))return"Completa tipo, prioridad y fecha de entrega.";if(n===2&&!form.prendasSel.length)return"Selecciona al menos una prenda del pedido.";if(n===5&&(!form.prendas.length||total<1))return"Agrega al menos una línea de talla con cantidad.";if(n===4&&(!c.nombre_tecnica||!c.numero_tecnica||!c.sellos_tpu))return"Completa las técnicas de nombre, número y TPU.";if(n===6&&(!texto(c.vendedor_responsable)||!c.autorizado))return"Confirma el vendedor responsable y la autorización de producción.";if(n===6&&Number(c.abono)>Number(c.presupuesto))return"El abono no puede superar el presupuesto.";return""}
+ function errorPaso(n=paso){const c=form.cab;if(n===0&&(!texto(c.vendedor)||!texto(c.cliente)||!texto(c.canal)||!texto(c.telefono)))return"Completa vendedor, canal de venta, cliente/equipo y teléfono.";if(n===1&&(!c.fecha_entrega||!c.tipo_contrato||!c.prioridad))return"Completa tipo, prioridad y fecha de entrega.";if(n===2&&!form.prendasSel.length)return"Selecciona al menos una prenda del pedido.";if(n===5&&(!form.prendas.length||total<1))return"Agrega al menos una línea de talla con cantidad.";if(n===4&&(!c.nombre_tecnica||!c.numero_tecnica||!c.sellos_tpu))return"Completa las técnicas de nombre, número y TPU.";if(n===6&&(!texto(c.vendedor_responsable)||!c.autorizado))return"Confirma el vendedor responsable y la autorización de producción.";if(n===6&&Number(c.abono)>Number(c.presupuesto))return"El abono no puede superar el presupuesto.";if(n===6){const r=comprobarFacturacion(form.prendas,form.facturacion);if(r.hayPrendas&&!r.ok)return`La facturación no cuadra con las prendas. ${r.faltan.length?"Faltan: "+r.faltan.join(", ")+". ":""}${r.sobran.length?"Sobran: "+r.sobran.join(", ")+".":""}`;}return""}
  async function irSiguiente(){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true);setPaso(x=>Math.min(6,x+1))}
  async function abrirPaso(i:number){if(i>paso){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true)}setPaso(i)}
 
@@ -227,7 +357,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
    {paso===6&&<PasoCierre form={form} setCab={setCab} saldo={saldo} agregar={agregarFact} cambiar={cambiar} quitar={quitar}/>} 
    <footer className={estilos.acciones}><button className="secondary" disabled={paso===0||guardando} onClick={()=>setPaso(x=>x-1)}>Anterior</button><span>Paso {paso+1} de 7 · borrador automático</span>{paso<6?<button onClick={()=>void irSiguiente()}>Continuar</button>:<><button className="secondary" onClick={()=>setPreview(true)}>Revisar</button><button onClick={()=>void guardar()} disabled={guardando}>{guardando?"Subiendo y registrando…":"Registrar contrato"}</button></>}</footer>
   </section>
-  {preview&&<VistaPrevia form={form} total={total} saldo={saldo} cerrar={()=>setPreview(false)}/>} 
+  {preview&&<VistaPrevia form={form} total={total} cerrar={()=>setPreview(false)}/>} 
  </>;
 }
 
@@ -318,8 +448,43 @@ function TarjetaSpec({spec,prendas,mockups,cambiar,quitar}:{spec:Spec;prendas:st
   <label className={estilos.obsSpec}><span>Observación libre</span><textarea rows={2} value={spec.observacion} onChange={e=>cambiar<Spec>("specs",spec.id,{observacion:e.target.value})} placeholder="Lo que se salga de lo estándar para esta prenda…"/></label>
  </article>;
 }
-function PasoJugadores({form,importar,plantilla,agregar,setForm,cambiar,quitar}:{form:Form;importar:(f:File)=>void;plantilla:()=>void;agregar:()=>void;setForm:SetForm;cambiar:Cambiar;quitar:Quitar}){return <><Titulo titulo="Jugadores y personalización" texto="Ingreso manual o carga desde Excel." accion={agregar} etiqueta="+ Jugador"><button className="secondary" onClick={plantilla}>Plantilla Excel</button><label className={estilos.botonArchivo}>Cargar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files?.[0]&&importar(e.target.files[0])}/></label></Titulo>{form.jugadores.map((j,i)=><div className={estilos.filaJugador} key={j.id}><b>{i+1}</b><input placeholder="Nombre" value={j.nombre} onChange={e=>cambiar<Jugador>("jugadores",j.id,{nombre:e.target.value})}/><input placeholder="Número" value={j.numero} onChange={e=>cambiar<Jugador>("jugadores",j.id,{numero:e.target.value})}/><select value={j.categoria} onChange={e=>cambiar<Jugador>("jugadores",j.id,{categoria:e.target.value})}><option>Hombre</option><option>Mujer</option><option>Niño</option><option>Niña</option></select><input placeholder="Talla sup." value={j.talla_superior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_superior:e.target.value})}/><input placeholder="Talla inf." value={j.talla_inferior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_inferior:e.target.value})}/><select value={j.calidad} onChange={e=>cambiar<Jugador>("jugadores",j.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input placeholder="Detalle" value={j.detalle} onChange={e=>cambiar<Jugador>("jugadores",j.id,{detalle:e.target.value})}/><button className="secondary" onClick={()=>quitar("jugadores",j.id)}>Quitar</button></div>)}{!form.jugadores.length&&<Vacio texto="Este contrato no tiene nómina de jugadores."/>}<div className={estilos.tituloBloque}>TALLAS POR PRENDA Y CALIDAD</div><p className={estilos.avisoInfo}>Para cada prenda seleccionada agrega una línea por calidad. Ingresa las cantidades de Hombres (H), Mujeres (M) y Niños por talla.</p><SeccionTallas form={form} setForm={setForm}/></>}
-function PasoCierre({form,setCab,saldo,agregar,cambiar,quitar}:{form:Form;setCab:SetCab;saldo:number;agregar:()=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Producción, valores y cierre</h2><div className={estilos.grid}><Campo titulo="Presupuesto total (USD)"><input type="number" min={0} step=".01" value={form.cab.presupuesto} onChange={e=>setCab("presupuesto",Number(e.target.value))}/></Campo><Campo titulo="Abono recibido (USD)"><input type="number" min={0} step=".01" value={form.cab.abono} onChange={e=>setCab("abono",Number(e.target.value))}/></Campo><div className={estilos.saldo}><span>Saldo pendiente</span><strong>${saldo.toFixed(2)}</strong></div><Campo titulo="Forma de entrega"><select value={form.cab.forma_entrega} onChange={e=>setCab("forma_entrega",e.target.value)}><option value="">Seleccionar…</option>{FORMAS_ENTREGA.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Dirección"><input value={form.cab.direccion} onChange={e=>setCab("direccion",e.target.value)}/></Campo><Campo titulo="Instrucciones especiales" ancho><textarea rows={4} value={form.cab.instrucciones} onChange={e=>setCab("instrucciones",e.target.value)}/></Campo><Campo titulo="Vendedor responsable *"><input value={form.cab.vendedor_responsable} onChange={e=>setCab("vendedor_responsable",e.target.value)}/></Campo></div><Titulo titulo="Detalle de facturación" accion={agregar} etiqueta="+ Línea"/>{form.facturacion.map(x=><div className={estilos.filaFact} key={x.id}><input value={x.concepto} onChange={e=>cambiar<Fact>("facturacion",x.id,{concepto:e.target.value})}/><select value={x.calidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input type="number" min={1} value={x.cantidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{cantidad:Number(e.target.value)})}/><label className={estilos.check}><input type="checkbox" checked={x.obsequio} onChange={e=>cambiar<Fact>("facturacion",x.id,{obsequio:e.target.checked})}/> Obsequio</label><button className="secondary" onClick={()=>quitar("facturacion",x.id)}>Quitar</button></div>)}<label className={estilos.autoriza}><input type="checkbox" checked={form.cab.autorizado} onChange={e=>setCab("autorizado",e.target.checked)}/><span><strong>Confirmo que revisé todos los datos.</strong> Autorizo el envío de este contrato a producción.</span></label></>}
+function PasoJugadores({form,importar,plantilla,agregar,setForm,cambiar,quitar}:{form:Form;importar:(f:File)=>void;plantilla:()=>void;agregar:()=>void;setForm:SetForm;cambiar:Cambiar;quitar:Quitar}){
+ async function sumarAutomatico(){
+  if(!form.jugadores.length)return mostrarAvisoDialogo("Primero agrega jugadores en la lista.","Sin jugadores",true);
+  const hayCargado=form.lineas.some(l=>totalLinea(l).total>0);
+  if(hayCargado&&!await confirmarDialogo("Se borrará la suma actual de tallas y se volverá a calcular desde la lista de jugadores. Si escribiste cantidades a mano, se van a perder. ¿Continuar?"))return;
+  const nuevas=tallasDesdeJugadores(form.jugadores);
+  setForm(f=>({...f,lineas:nuevas,prendasSel:Array.from(new Set([...f.prendasSel,...nuevas.map(l=>l.prenda)]))}));
+  await mostrarAvisoDialogo(`Se recalcularon ${nuevas.length} línea(s) de talla desde ${form.jugadores.length} jugador(es).`,"Tallas actualizadas");
+ }
+ return <>
+ <Titulo titulo="Jugadores y tallas por prenda / calidad" texto={`Total de jugadores: ${form.jugadores.length}`} accion={agregar} etiqueta="+ Agregar jugador">
+  <button onClick={()=>void sumarAutomatico()}>📊 Sumar automáticamente</button>
+  <button className="secondary" onClick={()=>setForm(f=>({...f,jugadores:ordenarJugadores(f.jugadores)}))}>Ordenar por tipo de prenda</button>
+  <button className="secondary" onClick={plantilla}>Plantilla Excel</button>
+  <label className={estilos.botonArchivo}>Cargar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={e=>e.target.files?.[0]&&importar(e.target.files[0])}/></label>
+ </Titulo>
+ <div className={estilos.tablaJug}>
+  <div className={estilos.jugCab}><span>#</span><span>Nombre</span><span>Núm.</span><span>Categ.</span><span>T.Sup</span><span>T.Inf</span><span>Manga</span><span>Calidad</span><span>Mod. arquero</span><span>Tipo uniforme</span><span>Detalle/variante</span><span>Mockup</span><span/></div>
+  {form.jugadores.map((j,i)=><div className={estilos.jugFila} key={j.id}>
+   <b>{i+1}</b>
+   <input placeholder="Nombre" value={j.nombre} onChange={e=>cambiar<Jugador>("jugadores",j.id,{nombre:e.target.value})}/>
+   <input placeholder="0" value={j.numero} onChange={e=>cambiar<Jugador>("jugadores",j.id,{numero:e.target.value})}/>
+   <select value={j.categoria} onChange={e=>cambiar<Jugador>("jugadores",j.id,{categoria:e.target.value})}><option>Hombre</option><option>Mujer</option><option>Niño</option><option>Niña</option></select>
+   <select value={j.talla_superior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_superior:e.target.value})}><option value="">—</option>{[...ADULTOS,...NINOS].map(t=><option key={t}>{t}</option>)}</select>
+   <select value={j.talla_inferior} onChange={e=>cambiar<Jugador>("jugadores",j.id,{talla_inferior:e.target.value})}><option value="">—</option>{[...ADULTOS,...NINOS].map(t=><option key={t}>{t}</option>)}</select>
+   <select value={j.manga} onChange={e=>cambiar<Jugador>("jugadores",j.id,{manga:e.target.value})}><option>Corta</option><option>Larga</option></select>
+   <select value={j.calidad} onChange={e=>cambiar<Jugador>("jugadores",j.id,{calidad:e.target.value})}><option value="">— Cal. —</option>{CALIDADES.map(c=><option key={c}>{c}</option>)}</select>
+   <select value={j.modelo_arquero} onChange={e=>cambiar<Jugador>("jugadores",j.id,{modelo_arquero:e.target.value})}><option value="N/A">— No es arquero —</option>{MODELOS_ARQUERO.map(g=><optgroup key={g.grupo} label={g.grupo}>{g.modelos.map(m=><option key={m}>{m}</option>)}</optgroup>)}</select>
+   <select value={j.tipo_uniforme} onChange={e=>cambiar<Jugador>("jugadores",j.id,{tipo_uniforme:e.target.value})}><option value="">— Tipo —</option>{TIPOS_UNIFORME.map(t=><option key={t}>{t}</option>)}</select>
+   <input placeholder="Ej: Cuello fucsia" value={j.detalle} onChange={e=>cambiar<Jugador>("jugadores",j.id,{detalle:e.target.value})}/>
+   <select value={j.mockup} onChange={e=>cambiar<Jugador>("jugadores",j.id,{mockup:e.target.value})}><option value="">— sin mockup —</option>{mockupsDe(form).map(m=><option key={m.id} value={m.descripcion}>{m.descripcion}</option>)}</select>
+   <button className="secondary" onClick={()=>quitar("jugadores",j.id)}>✕</button>
+  </div>)}
+ </div>
+ {!form.jugadores.length&&<Vacio texto="Este contrato no tiene nómina de jugadores."/>}
+ <div className={estilos.tituloBloque}>TALLAS POR PRENDA Y CALIDAD</div><p className={estilos.avisoInfo}>Para cada prenda seleccionada agrega una línea por calidad. Ingresa las cantidades de Hombres (H), Mujeres (M) y Niños por talla.</p><SeccionTallas form={form} setForm={setForm}/></>}
+function PasoCierre({form,setCab,saldo,agregar,cambiar,quitar}:{form:Form;setCab:SetCab;saldo:number;agregar:()=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Producción, valores y cierre</h2><div className={estilos.grid}><Campo titulo="Presupuesto total (USD)"><input type="number" min={0} step=".01" value={form.cab.presupuesto} onChange={e=>setCab("presupuesto",Number(e.target.value))}/></Campo><Campo titulo="Abono recibido (USD)"><input type="number" min={0} step=".01" value={form.cab.abono} onChange={e=>setCab("abono",Number(e.target.value))}/></Campo><div className={estilos.saldo}><span>Saldo pendiente</span><strong>${saldo.toFixed(2)}</strong></div><Campo titulo="Forma de entrega"><select value={form.cab.forma_entrega} onChange={e=>setCab("forma_entrega",e.target.value)}><option value="">Seleccionar…</option>{FORMAS_ENTREGA.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Dirección"><input value={form.cab.direccion} onChange={e=>setCab("direccion",e.target.value)}/></Campo><Campo titulo="Instrucciones especiales" ancho><textarea rows={4} value={form.cab.instrucciones} onChange={e=>setCab("instrucciones",e.target.value)}/></Campo><Campo titulo="Vendedor responsable *"><input value={form.cab.vendedor_responsable} onChange={e=>setCab("vendedor_responsable",e.target.value)}/></Campo></div><Titulo titulo="Detalle de facturación" texto="Cómo se factura el pedido (ej. 20 Uniforme completo + 10 Camiseta). Debe cuadrar con las prendas del contrato para poder guardar." accion={agregar} etiqueta="+ Agregar línea de facturación"/><ComprobanteFact prendas={form.prendas} facturacion={form.facturacion}/>{form.facturacion.map(x=><div className={estilos.filaFact} key={x.id}><select value={x.concepto} onChange={e=>cambiar<Fact>("facturacion",x.id,{concepto:e.target.value})}>{CONCEPTOS_FACT.map(o=><option key={o.l} value={o.l}>{o.l}{o.c?"":" (no valida)"}</option>)}</select><select value={x.calidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input type="number" min={1} value={x.cantidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{cantidad:Number(e.target.value)})}/><label className={estilos.check}><input type="checkbox" checked={x.obsequio} onChange={e=>cambiar<Fact>("facturacion",x.id,{obsequio:e.target.checked})}/> Obsequio</label><button className="secondary" onClick={()=>quitar("facturacion",x.id)}>Quitar</button></div>)}<label className={estilos.autoriza}><input type="checkbox" checked={form.cab.autorizado} onChange={e=>setCab("autorizado",e.target.checked)}/><span><strong>Confirmo que revisé todos los datos.</strong> Autorizo el envío de este contrato a producción.</span></label></>}
 function Titulo({titulo,texto,accion,etiqueta,children}:{titulo:string;texto?:string;accion:()=>void;etiqueta:string;children?:ReactNode}){return <div className={estilos.tituloAccion}><div><h2>{titulo}</h2>{texto&&<p>{texto}</p>}</div><div>{children}<button onClick={accion}>{etiqueta}</button></div></div>}
 function Vacio({texto}:{texto:string}){return <div className={estilos.vacio}>{texto}</div>}
 
@@ -349,7 +514,9 @@ function indiceMockup(valor:string,mockups:Archivo[]){
  return -1;
 }
 
-function VistaPrevia({form,total,saldo,cerrar}:{form:Form;total:number;saldo:number;cerrar:()=>void}){
+// Sin presupuesto/abono/saldo a proposito: el brief es el documento que
+// imprime el taller y en el legado no lleva ningun dato economico.
+function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void}){
  const [montado,setMontado]=useState(false);
  // El brief se monta en <body> por portal: así la regla @media print puede apagar el
  // resto de la página con un selector de hijo directo, sin tocar globals.css.
@@ -457,14 +624,6 @@ function VistaPrevia({form,total,saldo,cerrar}:{form:Form;total:number;saldo:num
      </div>)}</div>
     </section>}
 
-    <section className={estilos.bSeccion}>
-     <div className={estilos.bH3}>VALORES</div>
-     <table className={estilos.bDatos}><tbody>
-      <tr><td>Presupuesto</td><td>${Number(c.presupuesto||0).toFixed(2)}</td></tr>
-      <tr><td>Abono recibido</td><td>${Number(c.abono||0).toFixed(2)}</td></tr>
-      <tr><td>Saldo pendiente</td><td style={{fontWeight:900,color:"#92400E"}}>${saldo.toFixed(2)}</td></tr>
-     </tbody></table>
-    </section>
     <div className={estilos.bPie}>Brief generado {fechaCorta(new Date().toISOString().slice(0,10))} · Boman Sport</div>
    </article>
   </div>,document.body);
@@ -609,4 +768,15 @@ function SeccionTallas({form,setForm}:{form:Form;setForm:SetForm}){
    })}
   </section>;
  })}</>;
+}
+
+function ComprobanteFact({prendas,facturacion}:{prendas:Prenda[];facturacion:Fact[]}){
+ const r=comprobarFacturacion(prendas,facturacion);
+ if(!r.hayPrendas)return <p className={estilos.pista}>Aún no hay prendas con tallas para comprobar (llénalas en el paso Jugadores).</p>;
+ if(r.ok)return <p className={estilos.factOk}>✓ La facturación cuadra con las prendas del contrato.</p>;
+ return <div className={estilos.factMal}>
+  <strong>La facturación todavía no cuadra:</strong>
+  {r.faltan.length>0&&<div>Faltan por facturar: {r.faltan.join(" · ")}</div>}
+  {r.sobran.length>0&&<div>Facturado de más: {r.sobran.join(" · ")}</div>}
+ </div>;
 }
