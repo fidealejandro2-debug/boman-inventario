@@ -188,3 +188,4 @@
 .bFotosSolo figure{margin:0;border:1px solid #d9e2ec;border-radius:6px;padding:5px;background:#fff}
 .bFotosSolo img{width:100%;height:190px;object-fit:contain;display:block}
 .bFotosSolo figcaption{margin-top:4px;font-size:9.5px;font-weight:800;color:#1F4E78;text-align:center;text-transform:uppercase}
+.notaMedias{margin-top:6px;background:#EFF6FF;border:1px solid #93C5FD;border-radius:7px;padding:7px 10px;font-size:.8rem;color:#1e3a5f}

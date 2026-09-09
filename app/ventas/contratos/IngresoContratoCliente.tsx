@@ -532,7 +532,7 @@ function PasoJugadores({form,importar,plantilla,agregar,setForm,cambiar,quitar}:
  </div>
  {!form.jugadores.length&&<Vacio texto="Este contrato no tiene nómina de jugadores."/>}
  <div className={estilos.tituloBloque}>TALLAS POR PRENDA Y CALIDAD</div><p className={estilos.avisoInfo}>Para cada prenda seleccionada agrega una línea por calidad. Ingresa las cantidades de Hombres (H), Mujeres (M) y Niños por talla.</p><SeccionTallas form={form} setForm={setForm}/></>}
-function PasoCierre({form,setCab,saldo,agregar,cambiar,quitar}:{form:Form;setCab:SetCab;saldo:number;agregar:()=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Producción, valores y cierre</h2><div className={estilos.grid}><Campo titulo="Presupuesto total (USD)"><input type="number" min={0} step=".01" value={form.cab.presupuesto} onChange={e=>setCab("presupuesto",Number(e.target.value))}/></Campo><Campo titulo="Abono recibido (USD)"><input type="number" min={0} step=".01" value={form.cab.abono} onChange={e=>setCab("abono",Number(e.target.value))}/></Campo><div className={estilos.saldo}><span>Saldo pendiente</span><strong>${saldo.toFixed(2)}</strong></div><Campo titulo="Forma de entrega"><select value={form.cab.forma_entrega} onChange={e=>setCab("forma_entrega",e.target.value)}><option value="">Seleccionar…</option>{FORMAS_ENTREGA.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Dirección"><input value={form.cab.direccion} onChange={e=>setCab("direccion",e.target.value)}/></Campo><Campo titulo="Instrucciones especiales" ancho><textarea rows={4} value={form.cab.instrucciones} onChange={e=>setCab("instrucciones",e.target.value)}/></Campo><Campo titulo="Vendedor responsable *"><input value={form.cab.vendedor_responsable} onChange={e=>setCab("vendedor_responsable",e.target.value)}/></Campo></div><Titulo titulo="Detalle de facturación" texto="Cómo se factura el pedido (ej. 20 Uniforme completo + 10 Camiseta). Debe cuadrar con las prendas del contrato para poder guardar." accion={agregar} etiqueta="+ Agregar línea de facturación"/><ComprobanteFact prendas={form.prendas} facturacion={form.facturacion}/>{form.facturacion.map(x=><div className={estilos.filaFact} key={x.id}><select value={x.concepto} onChange={e=>cambiar<Fact>("facturacion",x.id,{concepto:e.target.value})}>{CONCEPTOS_FACT.map(o=><option key={o.l} value={o.l}>{o.l}{o.c?"":" (no valida)"}</option>)}</select><select value={x.calidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input type="number" min={1} value={x.cantidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{cantidad:Number(e.target.value)})}/><label className={estilos.check}><input type="checkbox" checked={x.obsequio} onChange={e=>cambiar<Fact>("facturacion",x.id,{obsequio:e.target.checked})}/> Obsequio</label><button className="secondary" onClick={()=>quitar("facturacion",x.id)}>Quitar</button></div>)}<label className={estilos.autoriza}><input type="checkbox" checked={form.cab.autorizado} onChange={e=>setCab("autorizado",e.target.checked)}/><span><strong>Confirmo que revisé todos los datos.</strong> Autorizo el envío de este contrato a producción.</span></label></>}
+function PasoCierre({form,setCab,saldo,agregar,cambiar,quitar}:{form:Form;setCab:SetCab;saldo:number;agregar:()=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Producción, valores y cierre</h2><div className={estilos.grid}><Campo titulo="Presupuesto total (USD)"><input type="number" min={0} step=".01" value={form.cab.presupuesto} onChange={e=>setCab("presupuesto",Number(e.target.value))}/></Campo><Campo titulo="Abono recibido (USD)"><input type="number" min={0} step=".01" value={form.cab.abono} onChange={e=>setCab("abono",Number(e.target.value))}/></Campo><div className={estilos.saldo}><span>Saldo pendiente</span><strong>${saldo.toFixed(2)}</strong></div><Campo titulo="Forma de entrega"><select value={form.cab.forma_entrega} onChange={e=>setCab("forma_entrega",e.target.value)}><option value="">Seleccionar…</option>{FORMAS_ENTREGA.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Dirección"><input value={form.cab.direccion} onChange={e=>setCab("direccion",e.target.value)}/></Campo><Campo titulo="Instrucciones especiales" ancho><textarea rows={4} value={form.cab.instrucciones} onChange={e=>setCab("instrucciones",e.target.value)}/></Campo><Campo titulo="Vendedor responsable *"><input value={form.cab.vendedor_responsable} onChange={e=>setCab("vendedor_responsable",e.target.value)}/></Campo></div><Titulo titulo="Detalle de facturación" texto="Cómo se factura el pedido (ej. 20 Uniforme completo + 10 Camiseta). Debe cuadrar con las prendas del contrato para poder guardar." accion={agregar} etiqueta="+ Agregar línea de facturación"/><ComprobanteFact form={form}/>{form.facturacion.map(x=><div className={estilos.filaFact} key={x.id}><select value={x.concepto} onChange={e=>cambiar<Fact>("facturacion",x.id,{concepto:e.target.value})}>{CONCEPTOS_FACT.map(o=><option key={o.l} value={o.l}>{o.l}{o.c?"":" (no valida)"}</option>)}</select><select value={x.calidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select><input type="number" min={1} value={x.cantidad} onChange={e=>cambiar<Fact>("facturacion",x.id,{cantidad:Number(e.target.value)})}/><label className={estilos.check}><input type="checkbox" checked={x.obsequio} onChange={e=>cambiar<Fact>("facturacion",x.id,{obsequio:e.target.checked})}/> Obsequio</label><button className="secondary" onClick={()=>quitar("facturacion",x.id)}>Quitar</button></div>)}<label className={estilos.autoriza}><input type="checkbox" checked={form.cab.autorizado} onChange={e=>setCab("autorizado",e.target.checked)}/><span><strong>Confirmo que revisé todos los datos.</strong> Autorizo el envío de este contrato a producción.</span></label></>}
 function Titulo({titulo,texto,accion,etiqueta,children}:{titulo:string;texto?:string;accion:()=>void;etiqueta:string;children?:ReactNode}){return <div className={estilos.tituloAccion}><div><h2>{titulo}</h2>{texto&&<p>{texto}</p>}</div><div>{children}<button onClick={accion}>{etiqueta}</button></div></div>}
 function Vacio({texto}:{texto:string}){return <div className={estilos.vacio}>{texto}</div>}
 
@@ -636,6 +636,9 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
       <table className={estilos.bDatos}><tbody>
        <tr><td>Técnica nombre</td><td>{c.nombre_tecnica||"—"}</td></tr>
        <tr><td>Técnica número</td><td>{c.numero_tecnica||"—"}</td></tr>
+       {/* El legado no imprime el TPU en el brief, pero se captura como obligatorio
+           y el taller lo necesita en papel: se agrega a proposito. */}
+       <tr><td>Sellos TPU</td><td>{c.sellos_tpu||"—"}{c.ubicacion_tpu&&` · ${c.ubicacion_tpu}`}</td></tr>
        {!!texto(c.bordado)&&<tr><td>Bordado especial</td><td style={{color:"#7c3aed",fontWeight:700}}>{c.bordado}</td></tr>}
       </tbody></table>
      </div>
@@ -836,15 +839,29 @@ function SeccionTallas({form,setForm}:{form:Form;setForm:SetForm}){
  })}</>;
 }
 
-function ComprobanteFact({prendas,facturacion}:{prendas:Prenda[];facturacion:Fact[]}){
+function ComprobanteFact({form}:{form:Form}){
+ const {prendas,facturacion}=form;
  const r=comprobarFacturacion(prendas,facturacion);
- if(!r.hayPrendas)return <p className={estilos.pista}>Aún no hay prendas con tallas para comprobar (llénalas en el paso Jugadores).</p>;
- if(r.ok)return <p className={estilos.factOk}>✓ La facturación cuadra con las prendas del contrato.</p>;
- return <div className={estilos.factMal}>
+ // La bandera se registra en adicionales Y se factura aparte: si esta en un
+ // lado y no en el otro, en produccion se la saltan. El aviso gana sobre todo
+ // lo demas, incluso antes de que haya prendas cargadas.
+ const conBandera=form.adic.bandera!=="Sin bandera";
+ const banderaFacturada=facturacion.some(f=>texto(f.concepto).toLowerCase()==="bandera");
+ if(conBandera&&!banderaFacturada)return <div className={estilos.factMal}><strong>📌 Revisa la sección de adicionales y el detalle de facturación para dejar la bandera visible en ambos lados.</strong></div>;
+ // Las medias de adicionales son el TOTAL: ya incluyen las que van dentro de
+ // los uniformes. Se desglosa para que quien factura sepa cuantas se cobran aparte.
+ const totalMedias=form.adicCant.medias||0;
+ const conUniforme=facturacion.reduce((n,f)=>{const c=texto(f.concepto).toLowerCase();return c.startsWith("uniforme completo")||c.startsWith("arquero completo")?n+(f.cantidad||0):n},0);
+ const extra=totalMedias-conUniforme;
+ const notaMedias=totalMedias>0?<div className={estilos.notaMedias}>🧦 <strong>Medias:</strong> {totalMedias} en total · {conUniforme} van dentro de uniformes/arqueros · <strong>{extra>0?`${extra} adicionales (aparte)`:extra===0?"ninguna adicional":`${Math.abs(extra)} menos que los uniformes — revisa`}</strong></div>:null;
+ if(!r.hayPrendas)return <>{notaMedias}<p className={estilos.pista}>Aún no hay prendas con tallas para comprobar (llénalas en el paso Jugadores).</p></>;
+ if(r.ok)return <>{notaMedias}<p className={estilos.factOk}>✓ La facturación cuadra con las prendas del contrato.</p></>;
+ return <><div className={estilos.factMal}>
   <strong>La facturación todavía no cuadra:</strong>
   {r.faltan.length>0&&<div>Faltan por facturar: {r.faltan.join(" · ")}</div>}
   {r.sobran.length>0&&<div>Facturado de más: {r.sobran.join(" · ")}</div>}
- </div>;
+  <div>Ajusta las líneas hasta que cuadre para poder guardar.</div>
+ </div>{notaMedias}</>;
 }
 
 // Paleta del legado: se eligen por nombre (el brief imprime el nombre, no el
