@@ -6,6 +6,7 @@ import { confirmarDialogo, mostrarAvisoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/permisos";
 import estilos from "./IngresoContrato.module.css";
+import {fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPrenda} from "./specsPrendas";
 
 // Todas estas listas son copia literal de BomanSport/index.html: son la fuente
 // de verdad del negocio. Si aqui difieren aunque sea en una tilde o un espacio,
@@ -329,7 +330,9 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
 
  function agregarPrenda(){setForm(f=>({...f,prendas:[...f.prendas,{id:uuid(),prenda:"Camiseta Jugador",calidad:"Amateur",detalle:"",genero:"H",talla:"M",cantidad:1}]}))}
  function agregarJugador(){setForm(f=>({...f,jugadores:[...f.jugadores,{id:uuid(),nombre:"",numero:"",categoria:"Hombre",talla_superior:"M",talla_inferior:"M",manga:"Corta",calidad:"Amateur",modelo_arquero:"",tipo_uniforme:"Uniforme completo",detalle:"",mockup:""}]}))}
- function agregarSpec(){setForm(f=>({...f,specs:[...f.specs,{id:uuid(),prenda_clave:f.prendas[0]?.prenda||"Camiseta Jugador",variante_calidad:f.prendas[0]?.calidad||"Amateur",mockup:"",campos:{},observacion:""}]}))}
+ // Una prenda puede llevar VARIAS especificaciones (variantes por mockup o
+ // calidad), igual que en el legado: por eso se agrega por ficha.
+ function agregarFicha(clave:string){setForm(f=>({...f,specs:[...f.specs,{id:uuid(),prenda_clave:clave,variante_calidad:"",mockup:"",campos:{},observacion:""}]}))}
  function agregarFact(){setForm(f=>({...f,facturacion:[...f.facturacion,{id:uuid(),concepto:"Uniforme completo",calidad:f.prendas[0]?.calidad||"Amateur",cantidad:1,obsequio:false}]}))}
  function seleccionar(tipo:"mockup"|"logo",files:FileList|null){if(!files)return;const limite=tipo==="mockup"?10:20;const nuevos=Array.from(files).slice(0,limite).map(file=>({id:uuid(),tipo,file,preview:file.type.startsWith("image/")?URL.createObjectURL(file):undefined,descripcion:file.name.replace(/\.[^.]+$/,""),color:"",prenda:"",posicion:"",tecnica:"",calidad_aplicable:"Todas",observacion:""}));setForm(f=>({...f,archivos:[...f.archivos,...nuevos]}))}
 
@@ -352,7 +355,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
    {paso===1&&<PasoContrato form={form} setCab={setCab}/>}
    {paso===2&&<PasoPrendas form={form} setForm={setForm} setCab={setCab} total={total} supabase={supabase}/>}
    {paso===3&&<PasoArchivos form={form} seleccionar={seleccionar} cambiar={cambiar} quitar={quitar}/>} 
-   {paso===4&&<PasoTecnica form={form} setCab={setCab} agregar={agregarSpec} cambiar={cambiar} quitar={quitar}/>} 
+   {paso===4&&<PasoTecnica form={form} setCab={setCab} agregarFicha={agregarFicha} cambiar={cambiar} quitar={quitar}/>} 
    {paso===5&&<PasoJugadores form={form} importar={importarJugadores} plantilla={plantillaJugadores} agregar={agregarJugador} setForm={setForm} cambiar={cambiar} quitar={quitar}/>} 
    {paso===6&&<PasoCierre form={form} setCab={setCab} saldo={saldo} agregar={agregarFact} cambiar={cambiar} quitar={quitar}/>} 
    <footer className={estilos.acciones}><button className="secondary" disabled={paso===0||guardando} onClick={()=>setPaso(x=>x-1)}>Anterior</button><span>Paso {paso+1} de 7 · borrador automático</span>{paso<6?<button onClick={()=>void irSiguiente()}>Continuar</button>:<><button className="secondary" onClick={()=>setPreview(true)}>Revisar</button><button onClick={()=>void guardar()} disabled={guardando}>{guardando?"Subiendo y registrando…":"Registrar contrato"}</button></>}</footer>
@@ -431,23 +434,46 @@ function PasoPrendas({form,setForm,setCab,total,supabase}:{form:Form;setForm:Rea
  </>;
 }
 function PasoArchivos({form,seleccionar,cambiar,quitar}:{form:Form;seleccionar:(t:"mockup"|"logo",f:FileList|null)=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Mockups, logos y sellos</h2><div className={estilos.cargas}><label><strong>Mockups</strong><span>Hasta 10 imágenes o PDF; el primero será principal.</span><input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>seleccionar("mockup",e.target.files)}/></label><label><strong>Logos y sellos</strong><span>Puedes seleccionar varios archivos.</span><input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>seleccionar("logo",e.target.files)}/></label></div><div className={estilos.archivos}>{form.archivos.map(a=><article key={a.id}>{a.preview?<img src={a.preview} alt=""/>:<div className={estilos.archivoViejo}>{a.tipo.toUpperCase()}</div>}<select value={a.tipo} onChange={e=>cambiar<Archivo>("archivos",a.id,{tipo:e.target.value as Archivo["tipo"]})}><option value="mockup">Mockup</option><option value="logo">Logo / sello</option></select><input value={a.descripcion} placeholder="Descripción" onChange={e=>cambiar<Archivo>("archivos",a.id,{descripcion:e.target.value})}/>{a.tipo==="logo"&&<><input value={a.prenda} placeholder="Prenda aplicable" onChange={e=>cambiar<Archivo>("archivos",a.id,{prenda:e.target.value})}/><input value={a.posicion} placeholder="Posición" onChange={e=>cambiar<Archivo>("archivos",a.id,{posicion:e.target.value})}/><input value={a.tecnica} placeholder="Técnica" onChange={e=>cambiar<Archivo>("archivos",a.id,{tecnica:e.target.value})}/></>}<button className="secondary" onClick={()=>quitar("archivos",a.id)}>Quitar</button></article>)}</div></>}
-function PasoTecnica({form,setCab,agregar,cambiar,quitar}:{form:Form;setCab:SetCab;agregar:()=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Especificaciones técnicas</h2><div className={estilos.grid}><Campo titulo="Nombre jugador - técnica *"><select value={form.cab.nombre_tecnica} onChange={e=>setCab("nombre_tecnica",e.target.value)}><option value="">Seleccionar…</option>{TECNICAS.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Número jugador - técnica *"><select value={form.cab.numero_tecnica} onChange={e=>setCab("numero_tecnica",e.target.value)}><option value="">Seleccionar…</option>{TECNICAS.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="¿Lleva sellos TPU? *"><select value={form.cab.sellos_tpu} onChange={e=>setCab("sellos_tpu",e.target.value)}><option>No</option><option>Sí</option></select></Campo><Campo titulo="Ubicación TPU"><select value={form.cab.ubicacion_tpu} onChange={e=>setCab("ubicacion_tpu",e.target.value)}>{UBICACION_TPU.map(x=><option key={x} value={x==="No aplica"?"":x}>{x}</option>)}</select></Campo><Campo titulo="Bordado / observaciones" ancho><textarea rows={3} value={form.cab.bordado} onChange={e=>setCab("bordado",e.target.value)}/></Campo><Campo titulo="Colores generales, separados por coma" ancho><input value={form.cab.colores} onChange={e=>setCab("colores",e.target.value)} placeholder="Azul marino, dorado, blanco"/></Campo></div><Titulo titulo="Detalle por prenda y calidad" texto="Los campos llenos se imprimen como tabla técnica en el brief; los vacíos no aparecen." accion={agregar} etiqueta="+ Especificación"/>{form.specs.map(s=><TarjetaSpec key={s.id} spec={s} prendas={Array.from(new Set(form.prendas.map(x=>x.prenda)))} mockups={mockupsDe(form)} cambiar={cambiar} quitar={quitar}/>)}{!form.specs.length&&<Vacio texto="Sin especificaciones técnicas: el brief saldrá solo con las técnicas generales."/>}</>}
-function TarjetaSpec({spec,prendas,mockups,cambiar,quitar}:{spec:Spec;prendas:string[];mockups:Archivo[];cambiar:Cambiar;quitar:Quitar}){
- const campos=CAMPOS_TECNICOS[familiaPrenda(spec.prenda_clave)];
- const marca=FAMILIA_MARCA[familiaPrenda(spec.prenda_clave)];
- const fijar=(c:string,v:string)=>cambiar<Spec>("specs",spec.id,{campos:{...spec.campos,[c]:v}});
- return <article className={estilos.tarjetaSpec}>
-  <header style={{borderLeftColor:marca.color}}>
-   <span aria-hidden="true">{marca.icono}</span>
-   <select aria-label="Prenda" value={spec.prenda_clave} onChange={e=>cambiar<Spec>("specs",spec.id,{prenda_clave:e.target.value})}>{(prendas.length?prendas:[spec.prenda_clave]).map(x=><option key={x}>{x}</option>)}</select>
-   <select aria-label="Calidad" value={spec.variante_calidad} onChange={e=>cambiar<Spec>("specs",spec.id,{variante_calidad:e.target.value})}>{CALIDADES.map(x=><option key={x}>{x}</option>)}</select>
-   <select aria-label="Mockup al que aplica" value={spec.mockup} onChange={e=>cambiar<Spec>("specs",spec.id,{mockup:e.target.value})}><option value="">Todos los mockups</option>{mockups.map((m,i)=><option key={m.id}>{etiquetaMockup(m,i)}</option>)}</select>
+function PasoTecnica({form,setCab,agregarFicha,cambiar,quitar}:{form:Form;setCab:SetCab;agregarFicha:(clave:string)=>void;cambiar:Cambiar;quitar:Quitar}){return <><h2>Especificaciones técnicas</h2><div className={estilos.grid}><Campo titulo="Nombre jugador - técnica *"><select value={form.cab.nombre_tecnica} onChange={e=>setCab("nombre_tecnica",e.target.value)}><option value="">Seleccionar…</option>{TECNICAS.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Número jugador - técnica *"><select value={form.cab.numero_tecnica} onChange={e=>setCab("numero_tecnica",e.target.value)}><option value="">Seleccionar…</option>{TECNICAS.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="¿Lleva sellos TPU? *"><select value={form.cab.sellos_tpu} onChange={e=>setCab("sellos_tpu",e.target.value)}><option>No</option><option>Sí</option></select></Campo><Campo titulo="Ubicación TPU"><select value={form.cab.ubicacion_tpu} onChange={e=>setCab("ubicacion_tpu",e.target.value)}>{UBICACION_TPU.map(x=><option key={x} value={x==="No aplica"?"":x}>{x}</option>)}</select></Campo><Campo titulo="Bordado / observaciones" ancho><textarea rows={3} value={form.cab.bordado} onChange={e=>setCab("bordado",e.target.value)}/></Campo><Campo titulo="Colores generales, separados por coma" ancho><input value={form.cab.colores} onChange={e=>setCab("colores",e.target.value)} placeholder="Azul marino, dorado, blanco"/></Campo></div><div className={estilos.tituloBloque}>Detalle por prenda y calidad</div>
+<p className={estilos.avisoFuerte}>Las especificaciones varían según la calidad. Elige primero la calidad de cada especificación y las opciones se ajustarán a ella.</p>
+{!form.prendasSel.length&&<Vacio texto="Selecciona prendas en el paso Prendas para que aparezcan sus especificaciones técnicas."/>}
+{fichasDePrendas(form.prendasSel).map(ficha=>{
+ const suyas=form.specs.filter(x=>x.prenda_clave===ficha.clave);
+ return <section className={estilos.bloquePrenda} key={ficha.clave}>
+  <header><strong>{ficha.icon} {ficha.label}</strong><button className="secondary" onClick={()=>agregarFicha(ficha.clave)}>+ Agregar otra especificación</button></header>
+  {!suyas.length&&<p className={estilos.pista}>Sin especificación: agrega una para detallar esta prenda en el brief.</p>}
+  {suyas.map(sp=><TarjetaSpec key={sp.id} spec={sp} ficha={ficha} mockups={mockupsDe(form)} cambiar={cambiar} quitar={quitar}/>)}
+ </section>;
+})}</>}
+function TarjetaSpec({spec,ficha,mockups,cambiar,quitar}:{spec:Spec;ficha:FichaPrenda;mockups:{id:string;descripcion:string}[];cambiar:Cambiar;quitar:Quitar}){
+ const set=(clave:string,valor:string)=>cambiar<Spec>("specs",spec.id,{campos:{...spec.campos,[clave]:valor}});
+ return <div className={estilos.tarjetaSpec}>
+  <header>
+   <span>{ficha.icon}</span>
+   <div className={estilos.corresponde}>
+    <span>Corresponde a:</span>
+    <select value={spec.mockup} onChange={e=>cambiar<Spec>("specs",spec.id,{mockup:e.target.value})}><option value="">— Mockup —</option>{mockups.map(m=><option key={m.id} value={m.descripcion}>{m.descripcion}</option>)}</select>
+    <select value={spec.variante_calidad} onChange={e=>cambiar<Spec>("specs",spec.id,{variante_calidad:e.target.value})}><option value="">— Calidad —</option>{CALIDADES.map(c=><option key={c}>{c}</option>)}</select>
+   </div>
    <button className="secondary" onClick={()=>quitar("specs",spec.id)}>Quitar</button>
   </header>
-  <div className={estilos.camposSpec}>{campos.map(f=><label key={f.c}><span>{f.t}</span>{f.o?<select value={spec.campos[f.c]||""} onChange={e=>fijar(f.c,e.target.value)}><option value="">— sin definir —</option>{f.o.map(o=><option key={o}>{o}</option>)}</select>:<input value={spec.campos[f.c]||""} onChange={e=>fijar(f.c,e.target.value)} placeholder="Opcional"/>}</label>)}</div>
-  <label className={estilos.obsSpec}><span>Observación libre</span><textarea rows={2} value={spec.observacion} onChange={e=>cambiar<Spec>("specs",spec.id,{observacion:e.target.value})} placeholder="Lo que se salga de lo estándar para esta prenda…"/></label>
- </article>;
+  {ficha.calAware&&!spec.variante_calidad&&<p className={estilos.avisoFuerte}>Elige primero la calidad: varias opciones de esta ficha cambian según la calidad.</p>}
+  <div className={estilos.camposSpec}>
+   {ficha.campos.filter(c=>c.id!=="observacion").map(campo=>{
+    const opts=opcionesCampo(ficha,campo,spec.variante_calidad,spec.campos);
+    const valor=spec.campos[campo.id]??"";
+    return <label key={campo.id}>
+     <span>{campo.label}{campo.optsAlta&&esCalidadAlta(spec.variante_calidad)?" ✦":""}</span>
+     {opts
+      ?<select value={valor} onChange={e=>set(campo.id,e.target.value)}><option value="">—</option>{opts.map(o=><option key={o}>{o}</option>)}</select>
+      :<input value={valor} onChange={e=>set(campo.id,e.target.value)} placeholder="Opcional"/>}
+    </label>;
+   })}
+  </div>
+  <label className={estilos.obsSpec}><span>📝 Observación {ficha.label.toLowerCase()}</span><textarea rows={2} value={spec.observacion} onChange={e=>cambiar<Spec>("specs",spec.id,{observacion:e.target.value})} placeholder="Detalles adicionales para esta prenda…"/></label>
+ </div>;
 }
+
 function PasoJugadores({form,importar,plantilla,agregar,setForm,cambiar,quitar}:{form:Form;importar:(f:File)=>void;plantilla:()=>void;agregar:()=>void;setForm:SetForm;cambiar:Cambiar;quitar:Quitar}){
  async function sumarAutomatico(){
   if(!form.jugadores.length)return mostrarAvisoDialogo("Primero agrega jugadores en la lista.","Sin jugadores",true);
