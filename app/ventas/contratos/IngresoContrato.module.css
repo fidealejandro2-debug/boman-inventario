@@ -80,7 +80,11 @@
    basta apagar sus hermanos. La clase la pone/quita el propio componente. */
 @media print{
  :global(body.brief-imprimible)>*:not(.vistaPrevia){display:none!important}
- .vistaPrevia{position:static!important;padding:0!important;background:#fff!important;overflow:visible!important}
+ /* Sin esto el brief sale en blanco: el navegador descarta los fondos de color
+    al imprimir, y como las cabeceras del brief son texto blanco sobre #1F4E78,
+    quedaban blanco sobre blanco. print-color-adjust se hereda, asi que ponerlo
+    en la raiz del portal cubre todo el documento. */
+ .vistaPrevia{position:static!important;padding:0!important;background:#fff!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
  .noPrint{display:none!important}
  .hoja{max-width:none;margin:0;padding:0;border-radius:0;box-shadow:none}
  .bSeccion,.bCols,.bMk{break-inside:auto}
@@ -89,3 +93,5 @@
 }
 @media(max-width:1050px){.pasos span{display:none}.grid{grid-template-columns:repeat(2,1fr)}.filaPrenda{grid-template-columns:repeat(3,1fr)}.filaJugador{grid-template-columns:30px repeat(3,1fr)}.filaFact{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.bMk{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr 1fr}.tarjetaSpec>header>span{display:none}}
 @media(max-width:650px){.cabecera{display:block}.cabecera button{margin-top:12px}.grid,.tipos,.cargas,.resumen{grid-template-columns:1fr}.filaPrenda,.filaSpec,.filaJugador,.filaFact{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr}.filaJugador b{display:none}.tituloAccion{align-items:flex-start;flex-direction:column}.acciones{flex-wrap:wrap}.acciones span{width:100%;order:-1}.acciones button{flex:1}}
+
+.pista{font-size:.72rem;color:var(--texto-secundario);margin-top:2px}
