@@ -5,6 +5,11 @@
   --borde: #e2e8f0;
   --texto: #172033;
   --texto-secundario: #64748b;
+  /* Las pantallas de produccion/ventas (v95 en adelante) piden estos dos
+     nombres. Faltaban, asi que su texto atenuado se pintaba del color
+     heredado: por eso esas pantallas se veian "planas". */
+  --texto-fuerte: #0f172a;
+  --texto-suave: #64748b;
   --azul: #1f4e78;
   --azul-fuerte: #153b61;
   --azul-suave: #eaf2fb;
@@ -46,6 +51,8 @@
   --borde: #263450;
   --texto: #e7edf7;
   --texto-secundario: #93a4bf;
+  --texto-fuerte: #f8fafc;
+  --texto-suave: #93a4bf;
   --azul: #4f85c9;
   --azul-fuerte: #6fa2e0;
   --azul-suave: #1c2c46;
