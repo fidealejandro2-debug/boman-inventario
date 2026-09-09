@@ -70,7 +70,8 @@ function familiaPrenda(prenda:string){const n=prenda.toLowerCase();
  return"otro"}
 const FAMILIA_MARCA:Record<string,{color:string;icono:string}>={camiseta:{color:"#1F4E78",icono:"👕"},polo:{color:"#5B21B6",icono:"👔"},pantaloneta:{color:"#155E75",icono:"🩳"},chompa:{color:"#92400E",icono:"🧥"},pantalon:{color:"#374151",icono:"👖"},otro:{color:"#0F766E",icono:"🎽"}};
 type Fact={id:string;concepto:string;calidad:string;cantidad:number;obsequio:boolean};
-type Cab={vendedor:string;canal:string;cliente:string;telefono:string;whatsapp:string;email:string;tipo_contrato:string;fecha_entrega:string;fecha_inicio_produccion:string;prioridad:string;arqueros:number;total_manual:number;reposicion:boolean;contrato_origen_reposicion_id:string;nombre_tecnica:string;numero_tecnica:string;sellos_tpu:string;ubicacion_tpu:string;bordado:string;colores:string;instrucciones:string;presupuesto:number;abono:number;forma_entrega:string;direccion:string;vendedor_responsable:string;autorizado:boolean;adicionales:string};
+type Cab={vendedor:string;canal:string;nombre_contrato_v115:string;cliente:string;almacen_venta_id_v115:string;telefono:string;whatsapp:string;email:string;tipo_contrato:string;fecha_entrega:string;fecha_inicio_produccion:string;prioridad:string;arqueros:number;total_manual:number;reposicion:boolean;contrato_origen_reposicion_id:string;nombre_tecnica:string;numero_tecnica:string;sellos_tpu:string;ubicacion_tpu:string;bordado:string;colores:string;instrucciones:string;presupuesto:number;abono:number;forma_entrega:string;direccion:string;vendedor_responsable:string;autorizado:boolean;adicionales:string};
+type AlmacenVenta={id:string;nombre:string;codigo:string};
 // Accesorios del pedido. En el legado cada uno es un select + una cantidad, y
 // se imprimen en el recuadro "ADICIONALES DEL PEDIDO" del brief.
 const ADICIONALES:{clave:keyof Adic;titulo:string;opciones:string[];etiquetaCant:string}[]=[
@@ -172,6 +173,24 @@ function tallasDesdeJugadores(jugadores:Jugador[]):Linea[]{
  }
  return Array.from(mapa.values());
 }
+// Alcance de prenda de cada tipo de uniforme, para las bandas de color del
+// brief: el de corte busca "donde estan las camisetas sueltas" de un vistazo.
+const TIPO_SOLO_SUPERIOR=new Set(["Solo camiseta","Solo Polo","Solo BVD","Chompa","Chompa de Frío","Chaleco"]);
+const TIPO_SOLO_INFERIOR=new Set(["Solo pantaloneta","Solo Falda Short","Solo pantalón","Solo bermuda"]);
+const grupoPrendaJugador=(tu:string)=>TIPO_SOLO_SUPERIOR.has(tu)?1:TIPO_SOLO_INFERIOR.has(tu)?2:0;
+// Si en el tramo hay un solo tipo, se usa su nombre literal; si hay varios, el
+// nombre del alcance. Mismo criterio que _etqGrupo del legado.
+function etiquetaGrupo(arr:Jugador[],desde:number){
+ const g=grupoPrendaJugador(arr[desde].tipo_uniforme),cal=arr[desde].calidad;const tipos=new Set<string>();
+ for(let k=desde;k<arr.length;k++){if(grupoPrendaJugador(arr[k].tipo_uniforme)!==g||arr[k].calidad!==cal)break;if(texto(arr[k].tipo_uniforme))tipos.add(texto(arr[k].tipo_uniforme))}
+ if(tipos.size===1)return Array.from(tipos)[0];
+ return g===1?"Solo parte superior":g===2?"Solo parte inferior":"Uniforme completo";
+}
+function cuentaGrupo(arr:Jugador[],desde:number){
+ const g=grupoPrendaJugador(arr[desde].tipo_uniforme),cal=arr[desde].calidad;let n=0;
+ for(let k=desde;k<arr.length;k++){if(grupoPrendaJugador(arr[k].tipo_uniforme)!==g||arr[k].calidad!==cal)break;n++}
+ return n;
+}
 // ── FACTURACION ───────────────────────────────────────────────────────────
 // El legado no deja guardar si el detalle de facturacion no CUADRA con las
 // prendas del contrato: cada concepto equivale a n unidades de una categoria
@@ -268,7 +287,7 @@ type Form={cab:Cab;prendasSel:string[];lineas:Linea[];adic:Adic;adicCant:AdicCan
 const adicInicial=():Adic=>ADICIONALES.reduce((a,x)=>({...a,[x.clave]:x.opciones[0]}),{} as Adic);
 const adicCantInicial=():AdicCant=>ADICIONALES.reduce((a,x)=>({...a,[x.clave]:0}),{} as AdicCant);
 
-const cabInicial=(nombre:string):Cab=>({vendedor:nombre,canal:"",cliente:"",telefono:"",whatsapp:"",email:"",tipo_contrato:"Normal",fecha_entrega:"",fecha_inicio_produccion:"",prioridad:"Normal",arqueros:0,total_manual:0,reposicion:false,contrato_origen_reposicion_id:"",nombre_tecnica:"",numero_tecnica:"",sellos_tpu:"No",ubicacion_tpu:"",bordado:"",colores:"",instrucciones:"",presupuesto:0,abono:0,forma_entrega:"Retiro en tienda",direccion:"",vendedor_responsable:nombre,autorizado:false,adicionales:""});
+const cabInicial=(nombre:string):Cab=>({vendedor:nombre,canal:"",nombre_contrato_v115:"",cliente:"",almacen_venta_id_v115:"",telefono:"",whatsapp:"",email:"",tipo_contrato:"Normal",fecha_entrega:"",fecha_inicio_produccion:"",prioridad:"Normal",arqueros:0,total_manual:0,reposicion:false,contrato_origen_reposicion_id:"",nombre_tecnica:"",numero_tecnica:"",sellos_tpu:"No",ubicacion_tpu:"",bordado:"",colores:"",instrucciones:"",presupuesto:0,abono:0,forma_entrega:"Retiro en tienda",direccion:"",vendedor_responsable:nombre,autorizado:false,adicionales:""});
 const inicial=(nombre:string):Form=>({cab:cabInicial(nombre),prendasSel:[],lineas:[],adic:adicInicial(),adicCant:adicCantInicial(),medidasBandera:"",prendas:[],jugadores:[],archivos:[],specs:[],facturacion:[]});
 const texto=(v:unknown)=>String(v??"").trim();
 // Compatibilidad al cargar una reposición: el jsonb `spec` guardado puede venir con la
@@ -302,13 +321,15 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
  const [form,setForm]=useState<Form>(()=>inicial(perfil.nombre_completo));
  const [paso,setPaso]=useState(0); const [guardando,setGuardando]=useState(false); const [resultado,setResultado]=useState<{numero:string;id:string;respaldo:"en_curso"|"ok"|"pendiente"}|null>(null);
  const [busqueda,setBusqueda]=useState(""); const [coincidencias,setCoincidencias]=useState<any[]>([]); const [buscando,setBuscando]=useState(false); const [preview,setPreview]=useState(false);
+ const [almacenesVenta,setAlmacenesVenta]=useState<AlmacenVenta[]>([]);
  const total=useMemo(()=>form.prendas.reduce((s,x)=>s+Math.max(0,Number(x.cantidad)||0),0),[form.prendas]);
  const saldo=Math.max(0,Number(form.cab.presupuesto||0)-Number(form.cab.abono||0));
  const setCab=<K extends keyof Cab>(k:K,v:Cab[K])=>setForm(f=>({...f,cab:{...f.cab,[k]:v}}));
  const cambiar=<T extends {id:string}>(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string,cambio:Partial<T>)=>setForm(f=>({...f,[lista]:(f[lista] as unknown as T[]).map(x=>x.id===id?{...x,...cambio}:x)} as Form));
  const quitar=(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string)=>setForm(f=>({...f,[lista]:(f[lista] as {id:string}[]).filter(x=>x.id!==id)} as Form));
 
- useEffect(()=>{const raw=localStorage.getItem(BORRADOR);if(!raw)return;try{const d=JSON.parse(raw) as Form;if(d?.cab&&Array.isArray(d.prendas))void confirmarDialogo("Hay un borrador guardado en este dispositivo. ¿Deseas recuperarlo?").then(si=>si?setForm({...d,archivos:(d.archivos||[]).filter(x=>x.url)}):localStorage.removeItem(BORRADOR))}catch{localStorage.removeItem(BORRADOR)}},[]);
+ useEffect(()=>{const raw=localStorage.getItem(BORRADOR);if(!raw)return;try{const d=JSON.parse(raw) as Form;if(d?.cab&&Array.isArray(d.prendas))void confirmarDialogo("Hay un borrador guardado en este dispositivo. ¿Deseas recuperarlo?").then(si=>si?setForm({...d,cab:{...cabInicial(perfil.nombre_completo),...d.cab},archivos:(d.archivos||[]).filter(x=>x.url)}):localStorage.removeItem(BORRADOR))}catch{localStorage.removeItem(BORRADOR)}},[perfil.nombre_completo]);
+ useEffect(()=>{void supabase.rpc("catalogo_ingreso_contrato_v115").then(({data,error})=>{if(error)void mostrarAvisoDialogo(error.message,"No se pudieron cargar los locales",true);else setAlmacenesVenta(((data as{almacenes?:AlmacenVenta[]})?.almacenes)||[])})},[supabase]);
  useEffect(()=>{const t=setTimeout(()=>{const seguro={...form,archivos:form.archivos.filter(x=>x.url).map(({file,preview,...x})=>x)};localStorage.setItem(BORRADOR,JSON.stringify(seguro))},900);return()=>clearTimeout(t)},[form]);
 
  // "prendas" es el formato de guardado (una fila por combinacion con cantidad
@@ -322,7 +343,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
   });
  },[form.lineas]);
 
- function errorPaso(n=paso){const c=form.cab;if(n===0&&(!texto(c.vendedor)||!texto(c.cliente)||!texto(c.canal)||!texto(c.telefono)))return"Completa vendedor, canal de venta, cliente/equipo y teléfono.";if(n===1&&(!c.fecha_entrega||!c.tipo_contrato||!c.prioridad))return"Completa tipo, prioridad y fecha de entrega.";if(n===2&&!form.prendasSel.length)return"Selecciona al menos una prenda del pedido.";if(n===5&&(!form.prendas.length||total<1))return"Agrega al menos una línea de talla con cantidad.";if(n===4&&(!c.nombre_tecnica||!c.numero_tecnica||!c.sellos_tpu))return"Completa las técnicas de nombre, número y TPU.";if(n===6&&(!texto(c.vendedor_responsable)||!c.autorizado))return"Confirma el vendedor responsable y la autorización de producción.";if(n===6&&Number(c.abono)>Number(c.presupuesto))return"El abono no puede superar el presupuesto.";if(n===6){const r=comprobarFacturacion(form.prendas,form.facturacion);if(r.hayPrendas&&!r.ok)return`La facturación no cuadra con las prendas. ${r.faltan.length?"Faltan: "+r.faltan.join(", ")+". ":""}${r.sobran.length?"Sobran: "+r.sobran.join(", ")+".":""}`;}return""}
+ function errorPaso(n=paso){const c=form.cab;if(n===0&&(!texto(c.vendedor)||!texto(c.nombre_contrato_v115)||!texto(c.cliente)||!texto(c.canal)||!texto(c.telefono)))return"Completa vendedor, canal, nombre del contrato, cliente real y teléfono.";if(n===0&&almacenesVenta.length>1&&!c.almacen_venta_id_v115)return"Selecciona la tienda o local donde se realizó la venta.";if(n===1&&(!c.fecha_entrega||!c.tipo_contrato||!c.prioridad))return"Completa tipo, prioridad y fecha de entrega.";if(n===2&&!form.prendasSel.length)return"Selecciona al menos una prenda del pedido.";if(n===5&&(!form.prendas.length||total<1))return"Agrega al menos una línea de talla con cantidad.";if(n===4&&(!c.nombre_tecnica||!c.numero_tecnica||!c.sellos_tpu))return"Completa las técnicas de nombre, número y TPU.";if(n===6&&(!texto(c.vendedor_responsable)||!c.autorizado))return"Confirma el vendedor responsable y la autorización de producción.";if(n===6&&Number(c.abono)>Number(c.presupuesto))return"El abono no puede superar el presupuesto.";if(n===6){const r=comprobarFacturacion(form.prendas,form.facturacion);if(r.hayPrendas&&!r.ok)return`La facturación no cuadra con las prendas. ${r.faltan.length?"Faltan: "+r.faltan.join(", ")+". ":""}${r.sobran.length?"Sobran: "+r.sobran.join(", ")+".":""}`;}return""}
  async function irSiguiente(){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true);setPaso(x=>Math.min(6,x+1))}
  async function abrirPaso(i:number){if(i>paso){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true)}setPaso(i)}
 
@@ -343,7 +364,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
  async function guardar(){const falla=[0,1,2,4,6].map(errorPaso).find(Boolean);if(falla)return mostrarAvisoDialogo(falla,"Contrato incompleto",true);if(!await confirmarDialogo(`Se registrará un contrato nuevo con ${total} prendas y saldo de $${saldo.toFixed(2)}. ¿Continuar?`))return;setGuardando(true);try{const archivos:any[]=[];for(let orden=0;orden<form.archivos.length;orden++){const a=form.archivos[orden];if(!a.file){archivos.push({...a,orden});continue}const key=uuid();const prep=await supabase.rpc("preparar_archivo_contrato_v108",{p_nombre_archivo:a.file.name,p_mime_type:a.file.type,p_tamano_bytes:a.file.size,p_idempotency_key:key});if(prep.error)throw prep.error;const path=(prep.data as any).path;const subida=await supabase.storage.from("contratos-archivos").upload(path,a.file,{contentType:a.file.type,upsert:false});if(subida.error)throw subida.error;archivos.push({...a,file:undefined,preview:undefined,pendiente_id:(prep.data as any).id,url:supabase.storage.from("contratos-archivos").getPublicUrl(path).data.publicUrl,orden})}
   const mapa=new Map<string,Prenda>();for(const x of form.prendas){const k=[x.prenda,x.calidad,x.detalle,x.genero,x.talla].join("¦");const anterior=mapa.get(k);mapa.set(k,{...x,cantidad:(anterior?.cantidad||0)+Number(x.cantidad)})}
   const payload={contrato:{...form.cab,prendas_txt:form.prendasSel.map(etiquetaPrenda).join(", "),colores_generales:form.cab.colores.split(",").map(x=>x.trim()).filter(Boolean).map(nombre=>({nombre})),adicionales:{detalle:form.cab.adicionales,items:ADICIONALES.filter(a=>form.adicCant[a.clave]>0||form.adic[a.clave]!==a.opciones[0]).map(a=>({tipo:a.titulo,valor:form.adic[a.clave],cantidad:form.adicCant[a.clave]})),medidas_bandera:form.medidasBandera}},prendas:Array.from(mapa.values()).map(({id,...x})=>x),jugadores:form.jugadores.map(({id,...x},orden)=>({...x,orden})),archivos:archivos.map(({id,...x})=>x),especificaciones:form.specs.map(({id,mockup,campos,observacion,...x},orden)=>({...x,orden,variante_mockup:mockup,spec:{campos,observacion}})),facturacion:form.facturacion.map(({id,...x},orden)=>({...x,orden}))};
-  const alta=await supabase.rpc("crear_contrato_v108",{p_datos:payload,p_idempotency_key:uuid()});if(alta.error)throw alta.error;const r:any=alta.data;localStorage.removeItem(BORRADOR);setResultado({numero:r.numero,id:r.contrato_id,respaldo:"en_curso"});setPreview(false);void respaldar(r.contrato_id)}catch(e){await mostrarAvisoDialogo(e instanceof Error?e.message:"No se pudo registrar el contrato","Error al registrar",true)}finally{setGuardando(false)}}
+  const alta=await supabase.rpc("crear_contrato_v115",{p_datos:payload,p_idempotency_key:uuid()});if(alta.error)throw alta.error;const r:any=alta.data;localStorage.removeItem(BORRADOR);setResultado({numero:r.numero,id:r.contrato_id,respaldo:"en_curso"});setPreview(false);void respaldar(r.contrato_id)}catch(e){await mostrarAvisoDialogo(e instanceof Error?e.message:"No se pudo registrar el contrato","Error al registrar",true)}finally{setGuardando(false)}}
 
  async function respaldar(id:string){try{const res=await fetch("/api/bomansport/respaldo-contrato",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contrato_id:id})});const data=await res.json();setResultado(x=>x&&x.id===id?{...x,respaldo:data.ok?"ok":"pendiente"}:x)}catch{setResultado(x=>x&&x.id===id?{...x,respaldo:"pendiente"}:x)}}
 
@@ -352,7 +373,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
   <header className={estilos.cabecera}><div><span className="eyebrow">VENTAS · v108</span><h1>Ingreso de contratos</h1><p>Pedido, brief técnico, tallas, diseños y valores conectados directamente con producción.</p></div><button className="secondary" onClick={()=>setPreview(true)}>Vista previa</button></header>
   <nav className={estilos.pasos}>{PASOS.map((x,i)=><button key={x} className={i===paso?estilos.activo:i<paso?estilos.completo:""} onClick={()=>void abrirPaso(i)}><b>{i<paso?"✓":i+1}</b><span>{x}</span></button>)}</nav>
   <section className={`card ${estilos.formulario}`}>
-   {paso===0&&<PasoCliente form={form} setCab={setCab} busqueda={busqueda} setBusqueda={setBusqueda} buscar={buscarAnterior} buscando={buscando} coincidencias={coincidencias} cargar={cargarReposicion}/>} 
+   {paso===0&&<PasoCliente form={form} setCab={setCab} almacenes={almacenesVenta} busqueda={busqueda} setBusqueda={setBusqueda} buscar={buscarAnterior} buscando={buscando} coincidencias={coincidencias} cargar={cargarReposicion}/>} 
    {paso===1&&<PasoContrato form={form} setCab={setCab}/>}
    {paso===2&&<PasoPrendas form={form} setForm={setForm} setCab={setCab} total={total} supabase={supabase}/>}
    {paso===3&&<PasoArchivos form={form} seleccionar={seleccionar} cambiar={cambiar} quitar={quitar}/>} 
@@ -554,7 +575,16 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
  const calidades=Array.from(new Set(form.prendas.map(x=>x.calidad).filter(Boolean)));
  const calidad=calidades.length?calidades.join(" / "):"Sin calidad";
  const colores=c.colores.split(",").map(x=>x.trim()).filter(Boolean);
- const adicionales=texto(c.adicionales).split("\n").map(x=>x.trim()).filter(Boolean);
+ // Mismo criterio que el legado: solo se imprime lo que difiere del valor por
+ // defecto, con "×cantidad" cuando la hay. La bandera va en MAYUSCULA y con
+ // recuadro propio porque en produccion se la saltaban.
+ const adicionales=(()=>{const out:string[]=[];
+  for(const a of ADICIONALES){const v=form.adic[a.clave],n=form.adicCant[a.clave]||0;
+   if(!v||v===a.opciones[0])continue;
+   out.push(a.clave==="bandera"?"BANDERA"+(n>0?` ×${n}`:""):v+(n>0?` ×${n}`:""));}
+  if(texto(form.medidasBandera))out.push(`📏 Medidas: ${texto(form.medidasBandera)}`);
+  if(texto(c.adicionales))out.push(texto(c.adicionales));
+  return out})();
  // Jugadores y specs se reparten por mockup; lo que no cae en ninguno se muestra
  // aparte para que nunca desaparezca del papel (el legado tuvo ese bug y lo blinda).
  const porMockup=mockups.map((m,i)=>({m,i,jugadores:form.jugadores.filter(j=>indiceMockup(j.mockup,mockups)===i),specs:form.specs.filter(s=>indiceMockup(s.mockup,mockups)===i)}));
@@ -585,7 +615,7 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
       <td className={estilos.bhRespH} rowSpan={2}><div className={estilos.bhCod}>NUEVO CONTRATO</div>RESPONSABLE<div className={estilos.bhResp}>{c.vendedor_responsable||c.vendedor||"—"}</div></td>
      </tr>
      <tr><td className={estilos.bhLbl}>FECHA DE INGRESO:</td><td className={estilos.bhVal}>{fechaCorta(new Date().toISOString().slice(0,10))}</td></tr>
-     <tr><td className={estilos.bhLbl}>FECHA DE ENTREGA:</td><td className={`${estilos.bhVal} ${estilos.bhEnt}`}>{fechaCorta(c.fecha_entrega)||"—"}</td><td className={estilos.bhVal}>{c.tipo_contrato} · {total} prendas</td></tr>
+     <tr><td className={estilos.bhLbl}>FECHA DE ENTREGA:</td><td className={`${estilos.bhVal} ${estilos.bhEnt}`} colSpan={2}>{fechaCorta(c.fecha_entrega)||"—"}</td></tr>
      <tr><td className={estilos.bhLbl}>ENTREGA:</td><td className={estilos.bhVal} colSpan={2}>{c.forma_entrega||"—"}{c.direccion&&` · ${c.direccion}`}</td></tr>
     </tbody></table>
 
@@ -600,9 +630,7 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
       <table className={estilos.bDatos}><tbody>
        <tr><td>Técnica nombre</td><td>{c.nombre_tecnica||"—"}</td></tr>
        <tr><td>Técnica número</td><td>{c.numero_tecnica||"—"}</td></tr>
-       <tr><td>Sellos TPU</td><td>{c.sellos_tpu||"—"}{c.ubicacion_tpu&&` · ${c.ubicacion_tpu}`}</td></tr>
        {!!texto(c.bordado)&&<tr><td>Bordado especial</td><td style={{color:"#7c3aed",fontWeight:700}}>{c.bordado}</td></tr>}
-       {c.arqueros>0&&<tr><td>Arqueros</td><td>{c.arqueros}</td></tr>}
       </tbody></table>
      </div>
      {!!adicionales.length&&<div className={estilos.bAdic}><div className={estilos.bAdicTit}>⚠️ ADICIONALES DEL PEDIDO</div>{adicionales.map((l,i)=><div key={i} className={/^bandera/i.test(l)?estilos.bAdicBandera:estilos.bAdicLinea}>• {l}</div>)}</div>}
@@ -662,16 +690,20 @@ function TablaJugadores({jugadores}:{jugadores:Jugador[]}){
  const arr=jugadores.slice().sort((a,b)=>posCalidad(a.calidad)-posCalidad(b.calidad)||a.tipo_uniforme.localeCompare(b.tipo_uniforme)||a.nombre.localeCompare(b.nombre));
  const hay={numero:arr.some(j=>texto(j.numero)),manga:arr.some(j=>j.manga==="Larga"),inferior:arr.some(j=>texto(j.talla_inferior)),arquero:arr.some(j=>texto(j.modelo_arquero)),calidad:arr.some(j=>texto(j.calidad)),tipo:arr.some(j=>texto(j.tipo_uniforme)),detalle:arr.some(j=>texto(j.detalle))};
  const columnas=1+Number(hay.numero)+1+1+Number(hay.manga)+Number(hay.inferior)+Number(hay.arquero)+Number(hay.tipo)+Number(hay.detalle);
- let calPrevia="";
+ let calPrevia="";let grupoPrevio:number|null=null;
  return <table className={estilos.bJug}>
   <thead><tr>
    <th>NOMBRE</th>{hay.numero&&<th>NÚM</th>}<th>CATEG.</th><th>T.CAM</th>{hay.manga&&<th>MANGA</th>}{hay.inferior&&<th>T.PANT</th>}{hay.arquero&&<th>MOD. ARQ.</th>}{hay.tipo&&<th>TIPO</th>}{hay.detalle&&<th>DETALLE</th>}
   </tr></thead>
   <tbody>{arr.map((j,i)=>{
    const banda=hay.calidad&&texto(j.calidad)&&j.calidad!==calPrevia?j.calidad:"";
-   if(banda)calPrevia=j.calidad;
+   if(banda){calPrevia=j.calidad;grupoPrevio=null}
+   const g=grupoPrendaJugador(j.tipo_uniforme);
+   const bandaGrupo=hay.tipo&&g!==grupoPrevio;
+   if(bandaGrupo)grupoPrevio=g;
    return <Fragment key={j.id}>
     {!!banda&&<tr><td className={estilos.bBandaCal} colSpan={columnas}>■ {banda.toUpperCase()} ▼</td></tr>}
+    {bandaGrupo&&<tr><td className={g===1?estilos.bGrupoSup:g===2?estilos.bGrupoInf:estilos.bGrupoComp} colSpan={columnas}>{g===1?"▲":g===2?"▼":"◆"}&nbsp; {etiquetaGrupo(arr,i)}<span className={estilos.bGrupoCuenta}>{cuentaGrupo(arr,i)} jug.</span></td></tr>}
     <tr className={i%2===0?estilos.bPar:undefined}>
      <td className={texto(j.nombre)?estilos.bNombre:estilos.bSinNombre}>{texto(j.nombre)||"SIN NOMBRE"}</td>
      {hay.numero&&<td className={estilos.bCentroFuerte}>{j.numero}</td>}
