@@ -62,14 +62,66 @@ function Icono({ nombre, size = 19 }: { nombre: keyof typeof ICONOS; size?: numb
   );
 }
 
-// Orden visual de los modulos de negocio en el menu. Unica fuente de la
-// reorganizacion: modulosBase no cambia de orden ni de contenido, para
-// minimizar choques con ediciones concurrentes sobre ese arreglo.
-const ORDEN_NAV: ModuloId[] = [
+// Agrupacion visual en modulos de negocio. modulosBase no cambia de
+// contenido (cada modulo original sigue siendo su propia unidad, con su
+// propio conjunto de "visible"); esto solo decide DONDE se pinta cada uno,
+// para minimizar choques con ediciones concurrentes sobre modulosBase.
+//
+// GrupoId es un subconjunto de ModuloId (todo grupo toma el nombre de su
+// modulo "principal"), asi que el icono del grupo es simplemente
+// Icono nombre={grupo.id} - no hace falta un mapa de iconos aparte.
+type GrupoId = Exclude<ModuloId, "inventario" | "mantenimiento">;
+
+const GRUPO_DE_MODULO: Record<ModuloId, GrupoId> = {
+  notificaciones: "notificaciones",
+  ventas: "ventas",
+  compras: "compras",
+  finanzas: "finanzas",
+  produccion: "produccion",
+  inventario: "compras",      // Compras: facturas/retenciones + bodega/inventario
+  mantenimiento: "produccion", // Producción: maquinaria, mantenimientos, contratos...
+  franquicias: "franquicias",
+  reportes: "reportes",
+  nomina: "nomina",
+  importaciones: "importaciones",
+  administracion: "administracion",
+  contabilidad: "contabilidad",
+};
+
+// Modulos que, dentro de su grupo, se muestran como su propio sub-menu
+// (un segundo nivel de acordeon) en vez de mezclar sus opciones sueltas con
+// las del grupo. Hoy solo Inventario: tiene 7 opciones propias y merece su
+// espacio dentro de Compras. Mantenimiento tiene una sola opcion, por eso se
+// deja como item suelto dentro de Producción en vez de anidarlo.
+const MODULOS_ANIDADOS: Partial<Record<ModuloId, true>> = { inventario: true };
+
+const ORDEN_GRUPOS: GrupoId[] = [
   "compras", "finanzas", "contabilidad", "ventas", "produccion",
   "franquicias", "nomina", "administracion",
-  "notificaciones", "inventario", "mantenimiento", "reportes", "importaciones",
+  "notificaciones", "reportes", "importaciones",
 ];
+
+const ETIQUETA_GRUPO: Record<GrupoId, string> = {
+  compras: "Compras",
+  finanzas: "Tesorería",
+  contabilidad: "Contabilidad",
+  ventas: "Ventas",
+  produccion: "Producción",
+  franquicias: "Franquicias",
+  nomina: "Talento Humano y Nómina",
+  administracion: "Administración",
+  notificaciones: "Notificaciones",
+  reportes: "Análisis",
+  importaciones: "Importaciones",
+};
+
+type SubgrupoRenderizado = { id: ModuloId; etiqueta: string; opciones: OpcionMenu[] };
+type GrupoRenderizado = {
+  id: GrupoId;
+  etiqueta: string;
+  opcionesDirectas: OpcionMenu[];
+  subgrupos: SubgrupoRenderizado[];
+};
 
 function nombreParaMenu(nombreCompleto: string) {
   const limpio = nombreCompleto.trim().replace(/\s+/g, " ");
@@ -98,7 +150,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const [movilAbierto, setMovilAbierto] = useState(false);
   const [contraido, setContraido] = useState(false);
   const [busqueda, setBusqueda] = useState("");
-  const [moduloAbierto, setModuloAbierto] = useState<ModuloId | null>(null);
+  const [moduloAbierto, setModuloAbierto] = useState<GrupoId | null>(null);
+  const [subgrupoAbierto, setSubgrupoAbierto] = useState<ModuloId | null>(null);
 
   useEffect(() => {
     setContraido(window.localStorage.getItem("boman-sidebar-contraido") === "1");
@@ -130,7 +183,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     });
   }
 
-  function alternarModulo(id: ModuloId) {
+  function alternarModulo(id: GrupoId) {
     if (contraido) {
       setContraido(false);
       window.localStorage.setItem("boman-sidebar-contraido", "0");
@@ -138,6 +191,10 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       return;
     }
     setModuloAbierto((actual) => (actual === id ? null : id));
+  }
+
+  function alternarSubgrupo(id: ModuloId) {
+    setSubgrupoAbierto((actual) => (actual === id ? null : id));
   }
 
   const puedeEditarProductos = perfil.rol === "admin";
@@ -250,15 +307,30 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   ];
 
   const consulta = busqueda.trim().toLocaleLowerCase("es");
-  const modulos = modulosBase
-    .map((modulo) => ({
-      ...modulo,
-      opciones: modulo.opciones.filter((opcion) => opcion.visible && (
-        !consulta || `${modulo.etiqueta} ${opcion.etiqueta} ${opcion.descripcion}`.toLocaleLowerCase("es").includes(consulta)
-      )),
-    }))
-    .filter((modulo) => modulo.opciones.length > 0)
-    .sort((a, b) => ORDEN_NAV.indexOf(a.id) - ORDEN_NAV.indexOf(b.id));
+  const gruposMapa = new Map<GrupoId, GrupoRenderizado>();
+  function grupoDe(id: GrupoId): GrupoRenderizado {
+    let grupo = gruposMapa.get(id);
+    if (!grupo) {
+      grupo = { id, etiqueta: ETIQUETA_GRUPO[id], opcionesDirectas: [], subgrupos: [] };
+      gruposMapa.set(id, grupo);
+    }
+    return grupo;
+  }
+  modulosBase.forEach((modulo) => {
+    const opcionesFiltradas = modulo.opciones.filter((opcion) => opcion.visible && (
+      !consulta || `${modulo.etiqueta} ${opcion.etiqueta} ${opcion.descripcion}`.toLocaleLowerCase("es").includes(consulta)
+    ));
+    if (!opcionesFiltradas.length) return;
+    const grupo = grupoDe(GRUPO_DE_MODULO[modulo.id]);
+    if (MODULOS_ANIDADOS[modulo.id]) {
+      grupo.subgrupos.push({ id: modulo.id, etiqueta: modulo.etiqueta, opciones: opcionesFiltradas });
+    } else {
+      grupo.opcionesDirectas.push(...opcionesFiltradas);
+    }
+  });
+  const grupos = ORDEN_GRUPOS
+    .map((id) => gruposMapa.get(id))
+    .filter((grupo): grupo is GrupoRenderizado => Boolean(grupo));
 
   function rutaActiva(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -267,12 +339,15 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const moduloActivo = modulosBase.find((modulo) =>
     modulo.opciones.some((opcion) => opcion.visible && rutaActiva(opcion.href))
   );
+  const grupoActivoId = moduloActivo ? GRUPO_DE_MODULO[moduloActivo.id] : undefined;
+  const subgrupoActivoId = moduloActivo && MODULOS_ANIDADOS[moduloActivo.id] ? moduloActivo.id : undefined;
   const opcionActiva = moduloActivo?.opciones.find((opcion) => opcion.visible && rutaActiva(opcion.href));
   const tituloActual = pathname === "/dashboard" ? "Panel principal" : opcionActiva?.etiqueta ?? "Boman ERP";
 
   useEffect(() => {
-    setModuloAbierto(pathname === "/dashboard" ? null : moduloActivo?.id ?? null);
-  }, [pathname, moduloActivo?.id]);
+    setModuloAbierto(pathname === "/dashboard" ? null : grupoActivoId ?? null);
+    setSubgrupoAbierto(pathname === "/dashboard" ? null : subgrupoActivoId ?? null);
+  }, [pathname, grupoActivoId, subgrupoActivoId]);
 
   return (
     <>
@@ -304,27 +379,27 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
             <span className="nav-enlace-texto"><strong>Panel principal</strong><small>Resumen de tu operación</small></span>
           </Link>
 
-          {modulos.map((modulo) => {
-            const expandido = Boolean(consulta) || moduloAbierto === modulo.id;
-            const activo = moduloActivo?.id === modulo.id;
+          {grupos.map((grupo) => {
+            const expandido = Boolean(consulta) || moduloAbierto === grupo.id;
+            const activo = grupoActivoId === grupo.id;
             return (
-              <section className={`nav-seccion ${expandido ? "abierta" : ""}`} key={modulo.id} aria-label={modulo.etiqueta}>
+              <section className={`nav-seccion ${expandido ? "abierta" : ""}`} key={grupo.id} aria-label={grupo.etiqueta}>
                 <button
                   type="button"
                   className={`nav-modulo ${activo ? "activo" : ""}`}
-                  onClick={() => alternarModulo(modulo.id)}
+                  onClick={() => alternarModulo(grupo.id)}
                   aria-expanded={expandido}
-                  aria-controls={`nav-submenu-${modulo.id}`}
-                  title={modulo.etiqueta}
+                  aria-controls={`nav-submenu-${grupo.id}`}
+                  title={grupo.etiqueta}
                 >
-                  <span className="nav-enlace-icono"><Icono nombre={modulo.id} /></span>
-                  <span className="nav-modulo-texto">{modulo.etiqueta}</span>
+                  <span className="nav-enlace-icono"><Icono nombre={grupo.id} /></span>
+                  <span className="nav-modulo-texto">{grupo.etiqueta}</span>
                   <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
                 </button>
                 {!contraido && (
                   <div className={`nav-submenu-envoltorio${expandido ? " abierta" : ""}`}>
-                    <div className="nav-submenu" id={`nav-submenu-${modulo.id}`}>
-                      {modulo.opciones.map((opcion) => (
+                    <div className="nav-submenu" id={`nav-submenu-${grupo.id}`}>
+                      {grupo.opcionesDirectas.map((opcion) => (
                         <Link
                           key={opcion.href}
                           href={opcion.href}
@@ -336,13 +411,48 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
                           <span className="nav-enlace-flecha" aria-hidden="true">›</span>
                         </Link>
                       ))}
+                      {grupo.subgrupos.map((subgrupo) => {
+                        const subExpandido = Boolean(consulta) || subgrupoAbierto === subgrupo.id;
+                        return (
+                          <div key={subgrupo.id}>
+                            <button
+                              type="button"
+                              className={`nav-modulo ${subgrupoActivoId === subgrupo.id ? "activo" : ""}`}
+                              onClick={() => alternarSubgrupo(subgrupo.id)}
+                              aria-expanded={subExpandido}
+                              aria-controls={`nav-submenu-${subgrupo.id}`}
+                              title={subgrupo.etiqueta}
+                            >
+                              <span className="nav-enlace-icono"><Icono nombre={subgrupo.id} size={17} /></span>
+                              <span className="nav-modulo-texto">{subgrupo.etiqueta}</span>
+                              <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
+                            </button>
+                            <div className={`nav-submenu-envoltorio${subExpandido ? " abierta" : ""}`}>
+                              <div className="nav-submenu" id={`nav-submenu-${subgrupo.id}`}>
+                                {subgrupo.opciones.map((opcion) => (
+                                  <Link
+                                    key={opcion.href}
+                                    href={opcion.href}
+                                    className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
+                                    title={`${opcion.etiqueta} — ${opcion.descripcion}`}
+                                  >
+                                    <span className="nav-subenlace-marca" aria-hidden="true" />
+                                    <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
+                                    <span className="nav-enlace-flecha" aria-hidden="true">›</span>
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
               </section>
             );
           })}
-          {!modulos.length && <p className="nav-sin-resultados">No encontramos ese módulo.</p>}
+          {!grupos.length && <p className="nav-sin-resultados">No encontramos ese módulo.</p>}
         </div>
 
         <div className="nav-usuario">
