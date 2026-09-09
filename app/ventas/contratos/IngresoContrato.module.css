@@ -95,3 +95,15 @@
 @media(max-width:650px){.cabecera{display:block}.cabecera button{margin-top:12px}.grid,.tipos,.cargas,.resumen{grid-template-columns:1fr}.filaPrenda,.filaSpec,.filaJugador,.filaFact{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr}.filaJugador b{display:none}.tituloAccion{align-items:flex-start;flex-direction:column}.acciones{flex-wrap:wrap}.acciones span{width:100%;order:-1}.acciones button{flex:1}}
 
 .pista{font-size:.72rem;color:var(--texto-secundario);margin-top:2px}
+
+/* Cupo de produccion del dia (v110): replica las barras del formulario legado. */
+.cupo{display:grid;gap:7px;padding:12px 14px;border:1px solid var(--borde);border-radius:10px;background:var(--superficie-suave);margin-top:14px}
+.cupo>strong{font-size:.82rem;color:var(--texto-secundario)}
+.barra{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center}
+.barra>span{font-size:.78rem;font-weight:700}
+.barra>b{font-size:.8rem;font-variant-numeric:tabular-nums}
+.barraPista{grid-column:1/-1;height:7px;border-radius:99px;background:var(--borde);overflow:hidden}
+.barraPista i{display:block;height:100%;border-radius:99px}
+.cupoMal{color:#dc2626}
+.cupoExcedido{margin:2px 0 0;padding:8px 10px;border:1px solid #fca5a5;background:#fef2f2;color:#b91c1c;border-radius:8px;font-size:.8rem;font-weight:700}
+.notaLili{margin-top:12px;padding:9px 12px;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:8px;font-size:.8rem}
