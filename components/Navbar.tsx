@@ -88,12 +88,26 @@ const GRUPO_DE_MODULO: Record<ModuloId, GrupoId> = {
   contabilidad: "contabilidad",
 };
 
-// Modulos que, dentro de su grupo, se muestran como su propio sub-menu
-// (un segundo nivel de acordeon) en vez de mezclar sus opciones sueltas con
-// las del grupo. Hoy solo Inventario: tiene 7 opciones propias y merece su
-// espacio dentro de Compras. Mantenimiento tiene una sola opcion, por eso se
-// deja como item suelto dentro de Producción en vez de anidarlo.
-const MODULOS_ANIDADOS: Partial<Record<ModuloId, true>> = { inventario: true };
+// Como se reparten, DENTRO de cada grupo, las opciones que le corresponden
+// (por href) en sub-menus con nombre propio -un segundo nivel de acordeon.
+// Todo lo que un grupo reciba y no figure en ninguna lista de hrefs de abajo
+// se queda como opcion suelta del grupo (por eso "Dashboard de producción"
+// sigue siendo un item directo de Producción: no esta en ninguna lista).
+const SUBGRUPOS_POR_GRUPO: Partial<Record<GrupoId, { id: string; etiqueta: string; icono: ModuloId; hrefs: string[] }[]>> = {
+  compras: [
+    { id: "compras-inventario", etiqueta: "Inventario", icono: "inventario", hrefs: [
+      "/inventario", "/operaciones", "/conteos", "/movimientos", "/control", "/productos", "/configuracion/inventario",
+    ] },
+  ],
+  produccion: [
+    { id: "produccion-contratos", etiqueta: "Contratos", icono: "ventas", hrefs: ["/produccion/contratos", "/tablero"] },
+    { id: "produccion-reportes", etiqueta: "Reportes", icono: "reportes", hrefs: ["/produccion/reportes"] },
+    { id: "produccion-maquinaria", etiqueta: "Maquinaria y activos", icono: "mantenimiento", hrefs: ["/mantenimiento"] },
+    { id: "produccion-control", etiqueta: "Control", icono: "produccion", hrefs: [
+      "/produccion/cronograma", "/produccion/costos", "/produccion/cobros", "/produccion/calidad", "/produccion",
+    ] },
+  ],
+};
 
 const ORDEN_GRUPOS: GrupoId[] = [
   "compras", "finanzas", "contabilidad", "ventas", "produccion",
@@ -115,7 +129,7 @@ const ETIQUETA_GRUPO: Record<GrupoId, string> = {
   importaciones: "Importaciones",
 };
 
-type SubgrupoRenderizado = { id: ModuloId; etiqueta: string; opciones: OpcionMenu[] };
+type SubgrupoRenderizado = { id: string; etiqueta: string; icono: ModuloId; opciones: OpcionMenu[] };
 type GrupoRenderizado = {
   id: GrupoId;
   etiqueta: string;
@@ -151,7 +165,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const [contraido, setContraido] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [moduloAbierto, setModuloAbierto] = useState<GrupoId | null>(null);
-  const [subgrupoAbierto, setSubgrupoAbierto] = useState<ModuloId | null>(null);
+  const [subgrupoAbierto, setSubgrupoAbierto] = useState<string | null>(null);
 
   useEffect(() => {
     setContraido(window.localStorage.getItem("boman-sidebar-contraido") === "1");
@@ -193,7 +207,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     setModuloAbierto((actual) => (actual === id ? null : id));
   }
 
-  function alternarSubgrupo(id: ModuloId) {
+  function alternarSubgrupo(id: string) {
     setSubgrupoAbierto((actual) => (actual === id ? null : id));
   }
 
@@ -321,13 +335,21 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       !consulta || `${modulo.etiqueta} ${opcion.etiqueta} ${opcion.descripcion}`.toLocaleLowerCase("es").includes(consulta)
     ));
     if (!opcionesFiltradas.length) return;
-    const grupo = grupoDe(GRUPO_DE_MODULO[modulo.id]);
-    if (MODULOS_ANIDADOS[modulo.id]) {
-      grupo.subgrupos.push({ id: modulo.id, etiqueta: modulo.etiqueta, opciones: opcionesFiltradas });
-    } else {
-      grupo.opcionesDirectas.push(...opcionesFiltradas);
-    }
+    // Todo entra primero como opcion directa del grupo; el reparto en
+    // sub-menus (si el grupo tiene alguno declarado) se hace despues, sobre
+    // el resultado ya combinado de todos los modulos que caen en ese grupo.
+    grupoDe(GRUPO_DE_MODULO[modulo.id]).opcionesDirectas.push(...opcionesFiltradas);
   });
+  for (const grupo of gruposMapa.values()) {
+    const config = SUBGRUPOS_POR_GRUPO[grupo.id];
+    if (!config) continue;
+    for (const sub of config) {
+      const opciones = grupo.opcionesDirectas.filter((opcion) => sub.hrefs.includes(opcion.href));
+      if (!opciones.length) continue;
+      grupo.subgrupos.push({ id: sub.id, etiqueta: sub.etiqueta, icono: sub.icono, opciones });
+      grupo.opcionesDirectas = grupo.opcionesDirectas.filter((opcion) => !sub.hrefs.includes(opcion.href));
+    }
+  }
   const grupos = ORDEN_GRUPOS
     .map((id) => gruposMapa.get(id))
     .filter((grupo): grupo is GrupoRenderizado => Boolean(grupo));
@@ -340,8 +362,10 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     modulo.opciones.some((opcion) => opcion.visible && rutaActiva(opcion.href))
   );
   const grupoActivoId = moduloActivo ? GRUPO_DE_MODULO[moduloActivo.id] : undefined;
-  const subgrupoActivoId = moduloActivo && MODULOS_ANIDADOS[moduloActivo.id] ? moduloActivo.id : undefined;
   const opcionActiva = moduloActivo?.opciones.find((opcion) => opcion.visible && rutaActiva(opcion.href));
+  const subgrupoActivoId = grupoActivoId && opcionActiva
+    ? SUBGRUPOS_POR_GRUPO[grupoActivoId]?.find((sub) => sub.hrefs.includes(opcionActiva.href))?.id
+    : undefined;
   const tituloActual = pathname === "/dashboard" ? "Panel principal" : opcionActiva?.etiqueta ?? "Boman ERP";
 
   useEffect(() => {
@@ -423,7 +447,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
                               aria-controls={`nav-submenu-${subgrupo.id}`}
                               title={subgrupo.etiqueta}
                             >
-                              <span className="nav-enlace-icono"><Icono nombre={subgrupo.id} size={17} /></span>
+                              <span className="nav-enlace-icono"><Icono nombre={subgrupo.icono} size={17} /></span>
                               <span className="nav-modulo-texto">{subgrupo.etiqueta}</span>
                               <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
                             </button>
