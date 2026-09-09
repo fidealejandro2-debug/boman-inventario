@@ -38,6 +38,8 @@ export default function PermisosCliente() {
   const [guardando, setGuardando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [modoBomanActivo, setModoBomanActivo] = useState<boolean | null>(null);
+  const [cambiandoModoBoman, setCambiandoModoBoman] = useState(false);
 
   const clave = (rol: string, permiso: string) => `${rol}:${permiso}`;
 
@@ -61,8 +63,39 @@ export default function PermisosCliente() {
     setValores(mapa);
   }
 
+  async function cargarModoBoman() {
+    const { data } = await supabase.from("configuracion_sistema").select("es_boman_especifico_activo").single();
+    setModoBomanActivo(data?.es_boman_especifico_activo ?? true);
+  }
+
+  async function alternarModoBoman() {
+    if (modoBomanActivo === null) return;
+    const nuevoValor = !modoBomanActivo;
+    const motivo = await pedirTextoDialogo(
+      nuevoValor
+        ? "Motivo para reactivar las funciones específicas de Boman Sport:"
+        : "Motivo para ocultar las funciones específicas de Boman Sport (modo marca blanca):",
+      nuevoValor ? "Vuelve a operar como Boman Sport" : "Preparar el sistema para venderlo como producto genérico"
+    );
+    if (motivo === null) return;
+    if (!motivo.trim()) return setError("El motivo del cambio es obligatorio.");
+
+    setCambiandoModoBoman(true);
+    setError(null);
+    setMensaje(null);
+    const { data, error: rpcError } = await supabase.rpc("admin_actualizar_configuracion_sistema_v107", {
+      p_es_boman_especifico_activo: nuevoValor,
+      p_motivo: motivo,
+    });
+    setCambiandoModoBoman(false);
+    if (rpcError) return setError(rpcError.message);
+    setMensaje((data as { mensaje?: string } | null)?.mensaje ?? "Configuración actualizada.");
+    await cargarModoBoman();
+  }
+
   useEffect(() => {
     cargar();
+    cargarModoBoman();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -121,11 +154,27 @@ export default function PermisosCliente() {
 
   return (
     <div className="card">
-      <h2>Permisos por rol</h2>
+      <div className="header-row">
+        <h2 style={{ margin: 0 }}>Permisos por rol</h2>
+        <a href="/administracion/permisos-personas">Permisos por persona →</a>
+      </div>
       <p className="ayuda">
         Define qué módulos aparecen y pueden abrir los usuarios de cada rol. Las
         asignaciones de empresa y almacén siguen limitando la información visible.
       </p>
+
+      {modoBomanActivo !== null && (
+        <div className="aviso" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <span>
+            {modoBomanActivo
+              ? "Funciones específicas de Boman Sport activas (contratos/BomanSport, franquicias)."
+              : "Modo marca blanca: esas funciones están ocultas para todos, incluido Administrador."}
+          </span>
+          <button className="secondary" disabled={cambiandoModoBoman} onClick={alternarModoBoman}>
+            {cambiandoModoBoman ? "Guardando…" : modoBomanActivo ? "Ocultar funciones de Boman Sport" : "Reactivar funciones de Boman Sport"}
+          </button>
+        </div>
+      )}
       <p className="aviso">
         Las reglas críticas no se pueden desactivar desde aquí: Administración conserva
         acceso total, nadie puede aprobar su propio conteo y las acciones sensibles

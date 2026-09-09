@@ -19,7 +19,8 @@ type ModuloId =
   | "reportes"
   | "nomina"
   | "importaciones"
-  | "administracion";
+  | "administracion"
+  | "contabilidad";
 
 type OpcionMenu = {
   href: string;
@@ -47,6 +48,7 @@ const ICONOS: Record<ModuloId | "inicio" | "buscar" | "salir", ReactNode> = {
   reportes: <><path d="M5 20V10M12 20V4M19 20v-7"/><path d="M3 20h18"/></>,
   nomina: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
   importaciones: <><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/></>,
+  contabilidad: <><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 9v11"/></>,
   administracion: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
   buscar: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
   salir: <><path d="M10 17l5-5-5-5M15 12H3"/><path d="M14 3h6v18h-6"/></>,
@@ -59,6 +61,15 @@ function Icono({ nombre, size = 19 }: { nombre: keyof typeof ICONOS; size?: numb
     </svg>
   );
 }
+
+// Orden visual de los modulos de negocio en el menu. Unica fuente de la
+// reorganizacion: modulosBase no cambia de orden ni de contenido, para
+// minimizar choques con ediciones concurrentes sobre ese arreglo.
+const ORDEN_NAV: ModuloId[] = [
+  "compras", "finanzas", "contabilidad", "ventas", "produccion",
+  "franquicias", "nomina", "administracion",
+  "notificaciones", "inventario", "mantenimiento", "reportes", "importaciones",
+];
 
 function nombreParaMenu(nombreCompleto: string) {
   const limpio = nombreCompleto.trim().replace(/\s+/g, " ");
@@ -138,14 +149,22 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerTesoreria = tienePermiso(perfil, "tesoreria.acceder");
   const puedeVerProduccion = tienePermiso(perfil, "produccion.acceder");
   const puedeVerCostosProduccion = tienePermiso(perfil, "produccion.costos.ver");
-  const puedeVerFinanzasContratos = tienePermiso(perfil, "contratos.finanzas.ver");
+  // v107: oculta lo especifico de Boman Sport (contratos/BomanSport,
+  // franquicias) incluso para admin cuando el ERP corre en modo marca
+  // blanca. Se consulta directo desde el perfil, sin pasar por
+  // tienePermiso(): esa funcion tiene un bypass de admin que la haria
+  // inutil aqui (ver lib/permisos.ts).
+  const modoBoman = perfil.modo_boman_especifico;
+  const puedeVerFinanzasContratos = tienePermiso(perfil, "contratos.finanzas.ver") && modoBoman;
   const puedeVerNomina = tienePermiso(perfil, "nomina.acceder");
-  const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder");
+  const puedeVerFranquicia = tienePermiso(perfil, "franquicia.acceder") && modoBoman;
   // La caja de tienda propia usa el mismo permiso que la de franquicia, pero no
-  // se le muestra a los roles de franquicia: ellos entran por /franquicia.
+  // se le muestra a los roles de franquicia: ellos entran por /franquicia. No
+  // se le aplica modoBoman: es la caja generica de cualquier tienda, no algo
+  // especifico de franquicias.
   const puedeVerCajaTienda = tienePermiso(perfil, "franquicia.caja")
     && ["admin", "control", "gerencia", "tienda"].includes(perfil.rol);
-  const puedeVerConsolidadoFranquicias = tienePermiso(perfil, "franquicia.consolidado");
+  const puedeVerConsolidadoFranquicias = tienePermiso(perfil, "franquicia.consolidado") && modoBoman;
   const puedeVerNotificaciones = tienePermiso(perfil, "notificaciones.acceder");
   const puedeVerMantenimiento = tienePermiso(perfil, "mantenimiento.acceder");
   const puedeVerImportaciones = tienePermiso(perfil, "importaciones.acceder");
@@ -207,7 +226,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     { id: "reportes", etiqueta: "Análisis", opciones: [
       { href: "/reportes", etiqueta: "Reportes", descripcion: "Indicadores y cumplimiento", visible: tienePermiso(perfil, "reportes.acceder") },
     ] },
-    { id: "nomina", etiqueta: "Talento humano", opciones: [
+    { id: "nomina", etiqueta: "Talento Humano y Nómina", opciones: [
       { href: "/nomina", etiqueta: "Personal y nómina", descripcion: "Expedientes, novedades y roles", visible: puedeVerNomina },
     ] },
     { id: "importaciones", etiqueta: "Importaciones", opciones: [
@@ -217,10 +236,17 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/administracion/empresas", etiqueta: "Empresas y locales", descripcion: "Grupo, RUC, tiendas y bodegas", visible: puedeAdministrar },
       { href: "/administracion/usuarios", etiqueta: "Usuarios", descripcion: "Roles, almacenes y accesos", visible: puedeAdministrar },
       { href: "/administracion/permisos", etiqueta: "Permisos por rol", descripcion: "Matriz de acceso del ERP", visible: puedeAdministrar },
-      { href: "/administracion/franquicias", etiqueta: "Configurar franquicias", descripcion: "Locales y empresas titulares", visible: puedeAdministrar },
-      { href: "/administracion/contratos-bomansport", etiqueta: "Sincronización BomanSport", descripcion: "Importación de contratos desde Google Sheets", visible: puedeAdministrar },
-      { href: "/administracion/cierre-bomansport", etiqueta: "Cierre BomanSport", descripcion: "Diagnóstico y transición definitiva a Vercel", visible: puedeAdministrar },
+      { href: "/administracion/permisos-personas", etiqueta: "Permisos por persona", descripcion: "Excepciones individuales sobre el rol", visible: puedeAdministrar },
+      { href: "/administracion/franquicias", etiqueta: "Configurar franquicias", descripcion: "Locales y empresas titulares", visible: puedeAdministrar && modoBoman },
+      { href: "/administracion/contratos-bomansport", etiqueta: "Sincronización BomanSport", descripcion: "Importación de contratos desde Google Sheets", visible: puedeAdministrar && modoBoman },
+      { href: "/administracion/cierre-bomansport", etiqueta: "Cierre BomanSport", descripcion: "Diagnóstico y transición definitiva a Vercel", visible: puedeAdministrar && modoBoman },
     ] },
+    // Modulo vacio a proposito: el pipeline de render de abajo filtra los
+    // modulos sin opciones visibles, asi que "Contabilidad" no aparece en el
+    // menu hasta que una pantalla contable real (libro diario, libro mayor,
+    // activos fijos...) le agregue una opcion aqui. Trabajo grande aparte,
+    // fuera de esta reorganizacion.
+    { id: "contabilidad", etiqueta: "Contabilidad", opciones: [] },
   ];
 
   const consulta = busqueda.trim().toLocaleLowerCase("es");
@@ -231,7 +257,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
         !consulta || `${modulo.etiqueta} ${opcion.etiqueta} ${opcion.descripcion}`.toLocaleLowerCase("es").includes(consulta)
       )),
     }))
-    .filter((modulo) => modulo.opciones.length > 0);
+    .filter((modulo) => modulo.opciones.length > 0)
+    .sort((a, b) => ORDEN_NAV.indexOf(a.id) - ORDEN_NAV.indexOf(b.id));
 
   function rutaActiva(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);

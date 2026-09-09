@@ -99,6 +99,11 @@ export type Perfil = {
   entidad_id: string | null;
   activo: boolean;
   permisos: PermisoCodigo[];
+  // v107: si es false, oculta lo especifico de Boman Sport (contratos/
+  // BomanSport, franquicias) incluso para admin -por eso Navbar.tsx lo
+  // consulta directo, sin pasar por tienePermiso() (ver su propio bypass
+  // de admin mas abajo).
+  modo_boman_especifico: boolean;
 };
 
 export function tienePermiso(

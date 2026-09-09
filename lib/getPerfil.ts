@@ -90,10 +90,14 @@ export async function getPerfilActual(): Promise<Perfil> {
     redirect("/login?motivo=inactivo");
   }
 
-  const perfilBase = perfil as Omit<Perfil, "permisos">;
-  const { data: permisos, error: permisosError } = await supabase.rpc(
-    "permisos_usuario_actual_v35"
-  );
+  const perfilBase = perfil as Omit<Perfil, "permisos" | "modo_boman_especifico">;
+  const [
+    { data: permisos, error: permisosError },
+    { data: modoBoman, error: modoBomanError },
+  ] = await Promise.all([
+    supabase.rpc("permisos_usuario_actual_v35"),
+    supabase.rpc("modo_boman_especifico_activo"),
+  ]);
 
   return {
     ...perfilBase,
@@ -101,5 +105,8 @@ export async function getPerfilActual(): Promise<Perfil> {
       !permisosError && Array.isArray(permisos)
         ? (permisos as PermisoCodigo[])
         : PERMISOS_ANTERIORES[perfilBase.rol],
+    // Fail-open a true: un error de RPC nunca debe ocultar algo por si solo,
+    // mismo criterio que el fallback de permisos de arriba.
+    modo_boman_especifico: !modoBomanError && typeof modoBoman === "boolean" ? modoBoman : true,
   };
 }
