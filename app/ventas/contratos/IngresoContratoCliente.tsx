@@ -370,7 +370,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
 
  if(resultado)return <section className={`card ${estilos.exito}`}><div>✓</div><h1>Contrato registrado</h1><strong>{resultado.numero}</strong><p>Ya está disponible en Producción → Contratos y en el tablero.</p><p className={resultado.respaldo==="pendiente"?estilos.respaldoPendiente:estilos.respaldoOk}>{resultado.respaldo==="en_curso"?"Respaldando en Google Sheets…":resultado.respaldo==="ok"?"✓ Copia de respaldo guardada en Google Sheets":"El respaldo en Sheets quedó pendiente; el contrato está seguro en Supabase."}</p><div>{resultado.respaldo==="pendiente"&&<button className="secondary" onClick={()=>void respaldar(resultado.id)}>Reintentar respaldo</button>}<button onClick={()=>{setResultado(null);setForm(inicial(perfil.nombre_completo));setPaso(0)}}>Ingresar otro</button><a className="button secondary" href="/produccion/contratos">Abrir expedientes</a></div></section>;
  return <>
-  <header className={estilos.cabecera}><div><span className="eyebrow">VENTAS · v108</span><h1>Ingreso de contratos</h1><p>Pedido, brief técnico, tallas, diseños y valores conectados directamente con producción.</p></div><button className="secondary" onClick={()=>setPreview(true)}>Vista previa</button></header>
+  <header className={estilos.cabecera}><div><span className="eyebrow">VENTAS · v115</span><h1>Ingreso de contratos</h1><p>Pedido, brief técnico, tallas, diseños y valores conectados directamente con producción.</p></div><button className="secondary" onClick={()=>setPreview(true)}>Vista previa</button></header>
   <nav className={estilos.pasos}>{PASOS.map((x,i)=><button key={x} className={i===paso?estilos.activo:i<paso?estilos.completo:""} onClick={()=>void abrirPaso(i)}><b>{i<paso?"✓":i+1}</b><span>{x}</span></button>)}</nav>
   <section className={`card ${estilos.formulario}`}>
    {paso===0&&<PasoCliente form={form} setCab={setCab} almacenes={almacenesVenta} busqueda={busqueda} setBusqueda={setBusqueda} buscar={buscarAnterior} buscando={buscando} coincidencias={coincidencias} cargar={cargarReposicion}/>} 
@@ -390,7 +390,7 @@ type SetCab=<K extends keyof Cab>(k:K,v:Cab[K])=>void;
 type Cambiar=<T extends {id:string}>(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string,cambio:Partial<T>)=>void;
 type Quitar=(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string)=>void;
 
-function PasoCliente({form,setCab,busqueda,setBusqueda,buscar,buscando,coincidencias,cargar}:{form:Form;setCab:SetCab;busqueda:string;setBusqueda:(x:string)=>void;buscar:()=>void;buscando:boolean;coincidencias:any[];cargar:(id:string)=>void}){return <><h2>Vendedor y cliente</h2><div className={estilos.reposicion}><div><strong>¿Es una reposición?</strong><span>Copia el brief anterior y crea un contrato nuevo.</span></div><div><input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&buscar()} placeholder="Cliente o BOM-2026-…"/><button className="secondary" onClick={buscar}>{buscando?"Buscando…":"Buscar"}</button></div>{coincidencias.map(x=><button className={estilos.resultado} key={x.id} onClick={()=>cargar(x.id)}><strong>{x.numero}</strong><span>{x.cliente} · {x.total_prendas} prendas</span></button>)}</div><div className={estilos.grid}><Campo titulo="Vendedor *"><><input list="lista-vendedores" value={form.cab.vendedor} onChange={e=>setCab("vendedor",e.target.value)} placeholder="Seleccionar o escribir vendedor…"/><datalist id="lista-vendedores">{VENDEDORES.map(v=><option key={v} value={v}/>)}</datalist><small className={estilos.pista}>Selecciona de la lista o escribe otro nombre.</small></></Campo><Campo titulo="Canal de venta *"><select value={form.cab.canal} onChange={e=>setCab("canal",e.target.value)}><option value="">Seleccionar…</option>{CANALES.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Cliente / equipo *"><input value={form.cab.cliente} onChange={e=>setCab("cliente",e.target.value)} placeholder="Nombre del equipo o cliente"/></Campo><Campo titulo="Teléfono *"><input value={form.cab.telefono} onChange={e=>setCab("telefono",e.target.value)} placeholder="0999123456"/></Campo><Campo titulo="WhatsApp"><input value={form.cab.whatsapp} onChange={e=>setCab("whatsapp",e.target.value)}/></Campo><Campo titulo="Correo"><input type="email" value={form.cab.email} onChange={e=>setCab("email",e.target.value)}/></Campo></div></>}
+function PasoCliente({form,setCab,almacenes,busqueda,setBusqueda,buscar,buscando,coincidencias,cargar}:{form:Form;setCab:SetCab;almacenes:AlmacenVenta[];busqueda:string;setBusqueda:(x:string)=>void;buscar:()=>void;buscando:boolean;coincidencias:any[];cargar:(id:string)=>void}){return <><h2>Vendedor, contrato y cliente</h2><div className={estilos.reposicion}><div><strong>¿Es una reposición?</strong><span>Copia el brief anterior y crea un contrato nuevo.</span></div><div><input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&buscar()} placeholder="Cliente, contrato o BOM-2026-…"/><button className="secondary" onClick={buscar}>{buscando?"Buscando…":"Buscar"}</button></div>{coincidencias.map(x=><button className={estilos.resultado} key={x.id} onClick={()=>cargar(x.id)}><strong>{x.numero}</strong><span>{x.cliente} · {x.total_prendas} prendas</span></button>)}</div><div className={estilos.grid}><Campo titulo="Vendedor *"><><input list="lista-vendedores" value={form.cab.vendedor} onChange={e=>setCab("vendedor",e.target.value)} placeholder="Seleccionar o escribir vendedor…"/><datalist id="lista-vendedores">{VENDEDORES.map(v=><option key={v} value={v}/>)}</datalist><small className={estilos.pista}>Selecciona de la lista o escribe otro nombre.</small></></Campo><Campo titulo="Canal de venta *"><select value={form.cab.canal} onChange={e=>setCab("canal",e.target.value)}><option value="">Seleccionar…</option>{CANALES.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Nombre del contrato *"><><input value={form.cab.nombre_contrato_v115} onChange={e=>setCab("nombre_contrato_v115",e.target.value)} placeholder="Ej. Uniformes Club Los Andes"/><small className={estilos.pista}>Así se identificará el pedido y aparecerá en el brief.</small></></Campo><Campo titulo="Nombre del cliente real *"><><input value={form.cab.cliente} onChange={e=>setCab("cliente",e.target.value)} placeholder="Persona o empresa que compra"/><small className={estilos.pista}>Se usa para su ficha, cartera e historial comercial.</small></></Campo>{almacenes.length>0&&<Campo titulo={`Tienda / local${almacenes.length>1?" *":""}`}><select value={form.cab.almacen_venta_id_v115} onChange={e=>setCab("almacen_venta_id_v115",e.target.value)}><option value="">{almacenes.length===1?`Automática: ${almacenes[0].nombre}`:"Seleccionar…"}</option>{almacenes.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></Campo>}<Campo titulo="Teléfono *"><input value={form.cab.telefono} onChange={e=>setCab("telefono",e.target.value)} placeholder="0999123456"/></Campo><Campo titulo="WhatsApp"><input value={form.cab.whatsapp} onChange={e=>setCab("whatsapp",e.target.value)}/></Campo><Campo titulo="Correo"><input type="email" value={form.cab.email} onChange={e=>setCab("email",e.target.value)}/></Campo></div></>}
 // 5 dias laborables antes de la fecha deseada, igual que el formulario legado.
 function habilesAntes(iso:string,dias:number){
  const d=new Date(iso+"T00:00:00");if(isNaN(d.getTime()))return "";
@@ -588,6 +588,11 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
  // Jugadores y specs se reparten por mockup; lo que no cae en ninguno se muestra
  // aparte para que nunca desaparezca del papel (el legado tuvo ese bug y lo blinda).
  const porMockup=mockups.map((m,i)=>({m,i,jugadores:form.jugadores.filter(j=>indiceMockup(j.mockup,mockups)===i),specs:form.specs.filter(s=>indiceMockup(s.mockup,mockups)===i)}));
+ // Igual que briefFotosSoloHtml del legado: un mockup sin jugadores ni specs
+ // no merece una seccion entera (dejaria media hoja en blanco); va arriba en
+ // un bloque compacto de solo foto.
+ const mockupsConContenido=porMockup.filter(x=>x.jugadores.length>0||x.specs.length>0);
+ const mockupsSoloFoto=porMockup.filter(x=>x.jugadores.length===0&&x.specs.length===0);
  const jugadoresSueltos=form.jugadores.filter(j=>indiceMockup(j.mockup,mockups)<0);
  const specsSueltas=form.specs.filter(s=>indiceMockup(s.mockup,mockups)<0);
  const grupos=agruparTallas(form.prendas);
@@ -607,14 +612,15 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
      <div className={estilos.bCal} style={calidad.length>26?{fontSize:"13px"}:calidad.length>16?{fontSize:"17px"}:undefined}>{calidad}</div>
      <div className={estilos.bNota}>NOTA: ANTES DEL ENSAMBLE, CORROBORAR QUE EL MOCKUP SEA EL CORRECTO</div>
     </div>
-    <div className={estilos.bTitulo}>DETALLE DE CONTRATO: {c.cliente||"—"}</div>
+    <div className={estilos.bTitulo}>DETALLE DE CONTRATO: {c.nombre_contrato_v115||c.cliente||"—"}</div>
     <table className={estilos.bhTbl}><tbody>
      <tr>
       <td className={estilos.bhLbl}>CONTRATO:</td>
-      <td className={estilos.bhVal}>{c.cliente||"—"}{c.prioridad==="Urgente"&&<span className={estilos.bBadgeRojo}>⚠️ URGENTE</span>}{c.reposicion&&<span className={estilos.bBadgeRojo}>🔄 REPOSICIÓN</span>}</td>
+      <td className={estilos.bhVal}>{c.nombre_contrato_v115||c.cliente||"—"}{c.prioridad==="Urgente"&&<span className={estilos.bBadgeRojo}>⚠️ URGENTE</span>}{c.reposicion&&<span className={estilos.bBadgeRojo}>🔄 REPOSICIÓN</span>}</td>
       <td className={estilos.bhRespH} rowSpan={2}><div className={estilos.bhCod}>NUEVO CONTRATO</div>RESPONSABLE<div className={estilos.bhResp}>{c.vendedor_responsable||c.vendedor||"—"}</div></td>
      </tr>
      <tr><td className={estilos.bhLbl}>FECHA DE INGRESO:</td><td className={estilos.bhVal}>{fechaCorta(new Date().toISOString().slice(0,10))}</td></tr>
+     <tr><td className={estilos.bhLbl}>CLIENTE:</td><td className={estilos.bhVal} colSpan={2}>{c.cliente||"—"}</td></tr>
      <tr><td className={estilos.bhLbl}>FECHA DE ENTREGA:</td><td className={`${estilos.bhVal} ${estilos.bhEnt}`} colSpan={2}>{fechaCorta(c.fecha_entrega)||"—"}</td></tr>
      <tr><td className={estilos.bhLbl}>ENTREGA:</td><td className={estilos.bhVal} colSpan={2}>{c.forma_entrega||"—"}{c.direccion&&` · ${c.direccion}`}</td></tr>
     </tbody></table>
@@ -642,7 +648,8 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
      <div className={estilos.bAviso}>⚠️ SIEMPRE PREDOMINA EL COLOR DEL MOCKUP Y DE LA MUESTRA SOBRE EL COLOR REFERENCIAL</div>
     </div>}
 
-    {porMockup.map(({m,i,jugadores,specs})=><section key={m.id} className={estilos.bSeccion}>
+    {mockupsSoloFoto.length>0&&<div className={estilos.bFotosSolo}>{mockupsSoloFoto.map(({m,i})=><figure key={m.id}><img src={m.preview||m.url} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
+    {mockupsConContenido.map(({m,i,jugadores,specs})=><section key={m.id} className={estilos.bSeccion}>
      <div className={estilos.bMk}>
       <div>
        <div className={estilos.bMkCab}><span>MOCKUP {i+1}</span>{texto(m.descripcion)&&` ${m.descripcion}`}</div>
