@@ -1179,7 +1179,11 @@ tr.fila-anulada .badge { text-decoration: none; opacity: .65; }
 
 @media print {
   .navbar, .nav-mobile-bar, .nav-overlay, .acciones-documento, button, .filtros, .tabs, .aviso-offline { display: none !important; }
-  body { background: #fff; }
+  /* html tambien: solo se blanqueaba body, y html se quedaba con --fondo-app
+     (#f3f6fa claro, #0b1220 en modo oscuro). Con los fondos activados eso pinta
+     la hoja entera de lado a lado -sobre todo el sobrante de la ultima pagina-
+     y se va en tinta sin aportar nada. */
+  html, body { background: #fff; }
   .container, .navbar ~ .container, .navbar.nav-contraido ~ .container { max-width: none; margin: 0; padding: 0; }
   .card { box-shadow: none; break-inside: avoid; }
 }

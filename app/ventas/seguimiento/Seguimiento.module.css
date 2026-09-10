@@ -7,4 +7,7 @@
 @media(max-width:1180px){.filtros{grid-template-columns:repeat(3,minmax(150px,1fr))}.cliente{grid-column:span 2}.kpis{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.cabecera{display:block}.cabecera button{margin-top:10px}.filtros{grid-template-columns:1fr 1fr}.cliente{grid-column:1/-1}.kpis{grid-template-columns:repeat(2,1fr)}.tarjetas{grid-template-columns:1fr}.tarjeta{grid-template-columns:115px minmax(0,1fr)}.mockup{min-height:290px}}
 @media(max-width:480px){.filtros{grid-template-columns:1fr}.cliente{grid-column:auto}.kpis{grid-template-columns:1fr 1fr}.kpis article{padding:11px}.tarjeta{grid-template-columns:1fr}.mockup{height:230px;min-height:230px}.finanzas{grid-template-columns:repeat(3,minmax(0,1fr))}.modal{padding:5px}.modalBarra{position:static}.modalBarra{align-items:flex-start}.modalBarra>div:last-child{flex-direction:column}}
-@media print{.noPrint{display:none!important}.modal{position:static;inset:auto;overflow:visible;padding:0;background:#fff;backdrop-filter:none}.modalCuerpo{max-width:none;margin:0}}
+/* Con el brief abierto se imprime SOLO el brief. Antes salia tambien la
+   pantalla del panel -KPIs, filtros y la tabla entera- antes del documento,
+   porque el modal no es un portal: vive dentro del mismo <main>. */
+@media print{.noPrint{display:none!important}.modal{position:static;inset:auto;overflow:visible;padding:0;background:#fff;backdrop-filter:none}.modalCuerpo{max-width:none;margin:0}:global(body):has(.modal) :global(main)>*:not(.modal){display:none!important}}
