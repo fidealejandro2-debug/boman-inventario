@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { mostrarAvisoDialogo } from "@/components/Dialogo";
+import { confirmarDialogo, mostrarAvisoDialogo, pedirTextoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
 import ExpedienteContrato, { type Expediente } from "@/app/produccion/contratos/ExpedienteContrato";
 import estilos from "./Seguimiento.module.css";
@@ -117,6 +117,36 @@ export default function PanelVendedoresCliente() {
 
   function aplicar(nuevos = filtros) { setPagina(1); setFiltros(nuevos); setAplicados({ ...nuevos, vendedores: [...nuevos.vendedores] }); }
   function rango(desde: string, hasta: string) { aplicar({ ...filtros, desde, hasta }); }
+  // Marcar entregado desde el panel, como el panel de vendedor del legado. NO
+  // escribe el estado a mano: pasa por registrar_entrega_contrato_v112, la misma
+  // via que /ventas/entregas. Asi la entrega queda en el libro de despachos y la
+  // cartera cuadra; poner el estado por fuera dejaria un contrato "entregado"
+  // sin una sola linea despachada.
+  const [entregando, setEntregando] = useState<string | null>(null);
+  async function marcarEntregado(fila: Fila) {
+    const responsable = await pedirTextoDialogo(`¿Quién recibe o entrega el contrato ${fila.numero}?`, "", "Responsable de la entrega");
+    if (!responsable || !responsable.trim()) return;
+    setEntregando(fila.id);
+    try {
+      const pend = await supabase.rpc("obtener_despacho_contrato_v112", { p_contrato_id: fila.id });
+      if (pend.error) return void mostrarAvisoDialogo(pend.error.message, "No se pudo leer el despacho", true);
+      const lineas = (((pend.data as { contrato?: { lineas?: { id: string; pendientes: number }[] } })?.contrato?.lineas) || [])
+        .filter((x) => Number(x.pendientes) > 0)
+        .map((x) => ({ contrato_prenda_id: x.id, cantidad: Number(x.pendientes) }));
+      if (!lineas.length) return void mostrarAvisoDialogo("Este contrato ya no tiene prendas pendientes de entregar.", "Nada por despachar", true);
+      const total = lineas.reduce((n, x) => n + x.cantidad, 0);
+      if (!await confirmarDialogo(`Se entregarán las ${total} prendas pendientes del contrato ${fila.numero}. Esto queda registrado en despachos y no se puede deshacer desde aquí.`, true)) return;
+      const { error } = await supabase.rpc("registrar_entrega_contrato_v112", {
+        p_contrato_id: fila.id, p_lineas: lineas, p_archivos: [],
+        p_fecha_entrega_real: new Date().toISOString(), p_responsable: responsable.trim(),
+        p_observacion: "Entrega total marcada desde el panel de vendedores",
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) return void mostrarAvisoDialogo(error.message, "No se pudo registrar la entrega", true);
+      await cargar();
+    } finally { setEntregando(null); }
+  }
+
   async function abrirBrief(id: string) {
     setAbriendo(id);
     const { data, error } = await supabase.rpc("obtener_brief_vendedor_v111", { p_contrato_id: id });
@@ -173,7 +203,7 @@ export default function PanelVendedoresCliente() {
               <div className={estilos.prendas}>{fila.prendas.slice(0, 5).map((p, i) => <span key={`${p.prenda}-${p.calidad}-${i}`}><b>{p.cantidad}</b> {p.prenda}{p.calidad ? ` · ${p.calidad}` : ""}</span>)}{fila.prendas.length > 5 && <span>+{fila.prendas.length - 5} líneas</span>}{!fila.prendas.length && <span>{fila.total_prendas} prendas · sin desglose</span>}</div>
               <div className={estilos.finanzas}><div><span>Presupuesto</span><strong>{DINERO.format(fila.presupuesto)}</strong></div><div><span>Abono</span><strong>{DINERO.format(fila.abono)}</strong></div><div><span>Saldo</span><strong className={fila.saldo > 0 ? estilos.saldo : ""}>{DINERO.format(fila.saldo)}</strong></div></div>
               <div className={estilos.barra}><i style={{ width: `${avance}%` }} /></div>
-              <div className={estilos.pie}><span className="badge ok">{fila.estado}</span><button disabled={abriendo === fila.id} onClick={() => void abrirBrief(fila.id)}>{abriendo === fila.id ? "Abriendo…" : "Abrir brief"}</button></div>
+              <div className={estilos.pie}><span className="badge ok">{fila.estado}</span><button disabled={abriendo === fila.id} onClick={() => void abrirBrief(fila.id)}>{abriendo === fila.id ? "Abriendo…" : "Abrir brief"}</button>{fila.estado !== "Entregado" && <button className="secondary" disabled={entregando === fila.id} onClick={() => void marcarEntregado(fila)}>{entregando === fila.id ? "Entregando…" : "Marcar entregado"}</button>}</div>
             </div>
           </article>;
         })}
