@@ -198,3 +198,11 @@
 .bPanelMockup img{width:100%;max-height:430px;object-fit:contain;display:block}
 .bPanelMockup figcaption{margin-top:5px;font-size:10.5px;font-weight:800;color:#1F4E78;text-align:center;text-transform:uppercase}
 @media print{.bPortadaWrap{grid-template-columns:1fr 1fr}.bPanelMockup img{max-height:360px}}
+
+/* Sugerencias del buscador de cliente real (paso Vendedor). */
+.clientesSug{display:flex;flex-direction:column;border:1px solid var(--borde);border-radius:8px;overflow:hidden;margin-top:4px;background:var(--superficie)}
+.clientesSug button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:6px 10px;border:0;border-bottom:1px solid var(--borde);background:none;text-align:left;cursor:pointer;width:100%}
+.clientesSug button:last-child{border-bottom:0}
+.clientesSug button:hover{background:var(--superficie-suave)}
+.clientesSug strong{font-size:.85rem;color:var(--texto-fuerte)}
+.clientesSug span{font-size:.72rem;color:var(--texto-suave)}

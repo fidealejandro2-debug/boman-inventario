@@ -434,7 +434,7 @@ export default function IngresoContratoCliente({perfil}:{perfil:Perfil}){
   <header className={estilos.cabecera}><div><span className="eyebrow">VENTAS · v115</span><h1>Ingreso de contratos</h1><p>Pedido, brief técnico, tallas, diseños y valores conectados directamente con producción.</p></div><button className="secondary" onClick={()=>setPreview(true)}>Vista previa</button></header>
   <nav className={estilos.pasos}>{PASOS.map((x,i)=><button key={x} className={i===paso?estilos.activo:i<paso?estilos.completo:""} onClick={()=>void abrirPaso(i)}><b>{i<paso?"✓":i+1}</b><span>{x}</span></button>)}</nav>
   <section className={`card ${estilos.formulario}`}>
-   {paso===0&&<PasoCliente form={form} setCab={setCab} almacenes={almacenesVenta} busqueda={busqueda} setBusqueda={setBusqueda} buscar={buscarAnterior} buscando={buscando} coincidencias={coincidencias} cargar={cargarReposicion}/>} 
+   {paso===0&&<PasoCliente supabase={supabase} form={form} setCab={setCab} almacenes={almacenesVenta} busqueda={busqueda} setBusqueda={setBusqueda} buscar={buscarAnterior} buscando={buscando} coincidencias={coincidencias} cargar={cargarReposicion}/>} 
    {paso===1&&<PasoContrato form={form} setCab={setCab}/>}
    {paso===2&&<PasoPrendas form={form} setForm={setForm} setCab={setCab} total={total} supabase={supabase}/>}
    {paso===3&&<PasoArchivos form={form} seleccionar={seleccionar} cambiar={cambiar} quitar={quitar}/>} 
@@ -451,7 +451,42 @@ type SetCab=<K extends keyof Cab>(k:K,v:Cab[K])=>void;
 type Cambiar=<T extends {id:string}>(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string,cambio:Partial<T>)=>void;
 type Quitar=(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string)=>void;
 
-function PasoCliente({form,setCab,almacenes,busqueda,setBusqueda,buscar,buscando,coincidencias,cargar}:{form:Form;setCab:SetCab;almacenes:AlmacenVenta[];busqueda:string;setBusqueda:(x:string)=>void;buscar:()=>void;buscando:boolean;coincidencias:any[];cargar:(id:string)=>void}){return <><h2>Vendedor, contrato y cliente</h2><div className={estilos.reposicion}><div><strong>¿Es una reposición?</strong><span>Copia el brief anterior y crea un contrato nuevo.</span></div><div><input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&buscar()} placeholder="Cliente, contrato o BOM-2026-…"/><button className="secondary" onClick={buscar}>{buscando?"Buscando…":"Buscar"}</button></div>{coincidencias.map(x=><button className={estilos.resultado} key={x.id} onClick={()=>cargar(x.id)}><strong>{x.numero}</strong><span>{x.cliente} · {x.total_prendas} prendas</span></button>)}</div><div className={estilos.grid}><Campo titulo="Vendedor *"><><input list="lista-vendedores" value={form.cab.vendedor} onChange={e=>setCab("vendedor",e.target.value)} placeholder="Seleccionar o escribir vendedor…"/><datalist id="lista-vendedores">{VENDEDORES.map(v=><option key={v} value={v}/>)}</datalist><small className={estilos.pista}>Selecciona de la lista o escribe otro nombre.</small></></Campo><Campo titulo="Canal de venta *"><select value={form.cab.canal} onChange={e=>setCab("canal",e.target.value)}><option value="">Seleccionar…</option>{CANALES.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Nombre del contrato *"><><input value={form.cab.nombre_contrato_v115} onChange={e=>setCab("nombre_contrato_v115",e.target.value)} placeholder="Ej. Uniformes Club Los Andes"/><small className={estilos.pista}>Así se identificará el pedido y aparecerá en el brief.</small></></Campo><Campo titulo="Nombre del cliente real *"><><input value={form.cab.cliente} onChange={e=>setCab("cliente",e.target.value)} placeholder="Persona o empresa que compra"/><small className={estilos.pista}>Se usa para su ficha, cartera e historial comercial.</small></></Campo>{almacenes.length>0&&<Campo titulo={`Tienda / local${almacenes.length>1?" *":""}`}><select value={form.cab.almacen_venta_id_v115} onChange={e=>setCab("almacen_venta_id_v115",e.target.value)}><option value="">{almacenes.length===1?`Automática: ${almacenes[0].nombre}`:"Seleccionar…"}</option>{almacenes.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></Campo>}<Campo titulo="Teléfono *"><input value={form.cab.telefono} onChange={e=>setCab("telefono",e.target.value)} placeholder="0999123456"/></Campo><Campo titulo="WhatsApp"><input value={form.cab.whatsapp} onChange={e=>setCab("whatsapp",e.target.value)}/></Campo><Campo titulo="Correo"><input type="email" value={form.cab.email} onChange={e=>setCab("email",e.target.value)}/></Campo></div></>}
+// Buscador del cliente real. NO crea nada: al guardar, el trigger
+// asignar_cliente_contrato_v113 busca por nombre normalizado y, si no existe,
+// crea la ficha solo. Por eso aqui basta con OFRECER los que ya estan: un
+// nombre nuevo se escribe y ya, y elegir uno de la lista evita que "Club Los
+// Andes" y "club los andes " terminen siendo dos fichas con cartera separada.
+function ClienteReal({supabase,valor,setCab}:{supabase:ReturnType<typeof createClient>;valor:string;setCab:SetCab}){
+ const [opciones,setOpciones]=useState<{id:string;nombre:string;contratos:number;saldo:number}[]>([]);
+ const [abierto,setAbierto]=useState(false);
+ useEffect(()=>{
+  const q=valor.trim();
+  if(q.length<2){setOpciones([]);return}
+  let vivo=true;
+  const t=setTimeout(()=>{
+   supabase.rpc("listar_clientes_v113",{p_busqueda:q,p_pagina:1,p_por_pagina:6}).then(({data,error})=>{
+    // Sin permiso clientes.acceder la RPC falla: el campo sigue siendo texto
+    // libre y el contrato se guarda igual, solo se pierde la sugerencia.
+    if(!vivo)return;
+    setOpciones(error?[]:(((data as{filas?:{id:string;nombre:string;contratos:number;saldo:number}[]})?.filas)||[]));
+   });
+  },300);
+  return()=>{vivo=false;clearTimeout(t)};
+ },[valor,supabase]);
+ const exacto=opciones.some(o=>o.nombre.trim().toLowerCase()===valor.trim().toLowerCase());
+ const sugerencias=abierto&&opciones.length>0&&!exacto?opciones:[];
+ return <Campo titulo="Nombre del cliente real *"><>
+  <input value={valor} onChange={e=>{setCab("cliente",e.target.value);setAbierto(true)}} onFocus={()=>setAbierto(true)} onBlur={()=>setTimeout(()=>setAbierto(false),150)} placeholder="Persona o empresa que compra" autoComplete="off"/>
+  {sugerencias.length>0&&<div className={estilos.clientesSug}>
+   {sugerencias.map(o=><button type="button" key={o.id} onMouseDown={e=>e.preventDefault()} onClick={()=>{setCab("cliente",o.nombre);setAbierto(false)}}>
+    <strong>{o.nombre}</strong><span>{o.contratos} contrato{o.contratos===1?"":"s"}{o.saldo>0?` · saldo $${o.saldo.toFixed(2)}`:""}</span>
+   </button>)}
+  </div>}
+  {exacto?<small className={estilos.pista}>Se usara la ficha que ya existe con ese nombre.</small>
+        :<small className={estilos.pista}>Busca al cliente para no duplicar su ficha. Si es nuevo, escribe el nombre y se creara solo.</small>}
+ </></Campo>;
+}
+function PasoCliente({supabase,form,setCab,almacenes,busqueda,setBusqueda,buscar,buscando,coincidencias,cargar}:{supabase:ReturnType<typeof createClient>;form:Form;setCab:SetCab;almacenes:AlmacenVenta[];busqueda:string;setBusqueda:(x:string)=>void;buscar:()=>void;buscando:boolean;coincidencias:any[];cargar:(id:string)=>void}){return <><h2>Vendedor, contrato y cliente</h2><div className={estilos.reposicion}><div><strong>¿Es una reposición?</strong><span>Copia el brief anterior y crea un contrato nuevo.</span></div><div><input value={busqueda} onChange={e=>setBusqueda(e.target.value)} onKeyDown={e=>e.key==="Enter"&&buscar()} placeholder="Cliente, contrato o BOM-2026-…"/><button className="secondary" onClick={buscar}>{buscando?"Buscando…":"Buscar"}</button></div>{coincidencias.map(x=><button className={estilos.resultado} key={x.id} onClick={()=>cargar(x.id)}><strong>{x.numero}</strong><span>{x.cliente} · {x.total_prendas} prendas</span></button>)}</div><div className={estilos.grid}><Campo titulo="Vendedor *"><><input list="lista-vendedores" value={form.cab.vendedor} onChange={e=>setCab("vendedor",e.target.value)} placeholder="Seleccionar o escribir vendedor…"/><datalist id="lista-vendedores">{VENDEDORES.map(v=><option key={v} value={v}/>)}</datalist><small className={estilos.pista}>Selecciona de la lista o escribe otro nombre.</small></></Campo><Campo titulo="Canal de venta *"><select value={form.cab.canal} onChange={e=>setCab("canal",e.target.value)}><option value="">Seleccionar…</option>{CANALES.map(x=><option key={x}>{x}</option>)}</select></Campo><Campo titulo="Nombre del contrato *"><><input value={form.cab.nombre_contrato_v115} onChange={e=>setCab("nombre_contrato_v115",e.target.value)} placeholder="Ej. Uniformes Club Los Andes"/><small className={estilos.pista}>Así se identificará el pedido y aparecerá en el brief.</small></></Campo><ClienteReal supabase={supabase} valor={form.cab.cliente} setCab={setCab}/>{almacenes.length>0&&<Campo titulo={`Tienda / local${almacenes.length>1?" *":""}`}><select value={form.cab.almacen_venta_id_v115} onChange={e=>setCab("almacen_venta_id_v115",e.target.value)}><option value="">{almacenes.length===1?`Automática: ${almacenes[0].nombre}`:"Seleccionar…"}</option>{almacenes.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}</select></Campo>}<Campo titulo="Teléfono *"><input value={form.cab.telefono} onChange={e=>setCab("telefono",e.target.value)} placeholder="0999123456"/></Campo><Campo titulo="WhatsApp"><input value={form.cab.whatsapp} onChange={e=>setCab("whatsapp",e.target.value)}/></Campo><Campo titulo="Correo"><input type="email" value={form.cab.email} onChange={e=>setCab("email",e.target.value)}/></Campo></div></>}
 // 5 dias laborables antes de la fecha deseada, igual que el formulario legado.
 function habilesAntes(iso:string,dias:number){
  const d=new Date(iso+"T00:00:00");if(isNaN(d.getTime()))return "";
