@@ -88,8 +88,21 @@
  .noPrint{display:none!important}
  .hoja{max-width:none;margin:0;padding:0;border-radius:0;box-shadow:none}
  .bSeccion,.bCols,.bMk{break-inside:auto}
- .bMk{grid-template-columns:340px 1fr;gap:10px}
- @page{size:A4 portrait;margin:6mm}
+ /* La foto ata por ANCHO, no por alto. Con 340px de columna y tope de 380px,
+    un mockup vertical (3:4) topaba en alto y se quedaba en ~285px de ancho:
+    ~55px de blanco a cada lado y altura reservada que no usaba. A 300x400 la
+    proporcion 3:4 encaja justa, se va el blanco lateral y la columna de al
+    lado -specs o jugadores- gana 40px de ancho util por hoja. */
+ .bMk{grid-template-columns:300px 1fr;gap:10px}
+ .bMkFoto{max-height:400px}
+ /* Menos aire entre secciones: son 22px por mockup que en un contrato de
+    varios mockups suman una franja entera de hoja. El filete de separacion
+    se queda -es lo que deja ver donde empieza cada mockup- pero mas fino. */
+ .bSeccion{margin-bottom:7px;padding-top:5px;border-top-width:2px}
+ .bTablaAncha{margin-top:5px}
+ /* Mismo margen que el brief legado, documentado alli como el minimo que
+    aguanta una impresora domestica sin recortar. */
+ @page{size:A4 portrait;margin:5mm 6mm}
 }
 @media(max-width:1050px){.pasos span{display:none}.grid{grid-template-columns:repeat(2,1fr)}.filaPrenda{grid-template-columns:repeat(3,1fr)}.filaJugador{grid-template-columns:30px repeat(3,1fr)}.filaFact{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.bMk{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr 1fr}.tarjetaSpec>header>span{display:none}}
 @media(max-width:650px){.cabecera{display:block}.cabecera button{margin-top:12px}.grid,.tipos,.cargas,.resumen{grid-template-columns:1fr}.filaPrenda,.filaSpec,.filaJugador,.filaFact{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr}.filaJugador b{display:none}.tituloAccion{align-items:flex-start;flex-direction:column}.acciones{flex-wrap:wrap}.acciones span{width:100%;order:-1}.acciones button{flex:1}}
