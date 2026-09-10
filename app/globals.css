@@ -1449,7 +1449,15 @@ button.btn-mini {
    Antes salía la página entera: el título "Nómina", su descripción y las
    pestañas. Se oculta todo y se deja visible únicamente el documento. */
 @media print {
-  body * { visibility: hidden !important; }
+  /* `body *` aquí es global: se aplicaba en TODA la app, no solo en Nómina.
+     Cualquier otra pantalla que se imprimiera salía en blanco -visibility
+     conserva el espacio, así que el navegador contaba las hojas pero no
+     pintaba nada- y así salía en blanco el brief de producción. Con :has
+     solo se apaga la página cuando de verdad hay un documento de Nómina
+     que imprimir; si el navegador no soporta :has, descarta la regla y
+     Nómina imprime la página completa, que es un mal menor frente a
+     dejar en blanco la impresión de todos los demás módulos. */
+  body:has(.doc-th) * { visibility: hidden !important; }
   .doc-th, .doc-th * { visibility: visible !important; }
   .doc-th {
     position: absolute;
