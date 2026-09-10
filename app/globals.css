@@ -464,6 +464,8 @@ table {
   white-space: nowrap;
 }
 .operational-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--badge-verde-fg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--badge-verde-fg) 18%, transparent); }
+.operational-status.consulta { color: var(--texto-secundario); border-color: var(--borde); background: var(--superficie-suave); }
+.operational-status.consulta i { background: var(--texto-secundario); box-shadow: 0 0 0 3px color-mix(in srgb, var(--texto-secundario) 14%, transparent); }
 .context-selector { border-left: 4px solid var(--azul); }
 .context-help {
   margin: -4px 0 14px;
@@ -477,6 +479,29 @@ table {
 .context-help summary { color: var(--azul-fuerte); font-weight: 700; cursor: pointer; }
 .context-help p { max-width: 920px; margin: 8px 0 2px; line-height: 1.55; }
 .workflow-nav { margin-bottom: 20px; }
+.nomina-workspace { min-width: 0; }
+.nomina-areas { margin-bottom: 8px; }
+.nomina-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0 2px;
+}
+.nomina-subnav button {
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--texto-secundario);
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 650;
+}
+.nomina-subnav button:hover { color: var(--azul-fuerte); border-color: var(--borde); background: var(--superficie); transform: none; }
+.nomina-subnav button.activo { color: var(--azul-fuerte); border-color: color-mix(in srgb, var(--azul) 25%, var(--borde)); background: var(--azul-suave); }
+.nomina-area-contenido { min-height: 360px; }
+.nomina-contexto { margin-top: 0; padding: 9px 11px; border-left: 3px solid var(--azul); background: var(--superficie-suave); }
 .loading-state {
   min-height: 150px;
   display: flex;
@@ -856,6 +881,11 @@ tr.fila-alerta td { color: var(--msg-error-fg); }
   .grid-2 { grid-template-columns: 1fr; }
   .container { padding: 16px 10px 28px; }
   .card { padding: 14px; border-radius: 11px; }
+  .workspace-heading .acciones-documento { width: 100%; }
+  .workspace-heading .acciones-documento > * { flex: 1 1 auto; }
+  .workspace-heading .operational-status { align-self: flex-start; }
+  .nomina-subnav { flex-wrap: nowrap; padding-bottom: 3px; overflow-x: auto; scrollbar-width: thin; }
+  .nomina-subnav button { flex: 0 0 auto; }
   .filtros > .field, .filtros > button { width: 100%; }
   .filtros select, .filtros input { width: 100%; }
   th, td { padding: 8px 9px; }
@@ -2352,10 +2382,9 @@ button.btn-mini {
 
 /* Cuentas por pagar y efectivo comprometido */
 .cxp-page { display: grid; gap: 15px; }
-.cxp-header { margin-bottom: 0; }
+.cxp-header { margin-bottom: 16px; }
 .cxp-header .acciones { margin: 0; }
-.cxp-explicacion { display: flex; align-items: baseline; gap: 10px; margin: 0; }
-.cxp-explicacion strong { flex-shrink: 0; }
+.cxp-explicacion { margin: 0 0 14px; }
 .cxp-kpis { grid-template-columns: repeat(5, minmax(155px, 1fr)); margin-bottom: 0; }
 .cxp-kpis .kpi { min-height: 110px; }
 .cxp-kpis .kpi.compromiso { border-top-color: #7c3aed; }
@@ -2426,7 +2455,7 @@ button.btn-mini {
   .cxp-montos { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 720px) {
-  .cxp-explicacion { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .cxp-explicacion { margin-bottom: 12px; }
   .cxp-kpis { grid-template-columns: 1fr 1fr; }
   .cxp-cuenta-resumen { grid-template-columns: 1fr 1fr; }
   .cxp-cuenta-resumen > span:first-child { grid-column: 1 / -1; }

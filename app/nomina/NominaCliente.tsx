@@ -49,6 +49,14 @@ const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "parametros", etiqueta: "Parámetros" },
 ];
 
+type AreaNomina = "personas" | "tiempo" | "pagos" | "control";
+const AREAS_NOMINA: { id: AreaNomina; etiqueta: string; descripcion: string; pestanas: Pestana[] }[] = [
+  { id: "personas", etiqueta: "Personas", descripcion: "Personal y expedientes", pestanas: ["personal", "departamentos", "cargas", "expediente", "vinculos"] },
+  { id: "tiempo", etiqueta: "Tiempo y novedades", descripcion: "Ausencias y descuentos", pestanas: ["ausencias", "novedades", "descuentos", "importacion"] },
+  { id: "pagos", etiqueta: "Roles y reportes", descripcion: "Cálculo y consulta", pestanas: ["roles", "reportes"] },
+  { id: "control", etiqueta: "Control", descripcion: "Auditoría y parámetros", pestanas: ["auditoria", "parametros"] },
+];
+
 export default function NominaCliente({
   rol,
   permisos,
@@ -67,6 +75,8 @@ export default function NominaCliente({
   // Gerencia consulta pero no escribe: mismo criterio que usuario_puede_nomina.
   const puedeEscribir = rol === "admin" || permisos.includes("nomina.editar");
   const esAdmin = rol === "admin";
+  const areaActiva = AREAS_NOMINA.find((area) => area.pestanas.includes(tab)) ?? AREAS_NOMINA[0];
+  const pestanasArea = PESTANAS.filter((pestana) => areaActiva.pestanas.includes(pestana.id));
 
   // Personas y empresas las usan casi todas las pestañas: se cargan una vez.
   async function cargarBase() {
@@ -114,25 +124,37 @@ export default function NominaCliente({
   }, []);
 
   return (
-    <div className="card">
-      <h2>Nómina</h2>
-      <p className="ayuda">
-        Personal de los tres RUC del grupo. El rol <strong>real</strong> es lo que la
-        persona cobra; el <strong>declarado</strong> es lo que consta ante el IESS.
-        {!puedeEscribir && " Tu perfil es de solo consulta."}
-      </p>
+    <div className="nomina-workspace">
+      <header className="page-heading workspace-heading">
+        <div><span className="eyebrow">TALENTO HUMANO</span><h1>Nómina</h1><p>Personal de los tres RUC, expedientes, tiempo, novedades y roles de pago.</p></div>
+        <span className={`operational-status ${puedeEscribir ? "" : "consulta"}`}><i aria-hidden="true" />{puedeEscribir ? "Gestión habilitada" : "Solo consulta"}</span>
+      </header>
 
-      <div className="tabs">
-        {PESTANAS.map((p) => (
+      <div className="tabs workflow-nav nomina-areas" aria-label="Áreas de nómina">
+        {AREAS_NOMINA.map((area) => (
+          <button type="button" key={area.id} className={`tab ${areaActiva.id === area.id ? "activo" : ""}`} onClick={() => setTab(area.pestanas[0])} title={area.descripcion}>
+            {area.etiqueta}
+          </button>
+        ))}
+      </div>
+      <nav className="nomina-subnav" aria-label={`Opciones de ${areaActiva.etiqueta}`}>
+        {pestanasArea.map((p) => (
           <button
+            type="button"
             key={p.id}
-            className={`tab ${tab === p.id ? "activo" : ""}`}
+            className={tab === p.id ? "activo" : ""}
             onClick={() => setTab(p.id)}
           >
             {p.etiqueta}
           </button>
         ))}
-      </div>
+      </nav>
+
+      <section className="card nomina-area-contenido">
+      <p className="ayuda nomina-contexto">
+        El rol <strong>real</strong> es lo que la persona cobra; el <strong>declarado</strong> es lo que consta ante el IESS.
+        {!puedeEscribir && " Tu perfil es de solo consulta."}
+      </p>
 
       {/* Sin empresas visibles, los desplegables de empresa salen vacíos y no
           se puede dar de alta a nadie ni elegir quién paga. Antes fallaba en
@@ -147,7 +169,7 @@ export default function NominaCliente({
       )}
 
       {!listo ? (
-        <p className="ayuda">Cargando…</p>
+        <div className="loading-state" aria-live="polite"><span aria-hidden="true" /><div><strong>Preparando Nómina</strong><p>Cargando personal, empresas y departamentos disponibles.</p></div></div>
       ) : (
         <>
           {tab === "personal" && (
@@ -220,6 +242,7 @@ export default function NominaCliente({
           {tab === "parametros" && <ParametrosTab esAdmin={esAdmin} />}
         </>
       )}
+      </section>
     </div>
   );
 }

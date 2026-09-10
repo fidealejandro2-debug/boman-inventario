@@ -72,21 +72,40 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("pend");
   const [orden, setOrden] = useState<"entrega" | "numero">("entrega");
+  const [estacion, setEstacion] = useState("");
 
   const hayError = "error" in datos;
   const etapas = hayError ? [] : datos.etapas;
   const filas = hayError ? [] : datos.filas;
 
+  // Las estaciones ya vienen en los datos: cada etapa dice que area la marca
+  // ("Sellos · TPU" -> Sellos). Elegir una deja la tabla como la pantalla de
+  // esa estacion en el taller, sin columnas de trabajo ajeno.
+  const estaciones = useMemo(
+    () => Array.from(new Set(etapas.map((e) => String(e.area || "").split(" · ")[0]).filter(Boolean))),
+    [etapas],
+  );
+  // Se conserva el indice original porque `f.hechas` va emparejado con
+  // datos.etapas, no con las columnas que se pintan.
+  const columnas = useMemo(
+    () => etapas.map((et, i) => ({ et, i })).filter(({ et }) => !estacion || String(et.area || "").split(" · ")[0] === estacion),
+    [etapas, estacion],
+  );
+
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
+    // Una columna de Exteriores en un contrato sin chompas no es trabajo
+    // pendiente, es trabajo que no existe. Sin esta excepcion esos contratos
+    // no salian NUNCA de "Pendientes" por mucho que el taller los terminara.
+    const pendiente = (f: Fila) => columnas.some(({ et, i }) => !f.hechas[i] && !(et.exterior && !f.esExterior));
     const lista = filas.filter((f) => {
       if (filtro === "urg" && !f.urgente) return false;
       if (filtro === "tarde" && !f.atrasado) return false;
       if (filtro === "fab2" && f.fabrica !== 2) return false;
       if (filtro === "muestras" && !f.muestras?.tpu && !f.muestras?.dtf) return false;
-      // "Pendientes" esconde lo que ya tiene todas las etapas marcadas: es el
-      // trabajo que queda, que es para lo que el taller mira este tablero.
-      if (filtro === "pend" && f.hechas.every(Boolean)) return false;
+      // "Pendientes" esconde lo que ya esta hecho. Con una estacion elegida es
+      // lo que le falta a ESA estacion: su cola de trabajo, no la del taller.
+      if (filtro === "pend" && !pendiente(f)) return false;
       if (!q) return true;
       return [f.numero, f.cliente, f.disenador, f.vendedor, f.prendasTxt]
         .some((campo) => String(campo || "").toLowerCase().includes(q));
@@ -98,7 +117,7 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
       if (!b.entregaMs) return -1;
       return a.entregaMs - b.entregaMs;
     });
-  }, [filas, busqueda, filtro, orden]);
+  }, [filas, busqueda, filtro, orden, columnas]);
 
   if (hayError) {
     return <div className="card"><div className="header-row"><h3 style={{ margin: 0 }}>Tablero de producción</h3></div>
@@ -113,7 +132,7 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
     <div className="card">
       <div className="header-row">
         <div>
-          <h3 style={{ margin: 0 }}>Tablero de producción</h3>
+          <h3 style={{ margin: 0 }}>Tablero de producción{estacion ? ` — ${estacion}` : ""}</h3>
           <p className="conteo">{visibles.length} de {datos.total} contratos · datos de {datos.hora}</p>
         </div>
         <button className="secondary" onClick={() => refrescar(() => router.refresh())} disabled={refrescando}>
@@ -133,6 +152,14 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
             <option value="numero">N.° de contrato</option>
           </select>
         </div>
+        <div className="field">
+          <label>Estación</label>
+          <select value={estacion} onChange={(e) => setEstacion(e.target.value)}>
+            <option value="">Todo el taller</option>
+            {estaciones.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          {!!estacion && <p className="conteo">Solo las etapas de {estacion}.</p>}
+        </div>
       </div>
 
       <div className="filtros">
@@ -150,7 +177,7 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
               <th style={{ minWidth: 230 }}>Contrato</th>
               <th style={{ minWidth: 120 }}>Entrega</th>
               <th style={{ minWidth: 110 }}>Diseño</th>
-              {etapas.map((et, i) => (
+              {columnas.map(({ et, i }) => (
                 <th key={`${et.area}-${et.nombre}-${i}`} className="num" style={{ minWidth: 62 }} title={et.area}>
                   <span style={{ background: et.bg, color: et.fg, borderRadius: 4, padding: "1px 5px", display: "inline-block", fontSize: 10 }}>
                     {et.emoji} {et.etiqueta}
@@ -187,7 +214,7 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
                   {f.fabrica === 2 && <div className="badge ajuste">Fábrica 2</div>}
                   {f.maquila && <div className="conteo">🏭 {f.maquila}</div>}
                 </td>
-                {etapas.map((et, i) => (
+                {columnas.map(({ et, i }) => (
                   <td key={`${f.numero}-${i}`} className="num">
                     {/* Columnas de Exteriores: un contrato sin chompas no las lleva,
                         y un vacio se confunde con "pendiente". El punto dice "no aplica". */}
@@ -205,7 +232,7 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
               </tr>
             ))}
             {!visibles.length && (
-              <tr><td colSpan={3 + etapas.length} className="vacio">Sin contratos con ese filtro.</td></tr>
+              <tr><td colSpan={3 + columnas.length} className="vacio">Sin contratos con ese filtro.</td></tr>
             )}
           </tbody>
         </table>

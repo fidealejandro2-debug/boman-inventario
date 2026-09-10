@@ -267,16 +267,16 @@ export default function CuentasPorPagarCliente({ perfil }: { perfil: Perfil }) {
 
   return (
     <div className="cxp-page">
-      <div className="header-row cxp-header">
-        <div><span className="eyebrow">FINANZAS</span><h2>Tesorería</h2><p className="conteo">Cuentas por pagar, desembolsos centralizados, cheques posfechados y efectivo comprometido.</p></div>
+      <header className="page-heading workspace-heading cxp-header">
+        <div><span className="eyebrow">FINANZAS</span><h1>Tesorería</h1><p>Cuentas por pagar, desembolsos centralizados, cheques posfechados y efectivo comprometido.</p></div>
         <div className="acciones">
           <button type="button" className="secondary" onClick={exportar}>Exportar</button>
           {puedeEditar && <button type="button" onClick={() => setConfigurando(true)}>Configurar pagadora</button>}
         </div>
-      </div>
+      </header>
 
       {!configuracion && <div className="error-box"><strong>Configura la compañía pagadora principal.</strong> Mientras tanto, cada factura quedó asignada a la misma compañía que la recibió.</div>}
-      <div className="info-box cxp-explicacion"><strong>Efectivo comprometido</strong><span>Incluye cheques, transferencias u otros pagos programados que todavía no se han hecho efectivos. Solo “Pagado / cobrado” reduce la deuda.</span></div>
+      <details className="context-help cxp-explicacion"><summary>Qué significa efectivo comprometido</summary><p>Incluye cheques, transferencias u otros pagos programados que todavía no se han hecho efectivos. Solo “Pagado / cobrado” reduce la deuda.</p></details>
       {error && <div className="error-box">{error}</div>}
       {mensaje && <div className="success-box">{mensaje}</div>}
 
@@ -288,20 +288,20 @@ export default function CuentasPorPagarCliente({ perfil }: { perfil: Perfil }) {
         <div className="kpi"><span className="label">Comprometido próximos 30 días</span><strong className="valor">{DINERO.format(Number(resumenVisible?.comprometido_30_dias ?? resumen.reduce((s, x) => s + Number(x.comprometido_30_dias), 0)))}</strong></div>
       </div>
 
-      <div className="tabs">
+      <div className="tabs workflow-nav" aria-label="Áreas de tesorería">
         <button type="button" className={`tab ${tab === "cartera" ? "activo" : ""}`} onClick={() => setTab("cartera")}>Cartera ({cuentasFiltradas.length})</button>
         <button type="button" className={`tab ${tab === "calendario" ? "activo" : ""}`} onClick={() => setTab("calendario")}>Calendario de efectivo ({calendario.length})</button>
         <button type="button" className={`tab ${tab === "instrumentos" ? "activo" : ""}`} onClick={() => setTab("instrumentos")}>Cheques y bancos</button>
       </div>
-      {tab !== "instrumentos" && <div className="filtros cxp-filtros">
+      {tab !== "instrumentos" && <div className="filtros filter-bar cxp-filtros">
         <div className="field buscador"><label>Buscar</label><input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Proveedor, RUC, factura o compañía" /></div>
         <div className="field"><label>Estado</label><select value={estado} onChange={(e) => setEstado(e.target.value)}><option value="">Todos</option>{Object.entries(ESTADO_CUENTA).map(([valor, etiqueta]) => <option value={valor} key={valor}>{etiqueta}</option>)}</select></div>
         <div className="field"><label>Compañía pagadora</label><select value={pagadoraId} onChange={(e) => setPagadoraId(e.target.value)}><option value="">Todas</option>{empresas.map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.codigo} · {empresa.razon_social}</option>)}</select></div>
         {(busqueda || estado || pagadoraId) && <button type="button" className="chip-limpiar" onClick={() => { setBusqueda(""); setEstado(""); setPagadoraId(""); }}>Limpiar</button>}
       </div>}
 
-      {tab === "instrumentos" ? <TesoreriaInstrumentosV104 perfil={perfil} /> : cargando ? <div className="vacio">Cargando cartera…</div> : tab === "cartera" ? (
-        cuentasFiltradas.length === 0 ? <div className="vacio card">No hay cuentas por pagar para estos filtros.</div> :
+      {tab === "instrumentos" ? <TesoreriaInstrumentosV104 perfil={perfil} /> : cargando ? <section className="card loading-state" aria-live="polite"><span aria-hidden="true" /><div><strong>Actualizando tesorería</strong><p>Cargando saldos, compromisos y calendario de efectivo.</p></div></section> : tab === "cartera" ? (
+        cuentasFiltradas.length === 0 ? <section className="empty-state"><span className="empty-state-icon" aria-hidden="true">$</span><strong>Sin cuentas por pagar</strong><p>No existen resultados para los filtros seleccionados.</p></section> :
         <div className="cxp-lista">{cuentasFiltradas.map((cuenta) => {
           const abierta = cuentaAbierta === cuenta.id;
           const detallePagos = pagosCuenta(cuenta.id);
@@ -332,7 +332,7 @@ export default function CuentasPorPagarCliente({ perfil }: { perfil: Perfil }) {
             </div>}
           </article>;
         })}</div>
-      ) : calendario.length === 0 ? <div className="vacio card">No hay salidas de efectivo programadas.</div> : (
+      ) : calendario.length === 0 ? <section className="empty-state"><span className="empty-state-icon" aria-hidden="true">30</span><strong>Sin salidas programadas</strong><p>Los cheques y pagos comprometidos aparecerán aquí según su fecha prevista.</p></section> : (
         <div className="cxp-calendario">{calendario.map(([dia, items]) => <section className={`cxp-dia ${dia < hoy ? "vencido" : ""}`} key={dia}><div className="cxp-dia-cabecera"><span><strong>{fechaCorta(dia)}</strong><small>{dia < hoy ? "Compromiso vencido" : dia === hoy ? "Sale hoy" : "Salida prevista"}</small></span><strong>{DINERO.format(items.reduce((s, item) => s + Number(item.monto), 0))}</strong></div><div>{items.map((item) => <article className="cxp-compromiso" key={item.pago_id}><span><strong>{item.proveedor}</strong><small>{item.numero_documento} · factura {item.empresa_deudora_codigo}</small></span><span><strong>{MEDIO[item.medio]}</strong><small>{item.numero_cheque ? `${item.banco} · cheque ${item.numero_cheque}` : item.nota}</small></span><span><strong>{item.empresa_pagadora_codigo}</strong><small>Compañía pagadora</small></span><strong className="num">{DINERO.format(Number(item.monto))}</strong></article>)}</div></section>)}</div>
       )}
 
