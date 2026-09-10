@@ -65,7 +65,13 @@ type AlmacenVenta={id:string;nombre:string;codigo:string};
 // Accesorios del pedido. En el legado cada uno es un select + una cantidad, y
 // se imprimen en el recuadro "ADICIONALES DEL PEDIDO" del brief.
 const ADICIONALES:{clave:keyof Adic;titulo:string;opciones:string[];etiquetaCant:string}[]=[
- {clave:"medias",titulo:"Medias",opciones:["No incluye medias","Incluye medias","Incluye polainas","Incluye antideslizantes","Incluye personalizadas"],etiquetaCant:"Cantidad de medias (si aplica)"},
+ // OJO: "Incluye polainas" e "Incluye antideslizantes" NO van aqui aunque el
+ // legado los ofrezca. Las dos tienen su PROPIO selector con su propia cantidad
+ // (abajo), y elegirlas desde Medias las hacia compartir el casillero de
+ // cantidad de las medias: el brief terminaba imprimiendo la misma prenda dos
+ // veces. Codigo.gs ya trae una fusion para reparar ese caso; aqui se corta de
+ // raiz. "Incluye personalizadas" si se queda: son medias, sin selector propio.
+ {clave:"medias",titulo:"Medias",opciones:["No incluye medias","Incluye medias","Incluye personalizadas"],etiquetaCant:"Cantidad de medias (si aplica)"},
  {clave:"polainas",titulo:"Polainas",opciones:["No incluye polainas","Incluye polainas"],etiquetaCant:"Cantidad de polainas (si aplica)"},
  {clave:"antideslizantes",titulo:"Medias antideslizantes",opciones:["No incluye antideslizantes","Incluye antideslizantes"],etiquetaCant:"Cantidad de antideslizantes (si aplica)"},
  {clave:"banda_capitan",titulo:"Banda de Capitán",opciones:["Sin banda de capitán","Con banda de capitán"],etiquetaCant:"Cantidad de bandas (si aplica)"},
@@ -547,7 +553,7 @@ function PasoPrendas({form,setForm,setCab,total,supabase}:{form:Form;setForm:Rea
   <p className={estilos.notaLili}>⚠️ Nota: Lili asignará la fecha exacta de inicio de producción según la capacidad del taller.</p>
   <div className={estilos.tituloBloque}>🎽 ADICIONALES DEL PEDIDO</div>
   <p className={estilos.avisoFuerte}>📌 Revisa esta sección muy bien antes de continuar: aquí se registran los accesorios del pedido, como banderas, banderines, medias y bolsos.</p>
-  <div className={estilos.adicionales}>{ADICIONALES.map(a=><div key={a.clave} className={estilos.filaAdic}><Campo titulo={a.titulo}><select value={form.adic[a.clave]} onChange={e=>setAdic(a.clave,e.target.value)}>{a.opciones.map(o=><option key={o}>{o}</option>)}</select></Campo><Campo titulo={a.etiquetaCant}><input type="number" min={0} value={form.adicCant[a.clave]} onChange={e=>setAdicCant(a.clave,Number(e.target.value))}/></Campo></div>)}</div>
+  <div className={estilos.adicionales}>{ADICIONALES.map(a=><div key={a.clave} className={estilos.filaAdic}><Campo titulo={a.titulo}><select value={form.adic[a.clave]} onChange={e=>setAdic(a.clave,e.target.value)}>{(a.opciones.includes(form.adic[a.clave])?a.opciones:[...a.opciones,form.adic[a.clave]]).map(o=><option key={o}>{o}</option>)}</select></Campo><Campo titulo={a.etiquetaCant}><input type="number" min={0} value={form.adicCant[a.clave]} onChange={e=>setAdicCant(a.clave,Number(e.target.value))}/></Campo></div>)}</div>
   {form.adic.bandera!=="Sin bandera"&&<div className={estilos.grid}><Campo titulo="Medidas de la bandera" ancho><input value={form.medidasBandera} onChange={e=>setForm(f=>({...f,medidasBandera:e.target.value}))} placeholder="Ej. 1,50X90"/></Campo></div>}
  </>;
 }
