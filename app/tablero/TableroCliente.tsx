@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { useRouter } from "next/navigation";
 
 export type Etapa = {
@@ -33,9 +34,41 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
   { valor: "muestras", etiqueta: "🧪 Faltan muestras" },
 ];
 
-export default function TableroCliente({ datos }: { datos: DatosTablero | { error: string } }) {
+export default function TableroCliente({ datos, puedeMarcar = false }: { datos: DatosTablero | { error: string }; puedeMarcar?: boolean }) {
   const router = useRouter();
   const [refrescando, refrescar] = useTransition();
+  const [marcando, setMarcando] = useState("");
+  // Marcar escribe en Supabase Y devuelve la marca a la hoja, porque las
+  // estaciones del taller siguen trabajando en el tablero de Apps Script: si
+  // solo se guardara aqui, el operario de Corte no veria el avance. La ruta
+  // avisa con `hoja:false` cuando la segunda escritura falla, y eso se muestra:
+  // es un desfase recuperable, pero callarlo seria peor.
+  async function alternarEtapa(numero: string, et: Etapa, hecha: boolean) {
+    if (!puedeMarcar) return;
+    const area = et.area || et.etiqueta;
+    const clave = `${numero}|${area}|${et.nombre}`;
+    if (marcando) return;
+    if (hecha) {
+      const motivo = await pedirMotivoDialogo(`Explica por qué se quita "${et.etiqueta}" de ${numero}.`, 10, "Quitar marca");
+      if (!motivo) return;
+      setMarcando(clave);
+      const r = await fetch("/api/bomansport/desmarcar-etapa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ numero, area, etapa: et.nombre, motivo }) });
+      const d = await r.json().catch(() => ({ ok: false, error: "Respuesta inválida" }));
+      setMarcando("");
+      if (!d.ok) return void mostrarAvisoDialogo(d.error || "No se pudo quitar la marca", "Sin cambios", true);
+      if (d.aviso) await mostrarAvisoDialogo(d.aviso, "Ojo", true);
+    } else {
+      if (!await confirmarDialogo(`¿Marcar "${et.etiqueta}" en el contrato ${numero}?`)) return;
+      setMarcando(clave);
+      const r = await fetch("/api/bomansport/marcar-etapa", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ numero, area, etapa: et.nombre }) });
+      const d = await r.json().catch(() => ({ ok: false, error: "Respuesta inválida" }));
+      setMarcando("");
+      if (!d.ok) return void mostrarAvisoDialogo(d.error || "No se pudo marcar", "Sin cambios", true);
+      if (d.aviso) await mostrarAvisoDialogo(d.aviso, "Ojo", true);
+    }
+    refrescar(() => router.refresh());
+  }
+
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("pend");
   const [orden, setOrden] = useState<"entrega" | "numero">("entrega");
@@ -160,9 +193,13 @@ export default function TableroCliente({ datos }: { datos: DatosTablero | { erro
                         y un vacio se confunde con "pendiente". El punto dice "no aplica". */}
                     {et.exterior && !f.esExterior
                       ? <span className="conteo">·</span>
-                      : f.hechas[i]
-                        ? <span style={{ color: "var(--rol-verde)", fontWeight: 900 }}>✓</span>
-                        : <span className="conteo">▫</span>}
+                      : puedeMarcar
+                        ? <button className="celdaEtapa" disabled={marcando !== ""} title={f.hechas[i] ? `Quitar ${et.etiqueta}` : `Marcar ${et.etiqueta}`} onClick={() => void alternarEtapa(f.numero, et, f.hechas[i])}>
+                            {f.hechas[i] ? <span style={{ color: "var(--rol-verde)", fontWeight: 900 }}>✓</span> : <span className="conteo">▫</span>}
+                          </button>
+                        : f.hechas[i]
+                          ? <span style={{ color: "var(--rol-verde)", fontWeight: 900 }}>✓</span>
+                          : <span className="conteo">▫</span>}
                   </td>
                 ))}
               </tr>

@@ -2436,3 +2436,13 @@ button.producto-sin-foto {
 @media (prefers-reduced-motion: reduce) {
   .producto-previsualizacion { animation: none; }
 }
+
+/* Casilla de etapa del tablero de produccion: es un boton, pero debe verse
+   igual que el texto que reemplaza (el tablero se lee de un vistazo y un
+   boton con marco por columna lo volveria ilegible). */
+.celdaEtapa {
+  background: none; border: 0; padding: 2px 6px; margin: 0; cursor: pointer;
+  border-radius: 5px; line-height: 1; font: inherit;
+}
+.celdaEtapa:hover:not(:disabled) { background: var(--superficie-suave); outline: 1px solid var(--borde); }
+.celdaEtapa:disabled { opacity: .5; cursor: progress; }

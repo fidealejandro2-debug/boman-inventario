@@ -35,7 +35,7 @@ export default async function TableroPage() {
     <>
       <Navbar perfil={perfil} />
       <main className="container">
-        <TableroCliente datos={datos} />
+        <TableroCliente datos={datos} puedeMarcar={tienePermiso(perfil, "contratos.marcar_etapa")} />
       </main>
     </>
   );
