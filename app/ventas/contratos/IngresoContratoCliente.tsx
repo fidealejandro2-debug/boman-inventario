@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/permisos";
 import estilos from "./IngresoContrato.module.css";
 import {TODOS_LOS_COLORES} from "./colores";
-import {fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPrenda} from "./specsPrendas";
+import {FICHAS_PRENDA,fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPrenda} from "./specsPrendas";
 
 // Todas estas listas son copia literal de BomanSport/index.html: son la fuente
 // de verdad del negocio. Si aqui difieren aunque sea en una tilde o un espacio,
@@ -46,19 +46,9 @@ type Prenda={id:string;prenda:string;calidad:string;detalle:string;genero:"H"|"M
 type Jugador={id:string;nombre:string;numero:string;categoria:string;talla_superior:string;talla_inferior:string;manga:string;calidad:string;modelo_arquero:string;tipo_uniforme:string;detalle:string;mockup:string};
 type Archivo={id:string;tipo:"mockup"|"logo";file?:File;preview?:string;url?:string;drive_id?:string;descripcion:string;color:string;prenda:string;posicion:string;tecnica:string;calidad_aplicable:string;observacion:string};
 type Spec={id:string;prenda_clave:string;variante_calidad:string;mockup:string;campos:Record<string,string>;observacion:string};
-type CampoTecnico={c:string;t:string;o?:string[]};
-
-// Catálogo de campos técnicos tomado del formulario legado (index.html) recortado a
-// lo que el brief realmente IMPRIME en sus tablas: el legado tiene cientos de
-// variantes condicionales por calidad que nunca llegan al papel del taller.
-const CAMPOS_CAMISETA:CampoTecnico[]=[{c:"corte",t:"Corte",o:["Ranglan","Recta","Corte especial"]},{c:"cuello_tipo",t:"Cuello tipo",o:["Normal","Polo","Chino","Especial"]},{c:"cuello_forma",t:"Cuello forma",o:["Normal","Redondo","En V","Cruzado","Personalizado"]},{c:"cuello_falso",t:"Cuello falso",o:["No","Sí","En V","Redondo"]},{c:"cuello_material",t:"Cuello material",o:["Rib","Tejido rib","Tejido licra","Tela"]},{c:"cuello_tecnica",t:"Cuello técnica",o:["Llano","Estampado","Sublimado","Personalizado"]},{c:"botones",t:"Botones",o:["No","Sí","Combinado"]},{c:"botones_cantidad",t:"Cantidad de botones"},{c:"punos_tipo",t:"Puños tipo",o:["Integrado","Aparte tela","Aparte tejido","Aparte rib","Combinado","No aplica"]},{c:"punos_tecnica",t:"Puños técnica",o:["Llano","Sublimado","Estampado","Sublimado y estampado","Personalizado","No aplica"]},{c:"vivos",t:"Vivos",o:["No","Sí","No aplica"]},{c:"vivos_donde",t:"Vivos dónde"},{c:"basta",t:"Basta",o:["Normal","Con casita","Falso","Cola de pato"]},{c:"empanada",t:"Empanada",o:["No aplica","Triangular","Cuadrada","Hexagonal"]},{c:"babero",t:"Babero",o:["No","Sí","Apuntado","Especial","No aplica"]},{c:"vinchas",t:"Vinchas",o:["No","Tela","Tejido","Rib"]},{c:"pie_cuello",t:"Pie de cuello",o:["No","Sí"]},{c:"pie_cuello_color",t:"Pie de cuello color"},{c:"reata",t:"Reata",o:["No","Pro","Tela","Sesgo","Pro sin Boman"]},{c:"reata_color",t:"Reata color"},{c:"talla_origen",t:"Etiqueta talla",o:["Nacional","Importada"]},{c:"talla_marca",t:"Marca de talla",o:["Con Boman","Sin Boman","Personalizada"]}];
-const CAMPOS_TECNICOS:Record<string,CampoTecnico[]>={
- camiseta:CAMPOS_CAMISETA,
- polo:CAMPOS_CAMISETA,
- pantaloneta:[{c:"tipo",t:"Tipo",o:["Basquet","Futbol"]},{c:"basta",t:"Basta",o:["Basquet normal","Basquet casita","Futbol normal","Futbol casita","Especial","Cosida aparte","Cosida aparte sublimada","Cosida aparte tela"]},{c:"cordon",t:"Cordón",o:["Unitario","Metreado"]},{c:"elastico",t:"Elástico",o:["Boman","Normal"]},{c:"vivos",t:"Vivos",o:["No","Sí"]},{c:"vivos_color",t:"Vivos color / dónde"},{c:"franjas_sublimadas",t:"Franjas sublimadas",o:["No aplica","Sí"]},{c:"franjas_adidas",t:"Franjas Adidas",o:["No aplica","1 franja","2 franjas","3 franjas","4 franjas"]},{c:"bolsillos",t:"Bolsillos",o:["No","Con cierre","Sin cierre"]},{c:"talla_origen",t:"Etiqueta talla",o:["Nacional","Importada"]},{c:"talla_marca",t:"Marca de talla",o:["Con Boman","Sin Boman","Personalizada"]}],
- chompa:[{c:"estilo",t:"Estilo",o:["Normal","Retro (Escolar)"]},{c:"capucha",t:"Capucha",o:["Sin capucha","Normal","Desmontable"]},{c:"capucha_reata",t:"Reata capucha"},{c:"basta",t:"Basta",o:["Faja","Basta suelta"]},{c:"cierre",t:"Cierre",o:["Sin cierre","Medio","Bajo","Completo"]},{c:"cierre_estampado",t:"Cierre estampado",o:["No","Sí"]},{c:"punos_tipo",t:"Puños",o:["Con elástico boman","Sin elástico","Elástico normal","Sesgo","Combinado"]},{c:"punos_forma",t:"Puño forma",o:["Puño normal","Puño guante"]},{c:"bolsillos",t:"Bolsillos",o:["No","Con cierre","Sin cierre","Canguro"]},{c:"velcro",t:"Velcro",o:["No","Sí"]},{c:"velcro_detalle",t:"Velcro detalle"},{c:"tiras_adidas",t:"Tiras Adidas",o:["Sin tira","1 tira","2 tiras","3 tiras","4 tiras"]},{c:"tela",t:"Tela"}],
- pantalon:[{c:"basta",t:"Basta",o:["Recta","Tubo","Semitubo","Puño"]},{c:"puno_tipo",t:"Tipo puño",o:["Rib","Tela","Elástico normal","Especial"]},{c:"basta_cierre",t:"Basta cierre",o:["Con cierre","Sin cierre"]},{c:"bolsillos",t:"Bolsillos",o:["No tiene","Con cierre","Sin cierre"]},{c:"franja",t:"Franja de tela",o:["No aplica","Sublimada"]},{c:"tiras_adidas",t:"Tira Adidas",o:["No","1 tira","2 tiras","3 tiras"]},{c:"cordon",t:"Cordón",o:["Unitario","Metreado"]},{c:"vivos",t:"Vivos",o:["No","Sí"]},{c:"vivos_donde",t:"Vivos dónde"}],
- otro:[{c:"material",t:"Material"},{c:"color",t:"Color"},{c:"detalle",t:"Detalle"}]};
+// El catalogo de campos tecnicos vive solo en specsPrendas.ts (FICHAS_PRENDA):
+// tener uno aqui para el brief y otro alla para el formulario hacia que lo
+// capturado no se imprimiera, porque los ids no coincidian.
 // El brief pinta cada prenda con un color de cabecera propio; agrupar por familia
 // evita mantener una entrada por cada uno de los 26 nombres de PRENDAS.
 function familiaPrenda(prenda:string){const n=prenda.toLowerCase();
@@ -806,13 +796,27 @@ function TablaJugadores({jugadores}:{jugadores:Jugador[]}){
 // destacada y la tabla etiqueta|valor. Los campos vacíos o "No aplica" no se imprimen.
 function BloqueSpecs({specs,titulo}:{specs:Spec[];titulo:string}){
  return <div><div className={estilos.bSpecTit}>{titulo}</div><div className={estilos.bSpecs}>{specs.map(s=>{
-  const familia=familiaPrenda(s.prenda_clave); const marca=FAMILIA_MARCA[familia];
-  const filas=CAMPOS_TECNICOS[familia].filter(f=>f.c!=="corte"&&texto(s.campos[f.c])&&!/^no aplica$/i.test(texto(s.campos[f.c])));
+  // MISMA ficha que uso el formulario para capturar. Antes el brief tenia su
+  // propio catalogo con otros ids, asi que lo capturado no se imprimia.
+  const ficha=FICHAS_PRENDA.find(f=>f.clave===s.prenda_clave);
+  const marca=FAMILIA_MARCA[familiaPrenda(ficha?.label||s.prenda_clave)];
+  const filas=(ficha?.campos||[])
+   .filter(f=>f.id!=="observacion"&&f.id!=="corte")
+   .map(f=>({t:f.label,v:texto(s.campos[f.id])}))
+   .filter(x=>x.v&&!/^no aplica$/i.test(x.v));
+  const corte=texto(s.campos.corte);
+  // Con mas de 5 filas la tabla de una columna deja media hoja vacia a su
+  // derecha: se parte en dos columnas lado a lado, como _specs2col del legado.
+  const dos=filas.length>5;
+  const mitad=Math.ceil(filas.length/2);
   return <article key={s.id} className={estilos.bSpecCard}>
-   <div className={estilos.bSpecCab} style={{background:marca.color}}>{marca.icono} {s.prenda_clave.toUpperCase()}{s.variante_calidad&&` · ${s.variante_calidad}`}</div>
-   {!!texto(s.campos.corte)&&<div className={estilos.bCorte}>✂️ CORTE: {s.campos.corte}</div>}
-   {!!filas.length&&<table className={estilos.bDatos}><tbody>{filas.map(f=><tr key={f.c}><td>{f.t}</td><td>{s.campos[f.c]}</td></tr>)}</tbody></table>}
-   {!filas.length&&!texto(s.campos.corte)&&!texto(s.observacion)&&<div className={estilos.bSpecVacio}>Sin detalle técnico cargado.</div>}
+   <div className={estilos.bSpecCab} style={{background:marca.color}}>{ficha?.icon||marca.icono} {(ficha?.label||s.prenda_clave).toUpperCase()}{s.variante_calidad&&` · ${s.variante_calidad}`}</div>
+   {!!corte&&<div className={estilos.bCorte}>✂️ CORTE: {corte}</div>}
+   {!!filas.length&&(dos
+    ?<table className={estilos.bDatos}><tbody>{Array.from({length:mitad},(_,k)=>{const a=filas[k],b=filas[k+mitad];
+      return <tr key={k}><td>{a.t}</td><td>{a.v}</td><td>{b?b.t:""}</td><td>{b?b.v:""}</td></tr>})}</tbody></table>
+    :<table className={estilos.bDatos}><tbody>{filas.map(f=><tr key={f.t}><td>{f.t}</td><td>{f.v}</td></tr>)}</tbody></table>)}
+   {!filas.length&&!corte&&!texto(s.observacion)&&<div className={estilos.bSpecVacio}>Sin detalle técnico cargado.</div>}
    {!!texto(s.observacion)&&<div className={estilos.bObs}><b>📝 Obs:</b> {s.observacion}</div>}
   </article>;
  })}</div></div>;

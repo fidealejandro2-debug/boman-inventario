@@ -37,6 +37,7 @@ const BASTA_BASQUET = ["Basquet normal", "Basquet casita", "Especial", "Cosida a
 export const bastaPantaloneta = (tipo: string) => (tipo === "Futbol" ? BASTA_FUTBOL : BASTA_BASQUET);
 
 const CAMPOS_CAMISETA: CampoSpec[] = [
+  { id: "corte", label: "Corte", opts: ["Ranglan", "Recta", "Corte especial"] },
   { id: "cuello_tipo", label: "Tipo cuello", opts: ["Normal", "Polo", "Chino", "Especial"] },
   { id: "cuello_forma", label: "Forma cuello", opts: ["Normal", "Redondo", "En V", "Cruzado", "Personalizado"] },
   { id: "cuello_falso", label: "Cuello falso", opts: ["No", "Sí", "En V", "Redondo"] },
