@@ -1006,20 +1006,22 @@ function ComprobanteFact({form}:{form:Form}){
  const {prendas,facturacion}=form;
  const r=comprobarFacturacion(prendas,facturacion);
  // La bandera se registra en adicionales Y se factura aparte: si esta en un
- // lado y no en el otro, en produccion se la saltan. El aviso gana sobre todo
- // lo demas, incluso antes de que haya prendas cargadas.
+ // lado y no en el otro, en produccion se la saltan.
+ // OJO: este aviso SE SUMA, no reemplaza. Antes hacia return aqui y tapaba el
+ // cuadre de prendas: con una bandera pendiente el vendedor no veia que le
+ // faltaban camisetas por facturar (reportado con captura).
  const conBandera=form.adic.bandera!=="Sin bandera";
  const banderaFacturada=facturacion.some(f=>texto(f.concepto).toLowerCase()==="bandera");
- if(conBandera&&!banderaFacturada)return <div className={estilos.factMal}><strong>📌 Revisa la sección de adicionales y el detalle de facturación para dejar la bandera visible en ambos lados.</strong></div>;
+ const avisoBandera=conBandera&&!banderaFacturada?<div className={estilos.factMal}><strong>📌 Revisa la sección de adicionales y el detalle de facturación para dejar la bandera visible en ambos lados.</strong></div>:null;
  // Las medias de adicionales son el TOTAL: ya incluyen las que van dentro de
  // los uniformes. Se desglosa para que quien factura sepa cuantas se cobran aparte.
  const totalMedias=form.adicCant.medias||0;
  const conUniforme=facturacion.reduce((n,f)=>{const c=texto(f.concepto).toLowerCase();return c.startsWith("uniforme completo")||c.startsWith("arquero completo")?n+(f.cantidad||0):n},0);
  const extra=totalMedias-conUniforme;
  const notaMedias=totalMedias>0?<div className={estilos.notaMedias}>🧦 <strong>Medias:</strong> {totalMedias} en total · {conUniforme} van dentro de uniformes/arqueros · <strong>{extra>0?`${extra} adicionales (aparte)`:extra===0?"ninguna adicional":`${Math.abs(extra)} menos que los uniformes — revisa`}</strong></div>:null;
- if(!r.hayPrendas)return <>{notaMedias}<p className={estilos.pista}>Aún no hay prendas con tallas para comprobar (llénalas en el paso Jugadores).</p></>;
- if(r.ok)return <>{notaMedias}<p className={estilos.factOk}>✓ La facturación cuadra con las prendas del contrato.</p></>;
- return <><div className={estilos.factMal}>
+ if(!r.hayPrendas)return <>{avisoBandera}{notaMedias}<p className={estilos.pista}>Aún no hay prendas con tallas para comprobar (llénalas en el paso Jugadores).</p></>;
+ if(r.ok)return <>{avisoBandera}{notaMedias}<p className={estilos.factOk}>✓ La facturación cuadra con las prendas del contrato.</p></>;
+ return <>{avisoBandera}<div className={estilos.factMal}>
   <strong>La facturación todavía no cuadra:</strong>
   {r.faltan.length>0&&<div>Faltan por facturar: {r.faltan.join(" · ")}</div>}
   {r.sobran.length>0&&<div>Facturado de más: {r.sobran.join(" · ")}</div>}
