@@ -706,6 +706,73 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
  // El brief se monta en <body> por portal: así la regla @media print puede apagar el
  // resto de la página con un selector de hijo directo, sin tocar globals.css.
  useEffect(()=>{setMontado(true);document.body.classList.add("brief-imprimible");const esc=(e:KeyboardEvent)=>{if(e.key==="Escape")cerrar()};document.addEventListener("keydown",esc);return()=>{document.body.classList.remove("brief-imprimible");document.removeEventListener("keydown",esc)}},[cerrar]);
+ if(!montado)return null;
+ return createPortal(
+  <div className={estilos.vistaPrevia} role="dialog" aria-modal="true" aria-label="Brief de producción" onMouseDown={e=>e.target===e.currentTarget&&cerrar()}>
+   <div className={`${estilos.barraBrief} ${estilos.noPrint}`}>
+    <strong>Vista previa del brief de producción</strong>
+    <button onClick={()=>window.print()}>Imprimir</button>
+    <button className="secondary" onClick={cerrar}>Cerrar</button>
+   </div>
+    <BriefHoja form={form}/>
+  </div>,document.body);
+}
+
+// Reconstruye el Form a partir de un contrato YA GUARDADO, para poder pintarlo
+// con el mismo BriefHoja del ingreso. Es el inverso del payload que arma
+// guardar(): las columnas de contrato_prendas / _jugadores / _archivos /
+// _specs / _facturacion se llaman igual que los campos del formulario, asi que
+// el mapeo es directo salvo en dos sitios:
+//  - `adicionales` en la cabecera es texto libre, pero guardado es un objeto
+//    {detalle, items, medidas_bandera}; hay que desarmarlo o el brief imprime
+//    "[object Object]".
+//  - las tallas no se guardan como matriz sino como filas ya expandidas, asi
+//    que se rearman con lineasDesdePrendas (lo mismo que hace una reposicion).
+type FilaGuardada=Record<string,unknown>;
+export function formDesdeContrato(datos:{contrato:FilaGuardada;prendas?:FilaGuardada[];jugadores?:FilaGuardada[];archivos?:FilaGuardada[];especificaciones?:FilaGuardada[];facturacion?:FilaGuardada[]}):Form{
+ const co=datos.contrato||{};
+ const t=(v:unknown)=>v===null||v===undefined?"":String(v);
+ const cab=cabInicial(t(co.vendedor));
+ for(const k of Object.keys(cab) as (keyof Cab)[]){
+  if(k==="adicionales")continue;                       // objeto, no texto: se trata abajo
+  const v=co[k as string];
+  if(v===null||v===undefined||v==="")continue;
+  (cab as Record<string,unknown>)[k]=typeof (cab as Record<string,unknown>)[k]==="number"?Number(v)
+   :typeof (cab as Record<string,unknown>)[k]==="boolean"?Boolean(v):t(v);
+ }
+ // La cabecera del formulario lleva los colores como texto separado por comas,
+ // pero la tabla los guarda en colores_generales (jsonb [{nombre}]). Sin esta
+ // conversion el brief de un contrato guardado salia sin la franja de colores.
+ if(Array.isArray(co.colores_generales))cab.colores=(co.colores_generales as Record<string,unknown>[]).map(x=>t(x&&x.nombre)).filter(Boolean).join(", ");
+ const ad=(co.adicionales&&typeof co.adicionales==="object"?co.adicionales:{}) as Record<string,unknown>;
+ cab.adicionales=t(ad.detalle);
+ const adic=adicInicial(),adicCant={} as AdicCant;
+ for(const a of ADICIONALES)adicCant[a.clave]=0;
+ for(const it of (Array.isArray(ad.items)?ad.items:[]) as Record<string,unknown>[]){
+  const def=ADICIONALES.find(x=>x.titulo===t(it.tipo));
+  if(!def)continue;
+  if(t(it.valor))adic[def.clave]=t(it.valor);
+  adicCant[def.clave]=Number(it.cantidad)||0;
+ }
+ const prendas=(datos.prendas||[]).map(x=>({id:uuid(),prenda:t(x.prenda),calidad:t(x.calidad),detalle:t(x.detalle),genero:(t(x.genero)||"H") as Prenda["genero"],talla:t(x.talla),cantidad:Number(x.cantidad)||0}));
+ return {
+  cab,
+  prendasSel:prendas.map(x=>x.prenda).filter((v,i,a)=>v&&a.indexOf(v)===i),
+  lineas:lineasDesdePrendas(datos.prendas||[]),
+  adic,adicCant,medidasBandera:t(ad.medidas_bandera),
+  prendas,
+  jugadores:(datos.jugadores||[]).map(x=>({id:uuid(),nombre:t(x.nombre),numero:t(x.numero),categoria:t(x.categoria),talla_superior:t(x.talla_superior),talla_inferior:t(x.talla_inferior),manga:t(x.manga),calidad:t(x.calidad),modelo_arquero:t(x.modelo_arquero),tipo_uniforme:t(x.tipo_uniforme),detalle:t(x.detalle),mockup:t(x.mockup)})),
+  archivos:(datos.archivos||[]).map(x=>({id:uuid(),tipo:(t(x.tipo)==="logo"?"logo":"mockup") as Archivo["tipo"],url:t(x.url)||undefined,drive_id:t(x.drive_id)||undefined,descripcion:t(x.descripcion),color:t(x.color),prenda:t(x.prenda),posicion:t(x.posicion),tecnica:t(x.tecnica),calidad_aplicable:t(x.calidad_aplicable)||"Todas",observacion:t(x.observacion)})),
+  specs:(datos.especificaciones||[]).map(x=>{const sp=(x.spec&&typeof x.spec==="object"?x.spec:{}) as Record<string,unknown>;
+   return {id:uuid(),prenda_clave:t(x.prenda_clave),variante_calidad:t(x.variante_calidad),mockup:t(x.variante_mockup),campos:(sp.campos&&typeof sp.campos==="object"?sp.campos:{}) as Record<string,string>,observacion:t(sp.observacion)}}),
+  facturacion:(datos.facturacion||[]).map(x=>({id:uuid(),concepto:t(x.concepto),calidad:t(x.calidad),cantidad:Number(x.cantidad)||0,obsequio:Boolean(x.obsequio)})),
+ };
+}
+
+// El DOCUMENTO del brief, sin el modal que lo envuelve. Se exporta para que el
+// expediente de un contrato ya guardado imprima EXACTAMENTE el mismo papel que
+// la vista previa del ingreso, en vez de sostener dos briefs distintos.
+export function BriefHoja({form}:{form:Form}){
  const c=form.cab;
  const mockups=mockupsDe(form);
  const logos=form.archivos.filter(a=>a.tipo==="logo");
@@ -744,14 +811,7 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
  const detalle=form.facturacion.length
   ?form.facturacion.map(f=>({cantidad:String(f.cantidad),texto:f.concepto,calidad:f.calidad,obsequio:f.obsequio}))
   :grupos.map(g=>({cantidad:String(g.lineas.reduce((s,l)=>s+l.totH+l.totM+l.totN,0)),texto:g.prenda,calidad:"",obsequio:false}));
- if(!montado)return null;
- return createPortal(
-  <div className={estilos.vistaPrevia} role="dialog" aria-modal="true" aria-label="Brief de producción" onMouseDown={e=>e.target===e.currentTarget&&cerrar()}>
-   <div className={`${estilos.barraBrief} ${estilos.noPrint}`}>
-    <strong>Vista previa del brief de producción</strong>
-    <button onClick={()=>window.print()}>Imprimir</button>
-    <button className="secondary" onClick={cerrar}>Cerrar</button>
-   </div>
+ return <>
    <article className={estilos.hoja}>
     <div className={estilos.bTop}>
      <div className={estilos.bCal} style={calidad.length>26?{fontSize:"13px"}:calidad.length>16?{fontSize:"17px"}:undefined}>{calidad}</div>
@@ -840,7 +900,7 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
 
     <div className={estilos.bPie}>Brief generado {fechaCorta(new Date().toISOString().slice(0,10))} · Boman Sport</div>
    </article>
-  </div>,document.body);
+  </>;
 }
 
 // Tabla de jugadores del brief: cabecera azul, zebra, bandas de calidad y columnas
