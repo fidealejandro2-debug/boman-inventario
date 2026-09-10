@@ -119,7 +119,7 @@ export const FICHAS_PRENDA: FichaPrenda[] = [
       { id: "franjas_adidas", label: "Franjas Adidas", opts: ["No aplica", "1", "2", "3", "4"] },
       { id: "observacion", label: "Observación" },
     ] },
-  { clave: "chompa", label: "CHOMPA", icon: "🧥", calAware: false, prendas: ["Chompa", "Exterior Completo"],
+  { clave: "chompa", label: "CHOMPA", icon: "🧥", calAware: false, prendas: ["Chompa", "Exterior Completo", "Hoodie"],
     campos: [
       { id: "modelo", label: "Prenda (título del brief)", opts: ["Exterior", "Rompevientos", "Chompa de Frío", "Buzo", "Retro", "Hoodie"] },
       { id: "estilo", label: "Estilo", opts: ["Normal", "Retro (Escolar)"] },

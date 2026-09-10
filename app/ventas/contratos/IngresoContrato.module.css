@@ -189,3 +189,12 @@
 .bFotosSolo img{width:100%;height:190px;object-fit:contain;display:block}
 .bFotosSolo figcaption{margin-top:4px;font-size:9.5px;font-weight:800;color:#1F4E78;text-align:center;text-transform:uppercase}
 .notaMedias{margin-top:6px;background:#EFF6FF;border:1px solid #93C5FD;border-radius:7px;padding:7px 10px;font-size:.8rem;color:#1e3a5f}
+
+/* Portada del brief (modo NO agrupado del legado): resumen tecnico a la
+   izquierda y el mockup principal grande a la derecha. */
+.bPortadaWrap{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:12px;align-items:start;margin:6px 0}
+.bPanelMockup{display:grid;gap:8px;margin:6px 0}
+.bPanelMockup figure{margin:0;border:1px solid #d9e2ec;border-radius:7px;padding:6px;background:#fff}
+.bPanelMockup img{width:100%;max-height:430px;object-fit:contain;display:block}
+.bPanelMockup figcaption{margin-top:5px;font-size:10.5px;font-weight:800;color:#1F4E78;text-align:center;text-transform:uppercase}
+@media print{.bPortadaWrap{grid-template-columns:1fr 1fr}.bPanelMockup img{max-height:360px}}

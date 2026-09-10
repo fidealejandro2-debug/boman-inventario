@@ -654,6 +654,14 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
  // un bloque compacto de solo foto.
  const mockupsConContenido=porMockup.filter(x=>x.jugadores.length>0||x.specs.length>0);
  const mockupsSoloFoto=porMockup.filter(x=>x.jugadores.length===0&&x.specs.length===0);
+ // Igual que agruparPorMockup del legado: se agrupa por mockup solo si ALGUN
+ // jugador o ALGUNA especificacion tiene mockup asignado. Si no, el brief usa
+ // la portada: mockup grande a la derecha y resumen tecnico a la izquierda.
+ const agrupado=form.jugadores.some(j=>texto(j.mockup))||form.specs.some(x=>texto(x.mockup));
+ const mockupsPortada=agrupado?[]:mockups.slice(0,2);
+ // En portada el legado muestra Mockup 1 (y 2) grandes; los demas bajan a la
+ // cuadricula de la segunda pagina, no desaparecen.
+ const mockupsCuadricula=agrupado?mockupsSoloFoto:mockups.slice(2).map((m,k)=>({m,i:k+2}));
  const jugadoresSueltos=form.jugadores.filter(j=>indiceMockup(j.mockup,mockups)<0);
  const specsSueltas=form.specs.filter(s=>indiceMockup(s.mockup,mockups)<0);
  const grupos=agruparTallas(form.prendas);
@@ -686,6 +694,7 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
      <tr><td className={estilos.bhLbl}>ENTREGA:</td><td className={estilos.bhVal} colSpan={2}>{c.forma_entrega||"—"}{c.direccion&&` · ${c.direccion}`}</td></tr>
     </tbody></table>
 
+    <div className={agrupado?undefined:estilos.bPortadaWrap}>
     <div className={estilos.bCols}>
      <table className={estilos.cdTbl}><tbody>
       <tr><td className={estilos.cdH}>CANT.</td><td className={estilos.cdH}>{form.facturacion.length?"DETALLE (FACTURACIÓN)":"DETALLE"}</td></tr>
@@ -706,13 +715,16 @@ function VistaPrevia({form,total,cerrar}:{form:Form;total:number;cerrar:()=>void
      {!!adicionales.length&&<div className={estilos.bAdic}><div className={estilos.bAdicTit}>⚠️ ADICIONALES DEL PEDIDO</div>{adicionales.map((l,i)=><div key={i} className={/^bandera/i.test(l)?estilos.bAdicBandera:estilos.bAdicLinea}>• {l}</div>)}</div>}
     </div>
 
+    {mockupsPortada.length>0&&<div className={estilos.bPanelMockup}>{mockupsPortada.map(({id,preview,url,descripcion},i)=>
+    <figure key={id}><img src={preview||url} alt=""/><figcaption>MOCKUP {i+1}{descripcion?` · ${descripcion}`:""}</figcaption></figure>)}</div>}
+    </div>
     {!!colores.length&&<div className={estilos.bColores}>
      <div className={estilos.bH3}>COLORES GENERALES</div>
      <div className={estilos.bChips}>{colores.map(x=><span key={x} className={estilos.bChip}>{x}</span>)}</div>
      <div className={estilos.bAviso}>⚠️ SIEMPRE PREDOMINA EL COLOR DEL MOCKUP Y DE LA MUESTRA SOBRE EL COLOR REFERENCIAL</div>
     </div>}
 
-    {mockupsSoloFoto.length>0&&<div className={estilos.bFotosSolo}>{mockupsSoloFoto.map(({m,i})=><figure key={m.id}><img src={m.preview||m.url} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
+    {mockupsCuadricula.length>0&&<div className={estilos.bFotosSolo}>{mockupsCuadricula.map(({m,i})=><figure key={m.id}><img src={m.preview||m.url} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
     {mockupsConContenido.map(({m,i,jugadores,specs})=><section key={m.id} className={estilos.bSeccion}>
      <div className={estilos.bMk}>
       <div>
