@@ -298,6 +298,9 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/produccion", etiqueta: "Órdenes de producción", descripcion: "Rutas, etapas, lotes y costos", visible: puedeVerProduccion },
       { href: "/produccion/calidad", etiqueta: "Calidad y errores", descripcion: "Novedades, reprocesos y acciones correctivas", visible: puedeVerProduccion || puedeVerNomina },
       { href: "/tablero", etiqueta: "Tablero de contratos", descripcion: "Avance por etapa de los contratos de Boman Sport", visible: puedeVerProduccion },
+      // Unica entrada visible para un operario de estacion: su cuenta no tiene
+      // produccion.acceder, asi que el resto del menu le queda vacio.
+      { href: "/estacion", etiqueta: "Mi estación", descripcion: "La cola de trabajo de tu estación del taller", visible: tienePermiso(perfil, "produccion.estacion") },
     ] },
     { id: "inventario", etiqueta: "Inventario", opciones: [
       { href: "/inventario", etiqueta: "Existencias", descripcion: "Stock disponible por almacén", visible: tienePermiso(perfil, "inventario.acceder") },

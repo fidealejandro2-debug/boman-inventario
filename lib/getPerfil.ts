@@ -90,17 +90,23 @@ export async function getPerfilActual(): Promise<Perfil> {
     redirect("/login?motivo=inactivo");
   }
 
-  const perfilBase = perfil as Omit<Perfil, "permisos" | "modo_boman_especifico">;
+  const perfilBase = perfil as Omit<Perfil, "permisos" | "modo_boman_especifico" | "estaciones">;
   const [
     { data: permisos, error: permisosError },
     { data: modoBoman, error: modoBomanError },
+    { data: estaciones },
   ] = await Promise.all([
     supabase.rpc("permisos_usuario_actual_v35"),
     supabase.rpc("modo_boman_especifico_activo"),
+    // Aparte del select principal a proposito: `estaciones` solo existe desde
+    // v117, y pedirla ahi tumbaria el login de TODOS si el deploy llega antes
+    // que la migracion. Aqui, si la columna no esta, solo se pierde el dato.
+    supabase.rpc("estaciones_usuario_actual_v117"),
   ]);
 
   return {
     ...perfilBase,
+    estaciones: Array.isArray(estaciones) ? (estaciones as string[]) : [],
     permisos:
       !permisosError && Array.isArray(permisos)
         ? (permisos as PermisoCodigo[])

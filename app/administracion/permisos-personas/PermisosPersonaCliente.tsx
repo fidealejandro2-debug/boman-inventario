@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
-import { pedirTextoDialogo } from "@/components/Dialogo";
+import { confirmarDialogo, pedirTextoDialogo } from "@/components/Dialogo";
 
 type Usuario = { id: string; nombre_completo: string; email: string; rol: string; activo: boolean };
 
@@ -46,6 +46,20 @@ export default function PermisosPersonaCliente() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  // v117: estaciones del taller. Asignar una encierra a la cuenta en ella, asi
+  // que vive aqui, junto a lo demas que decide que puede hacer una persona.
+  const [catalogoEstaciones, setCatalogoEstaciones] = useState<string[]>([]);
+  const [estaciones, setEstaciones] = useState<string[]>([]);
+  const [estacionesOriginal, setEstacionesOriginal] = useState<string[]>([]);
+  const [guardandoEstaciones, setGuardandoEstaciones] = useState(false);
+
+  useEffect(() => {
+    // Si v117 no esta instalada la RPC no existe: el bloque de estaciones
+    // simplemente no aparece y el resto de la pantalla sigue funcionando.
+    supabase.rpc("estaciones_produccion_v117").then(({ data }) => {
+      if (Array.isArray(data)) setCatalogoEstaciones(data as string[]);
+    });
+  }, [supabase]);
 
   useEffect(() => {
     fetch("/api/admin/usuarios")
@@ -79,6 +93,32 @@ export default function PermisosPersonaCliente() {
     setFilas(nuevas);
     setOriginal(mapa);
     setValores(mapa);
+
+    const { data: asignadas } = await supabase.rpc("estaciones_de_perfil_v117", { p_perfil_id: usuario.id });
+    const lista = Array.isArray(asignadas) ? (asignadas as string[]) : [];
+    setEstaciones(lista);
+    setEstacionesOriginal(lista);
+  }
+
+  async function guardarEstaciones() {
+    if (!seleccionado) return;
+    const encierra = estaciones.length > 0;
+    const aviso = encierra
+      ? `${seleccionado.nombre_completo} quedará limitado a ${estaciones.join(", ")}: perderá TODO lo demás del sistema y solo verá la cola de esa estación. ¿Continuar?`
+      : `${seleccionado.nombre_completo} dejará de ser operario de estación y volverá a los permisos de su rol (${ETIQUETAS_ROL[seleccionado.rol] ?? seleccionado.rol}). ¿Continuar?`;
+    if (!(await confirmarDialogo(aviso))) return;
+
+    setGuardandoEstaciones(true);
+    setError(null);
+    setMensaje(null);
+    const { error: guardarError } = await supabase.rpc("admin_asignar_estaciones_v117", {
+      p_perfil_id: seleccionado.id,
+      p_estaciones: estaciones,
+    });
+    setGuardandoEstaciones(false);
+    if (guardarError) return setError(guardarError.message);
+    setEstacionesOriginal(estaciones);
+    setMensaje(encierra ? "Estaciones asignadas. La cuenta ya solo ve su estación." : "Estaciones quitadas.");
   }
 
   const modulos = useMemo(() => [...new Set(filas.map((f) => f.modulo))], [filas]);
@@ -166,6 +206,44 @@ export default function PermisosPersonaCliente() {
             <h3 style={{ margin: 0 }}>{seleccionado.nombre_completo} <span className="conteo">({ETIQUETAS_ROL[seleccionado.rol] ?? seleccionado.rol})</span></h3>
             <button className="secondary" onClick={() => setSeleccionado(null)}>Cambiar persona</button>
           </div>
+
+          {!!catalogoEstaciones.length && (
+            <section className="card" style={{ marginTop: 12 }}>
+              <h4 style={{ margin: "0 0 4px" }}>Estación de producción</h4>
+              <p className="ayuda" style={{ marginTop: 0 }}>
+                Marcar una estación convierte esta cuenta en operario de taller: verá <strong>solo</strong> la
+                cola de esa estación en «Mi estación», podrá marcar sus etapas y nada más. Sin ninguna marcada,
+                la cuenta funciona con los permisos normales de su rol.
+              </p>
+              <div className="filtros" style={{ flexWrap: "wrap" }}>
+                {catalogoEstaciones.map((a) => {
+                  const puesta = estaciones.includes(a);
+                  return (
+                    <label key={a} className="badge" style={{ display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={puesta}
+                        disabled={guardandoEstaciones}
+                        onChange={() => setEstaciones(puesta ? estaciones.filter((x) => x !== a) : [...estaciones, a])}
+                      />
+                      {a}
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="form-inline" style={{ marginTop: 10 }}>
+                <button
+                  disabled={guardandoEstaciones || estaciones.slice().sort().join("|") === estacionesOriginal.slice().sort().join("|")}
+                  onClick={guardarEstaciones}
+                >
+                  {guardandoEstaciones ? "Guardando…" : "Guardar estaciones"}
+                </button>
+                <button className="secondary" disabled={guardandoEstaciones} onClick={() => setEstaciones(estacionesOriginal)}>
+                  Descartar
+                </button>
+              </div>
+            </section>
+          )}
 
           {cargandoMatriz ? (
             <p className="ayuda">Cargando permisos…</p>

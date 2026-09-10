@@ -58,7 +58,8 @@ export type PermisoCodigo =
   | "mantenimiento.acceder"
   | "mantenimiento.editar"
   | "importaciones.acceder"
-  | "productos.crear";
+  | "productos.crear"
+  | "produccion.estacion";
 
 export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "inventario.acceder",
@@ -110,6 +111,7 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "mantenimiento.editar",
   "importaciones.acceder",
   "productos.crear",
+  "produccion.estacion",
 ];
 
 export type Perfil = {
@@ -119,6 +121,10 @@ export type Perfil = {
   entidad_id: string | null;
   activo: boolean;
   permisos: PermisoCodigo[];
+  // v117: estaciones de taller de esta cuenta. Vacio = cuenta normal. Con
+  // valores = operario encerrado en su estacion (la base le recorta los
+  // permisos sola; aqui solo se usa para saber que cola mostrarle).
+  estaciones: string[];
   // v107: si es false, oculta lo especifico de Boman Sport (contratos/
   // BomanSport, franquicias) incluso para admin -por eso Navbar.tsx lo
   // consulta directo, sin pasar por tienePermiso() (ver su propio bypass

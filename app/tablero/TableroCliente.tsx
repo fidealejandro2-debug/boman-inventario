@@ -34,7 +34,13 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
   { valor: "muestras", etiqueta: "🧪 Faltan muestras" },
 ];
 
-export default function TableroCliente({ datos, puedeMarcar = false }: { datos: DatosTablero | { error: string }; puedeMarcar?: boolean }) {
+export default function TableroCliente({ datos, puedeMarcar = false, estacionesPermitidas }: {
+  datos: DatosTablero | { error: string };
+  puedeMarcar?: boolean;
+  /** v117. Con valores, la pantalla es la de un operario: solo sus estaciones
+   *  y sin la opcion de ver el taller completo. Sin valores, tablero normal. */
+  estacionesPermitidas?: string[];
+}) {
   const router = useRouter();
   const [refrescando, refrescar] = useTransition();
   const [marcando, setMarcando] = useState("");
@@ -72,18 +78,21 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("pend");
   const [orden, setOrden] = useState<"entrega" | "numero">("entrega");
-  const [estacion, setEstacion] = useState("");
+  const restringido = !!estacionesPermitidas?.length;
+  const [estacion, setEstacion] = useState(restringido ? estacionesPermitidas![0] : "");
 
   const hayError = "error" in datos;
   const etapas = hayError ? [] : datos.etapas;
   const filas = hayError ? [] : datos.filas;
 
-  // Las estaciones ya vienen en los datos: cada etapa dice que area la marca
+  // Las estaciones vienen en los datos: cada etapa dice que area la marca
   // ("Sellos · TPU" -> Sellos). Elegir una deja la tabla como la pantalla de
   // esa estacion en el taller, sin columnas de trabajo ajeno.
   const estaciones = useMemo(
-    () => Array.from(new Set(etapas.map((e) => String(e.area || "").split(" · ")[0]).filter(Boolean))),
-    [etapas],
+    () => restringido
+      ? estacionesPermitidas!
+      : Array.from(new Set(etapas.map((e) => String(e.area || "").split(" · ")[0]).filter(Boolean))),
+    [etapas, restringido, estacionesPermitidas],
   );
   // Se conserva el indice original porque `f.hechas` va emparejado con
   // datos.etapas, no con las columnas que se pintan.
@@ -154,8 +163,8 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
         </div>
         <div className="field">
           <label>Estación</label>
-          <select value={estacion} onChange={(e) => setEstacion(e.target.value)}>
-            <option value="">Todo el taller</option>
+          <select value={estacion} onChange={(e) => setEstacion(e.target.value)} disabled={restringido && estaciones.length === 1}>
+            {!restringido && <option value="">Todo el taller</option>}
             {estaciones.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
           {!!estacion && <p className="conteo">Solo las etapas de {estacion}.</p>}
@@ -168,6 +177,12 @@ export default function TableroCliente({ datos, puedeMarcar = false }: { datos: 
         ))}
       </div>
     </div>
+
+    {restringido && !columnas.length && (
+      <div className="card"><div className="badge bajo" style={{ display: "inline-block", whiteSpace: "normal", lineHeight: 1.4 }}>
+        Ninguna etapa del tablero está asignada a {estacion}. Si acaba de configurarse, falta correr <code>sql/v117_estaciones_produccion.sql</code>: sin ella todas las etapas llegan sin estación.
+      </div></div>
+    )}
 
     <div className="card">
       <div className="tabla-scroll">
