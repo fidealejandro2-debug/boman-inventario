@@ -687,7 +687,12 @@ const posCalidad=(c:string)=>{const i=CALIDADES.indexOf(c);return i<0?99:i};
 const fechaCorta=(v:string)=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(texto(v));return m?`${m[3]}/${m[2]}/${m[1]}`:texto(v)};
 const mockupsDe=(f:Form)=>f.archivos.filter(a=>a.tipo==="mockup");
 const etiquetaMockup=(a:Archivo,i:number)=>texto(a.descripcion)||`Mockup ${i+1}`;
-const imagenDe=(a:Archivo)=>a.preview||a.url||"";
+// `url` de un archivo ya guardado es el enlace de Drive a la PAGINA del
+// archivo (/file/d/ID/view), que no se puede poner en un <img>. Para eso esta
+// drive_id: con el se arma la miniatura publica, que es lo que el expediente
+// hacia antes de unificar el brief. `preview` (blob local) manda mientras el
+// archivo todavia no se ha subido.
+const imagenDe=(a:Archivo)=>a.preview||(a.drive_id?`https://drive.google.com/thumbnail?id=${a.drive_id}&sz=w1600`:a.url||"");
 // Resolver a QUÉ mockup apunta un jugador o una spec. Igual que el legado: manda la
 // descripción exacta y solo si ninguna coincide se lee "Mockup N" como alias posicional,
 // para que una imagen descrita literalmente "Mockup 2" no caiga también en la segunda.
@@ -851,8 +856,8 @@ export function BriefHoja({form}:{form:Form}){
      {!!adicionales.length&&<div className={estilos.bAdic}><div className={estilos.bAdicTit}>⚠️ ADICIONALES DEL PEDIDO</div>{adicionales.map((l,i)=><div key={i} className={/^bandera/i.test(l)?estilos.bAdicBandera:estilos.bAdicLinea}>• {l}</div>)}</div>}
     </div>
 
-    {mockupsPortada.length>0&&<div className={estilos.bPanelMockup}>{mockupsPortada.map(({id,preview,url,descripcion},i)=>
-    <figure key={id}><img src={preview||url} alt=""/><figcaption>MOCKUP {i+1}{descripcion?` · ${descripcion}`:""}</figcaption></figure>)}</div>}
+    {mockupsPortada.length>0&&<div className={estilos.bPanelMockup}>{mockupsPortada.map((m,i)=>
+    <figure key={m.id}><img src={imagenDe(m)} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
     </div>
     {!!colores.length&&<div className={estilos.bColores}>
      <div className={estilos.bH3}>COLORES GENERALES</div>
@@ -860,7 +865,7 @@ export function BriefHoja({form}:{form:Form}){
      <div className={estilos.bAviso}>⚠️ SIEMPRE PREDOMINA EL COLOR DEL MOCKUP Y DE LA MUESTRA SOBRE EL COLOR REFERENCIAL</div>
     </div>}
 
-    {mockupsCuadricula.length>0&&<div className={estilos.bFotosSolo}>{mockupsCuadricula.map(({m,i})=><figure key={m.id}><img src={m.preview||m.url} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
+    {mockupsCuadricula.length>0&&<div className={estilos.bFotosSolo}>{mockupsCuadricula.map(({m,i})=><figure key={m.id}><img src={imagenDe(m)} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
     {mockupsConContenido.map(({m,i,jugadores,specs})=><section key={m.id} className={estilos.bSeccion}>
      <div className={estilos.bMk}>
       <div>
