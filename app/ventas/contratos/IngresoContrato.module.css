@@ -40,7 +40,7 @@
 .bMkCab{font-size:13px;font-weight:800;color:#1F4E78;margin-bottom:5px;break-after:avoid}.bMkCab span{background:#1F4E78;color:#fff;border-radius:5px;padding:2px 9px;font-size:11px;letter-spacing:.5px}
 .bMkFoto{width:100%;max-height:380px;object-fit:contain;border:1px solid #d9e2ec;border-radius:8px;background:#fff;display:block}
 .bMkVacio{height:200px;display:grid;place-items:center;background:#f8fafc;border:1px solid #d9e2ec;border-radius:8px;color:#94a3b8;font-size:12px}
-.bMkColor{font-size:11px;color:#64748b;font-weight:700;margin-top:5px;text-align:center}.bMkSinSpec{font-size:11px;color:#94a3b8;font-style:italic;padding:6px}
+.bMkColor{font-size:11px;color:#64748b;font-weight:700;margin-top:5px;text-align:center}
 .bCorte{margin-top:5px;text-align:center;background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:1.5px solid #F59E0B;border-radius:5px;padding:3px 12px;font-size:12.5px;font-weight:900;color:#92400E}
 .bInstr{margin-top:8px;background:#FFF3CD;border:1.5px solid #F59E0B;border-radius:4px;padding:5px 9px;font-size:11.5px;color:#7c2d12;line-height:1.35;font-weight:700;white-space:pre-wrap}.bInstrTit{font-size:10px;font-weight:800;color:#92400E;margin-bottom:2px}
 .bSpecTit{font-size:11px;font-weight:800;color:#1F4E78;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #d9e2ec;padding-bottom:3px;margin-bottom:5px;break-after:avoid}

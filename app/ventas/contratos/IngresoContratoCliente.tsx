@@ -866,6 +866,13 @@ export function BriefHoja({form}:{form:Form}){
     </div>}
 
     {mockupsCuadricula.length>0&&<div className={estilos.bFotosSolo}>{mockupsCuadricula.map(({m,i})=><figure key={m.id}><img src={imagenDe(m)} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
+    {/* Maquetacion del legado (Codigo.gs, seccion por mockup): la columna de la
+        derecha NO es siempre las specs. Si el mockup tiene especificaciones, van
+        ahi -es lo que produccion mira junto a la foto- y la lista de jugadores
+        baja a ancho completo, que es una tabla ancha y lo agradece. Si NO tiene
+        specs, la lista sube al costado de la foto: antes se pintaba un cartel de
+        "sin especificaciones tecnicas" y media hoja quedaba vacia mientras los
+        jugadores se iban solos abajo. */}
     {mockupsConContenido.map(({m,i,jugadores,specs})=><section key={m.id} className={estilos.bSeccion}>
      <div className={estilos.bMk}>
       <div>
@@ -875,9 +882,9 @@ export function BriefHoja({form}:{form:Form}){
        {!!specs.map(s=>s.campos.corte).filter(Boolean).length&&<div className={estilos.bCorte}>✂️ CORTE: {Array.from(new Set(specs.map(s=>s.campos.corte).filter(Boolean))).join(" / ")}</div>}
        {i===0&&!!texto(c.instrucciones)&&<div className={estilos.bInstr}><div className={estilos.bInstrTit}>⚠️ INSTRUCCIONES ESPECIALES</div><div>{c.instrucciones}</div></div>}
       </div>
-      <div>{specs.length?<BloqueSpecs specs={specs} titulo={`🧵 Especificaciones técnicas — Mockup ${i+1}`}/>:<div className={estilos.bMkSinSpec}>Sin especificaciones técnicas propias de este mockup.</div>}</div>
+      <div>{specs.length?<BloqueSpecs specs={specs} titulo={`🧵 Especificaciones técnicas — Mockup ${i+1}`}/>:<TablaJugadores jugadores={jugadores}/>}</div>
      </div>
-     {!!jugadores.length&&<div className={estilos.bTablaAncha}><TablaJugadores jugadores={jugadores}/></div>}
+     {!!specs.length&&!!jugadores.length&&<div className={estilos.bTablaAncha}><TablaJugadores jugadores={jugadores}/></div>}
     </section>)}
 
     {!mockups.length&&!!form.specs.length&&<section className={estilos.bSeccion}><BloqueSpecs specs={form.specs} titulo="🧵 Especificaciones técnicas"/></section>}
