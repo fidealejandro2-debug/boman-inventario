@@ -297,13 +297,13 @@ export default function ProduccionCliente({ perfil }: { perfil: Perfil }) {
     await cargar();
   }
 
-  if (cargando) return <div className="card"><div className="vacio">Cargando maestro de producción...</div></div>;
+  if (cargando) return <><header className="page-heading workspace-heading"><div><span className="eyebrow">PRODUCCIÓN</span><h1>Producción y costos</h1><p>Órdenes, rutas, materiales y costos en un solo espacio de trabajo.</p></div></header><section className="card loading-state" aria-live="polite"><span aria-hidden="true" /><div><strong>Preparando producción</strong><p>Cargando fórmulas, rutas, costos y configuración del catálogo.</p></div></section></>;
 
   return <>
-    <div className="header-row"><div><h2 style={{ color: "#1f3864", margin: 0 }}>Producción y costos</h2><p className="conteo">Órdenes, rutas por etapas, lotes, materiales en proceso y costo real por RUC.</p></div>{puedeEditar && tab === "formulas" && <button onClick={nuevaFormula}>+ Nueva fórmula</button>}</div>
+    <header className="page-heading workspace-heading"><div><span className="eyebrow">PRODUCCIÓN</span><h1>Producción y costos</h1><p>Órdenes, rutas por etapas, lotes, materiales en proceso y costo real por RUC.</p></div>{puedeEditar && tab === "formulas" && <button onClick={nuevaFormula}>+ Nueva fórmula</button>}</header>
     {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
-    <div className="info-box"><strong>Control productivo V25.</strong> Cada orden conserva su ruta, responsables, maquila, evidencia por etapa y lote de resultado; el cierre separa consumo, merma, sobrante, producto conforme y cuarentena.</div>
-    <div className="tabs"><button className={`tab ${tab === "ordenes" ? "activo" : ""}`} onClick={() => setTab("ordenes")}>Órdenes</button><button className={`tab ${tab === "rutas" ? "activo" : ""}`} onClick={() => setTab("rutas")}>Rutas y etapas</button><button className={`tab ${tab === "formulas" ? "activo" : ""}`} onClick={() => setTab("formulas")}>Fórmulas / BOM</button><button className={`tab ${tab === "maestro" ? "activo" : ""}`} onClick={() => setTab("maestro")}>Maestro productivo</button><button className={`tab ${tab === "costos" ? "activo" : ""}`} onClick={() => setTab("costos")}>Costos estimados</button></div>
+    <details className="context-help"><summary>Cómo funciona el control productivo</summary><p>Cada orden conserva su ruta, responsables, maquila, evidencia por etapa y lote de resultado; el cierre separa consumo, merma, sobrante, producto conforme y cuarentena.</p></details>
+    <div className="tabs workflow-nav" aria-label="Áreas de producción"><button className={`tab ${tab === "ordenes" ? "activo" : ""}`} onClick={() => setTab("ordenes")}>Órdenes</button><button className={`tab ${tab === "rutas" ? "activo" : ""}`} onClick={() => setTab("rutas")}>Rutas y etapas</button><button className={`tab ${tab === "formulas" ? "activo" : ""}`} onClick={() => setTab("formulas")}>Fórmulas / BOM</button><button className={`tab ${tab === "maestro" ? "activo" : ""}`} onClick={() => setTab("maestro")}>Maestro productivo</button><button className={`tab ${tab === "costos" ? "activo" : ""}`} onClick={() => setTab("costos")}>Costos estimados</button></div>
 
     {tab === "ordenes" && <OrdenesProduccionCliente perfil={perfil} />}
     {tab === "rutas" && <RutasProduccionCliente perfil={perfil} />}

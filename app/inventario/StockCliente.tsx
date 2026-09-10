@@ -212,11 +212,11 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
 
   return (
     <>
-      <header className="page-heading">
+      <header className="page-heading workspace-heading">
         <div><span className="eyebrow">INVENTARIO</span><h1>Existencias por local</h1><p>Selecciona primero una bodega o tienda. Así la pantalla carga solamente su inventario y puedes buscar en todos sus SKU sin el límite de 1000 filas.</p></div>
       </header>
 
-      <section className="card" style={{ marginBottom: 16 }}>
+      <section className="card context-selector" style={{ marginBottom: 16 }}>
         <div className="header-row" style={{ alignItems: "flex-end" }}>
           <div className="field" style={{ flex: "1 1 360px", maxWidth: 620 }}>
             <label>Local que deseas consultar *</label>
@@ -231,7 +231,7 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
       </section>
 
       {!almacenId ? (
-        <section className="card vacio" style={{ padding: "48px 24px" }}><strong style={{ display: "block", fontSize: 18, marginBottom: 8 }}>Elige el local para comenzar</strong><span>Las cantidades, alertas, fotografías y búsqueda se cargarán después de seleccionar una ubicación.</span></section>
+        <section className="empty-state"><span className="empty-state-icon" aria-hidden="true">01</span><strong>Elige el local para comenzar</strong><p>Las cantidades, alertas, fotografías y búsqueda se cargarán después de seleccionar una ubicación.</p></section>
       ) : (
         <>
           <div className="kpis">
@@ -243,7 +243,7 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
           </div>
 
           <section className="card">
-            <div className="filtros">
+            <div className="filtros filter-bar">
               <BuscadorCodigoProducto onEncontrado={async (producto) => {
                 if (!filas.some((fila) => fila.producto_id === producto.producto_id)) {
                   await mostrarAvisoDialogo(`${producto.sku} · ${producto.producto} no está habilitado en ${almacenSeleccionado?.nombre ?? "el local seleccionado"}.`, "Producto fuera del local");

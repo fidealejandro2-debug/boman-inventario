@@ -768,8 +768,10 @@ export function formDesdeContrato(datos:{contrato:FilaGuardada;prendas?:FilaGuar
   prendas,
   jugadores:(datos.jugadores||[]).map(x=>({id:uuid(),nombre:t(x.nombre),numero:t(x.numero),categoria:t(x.categoria),talla_superior:t(x.talla_superior),talla_inferior:t(x.talla_inferior),manga:t(x.manga),calidad:t(x.calidad),modelo_arquero:t(x.modelo_arquero),tipo_uniforme:t(x.tipo_uniforme),detalle:t(x.detalle),mockup:t(x.mockup)})),
   archivos:(datos.archivos||[]).map(x=>({id:uuid(),tipo:(t(x.tipo)==="logo"?"logo":"mockup") as Archivo["tipo"],url:t(x.url)||undefined,drive_id:t(x.drive_id)||undefined,descripcion:t(x.descripcion),color:t(x.color),prenda:t(x.prenda),posicion:t(x.posicion),tecnica:t(x.tecnica),calidad_aplicable:t(x.calidad_aplicable)||"Todas",observacion:t(x.observacion)})),
-  specs:(datos.especificaciones||[]).map(x=>{const sp=(x.spec&&typeof x.spec==="object"?x.spec:{}) as Record<string,unknown>;
-   return {id:uuid(),prenda_clave:t(x.prenda_clave),variante_calidad:t(x.variante_calidad),mockup:t(x.variante_mockup),campos:(sp.campos&&typeof sp.campos==="object"?sp.campos:{}) as Record<string,string>,observacion:t(sp.observacion)}}),
+  // leerSpec y no `spec.campos` a secas: los contratos migrados de BomanSport
+  // guardan la ficha anidada, y leyendo la forma nueva a pelo el expediente
+  // imprimia la tarjeta vacia.
+  specs:(datos.especificaciones||[]).map(x=>({id:uuid(),prenda_clave:t(x.prenda_clave),variante_calidad:t(x.variante_calidad),mockup:t(x.variante_mockup),...leerSpec(x.spec)})),
   facturacion:(datos.facturacion||[]).map(x=>({id:uuid(),concepto:t(x.concepto),calidad:t(x.calidad),cantidad:Number(x.cantidad)||0,obsequio:Boolean(x.obsequio)})),
  };
 }
@@ -964,6 +966,18 @@ function BloqueSpecs({specs,titulo}:{specs:Spec[];titulo:string}){
    .filter(f=>f.id!=="observacion"&&f.id!=="corte")
    .map(f=>({t:f.label,v:texto(s.campos[f.id])}))
    .filter(x=>x.v&&!/^no aplica$/i.test(x.v));
+  // Las specs que vienen de BomanSport usan otros nombres de campo (`cuello`,
+  // `punos`, `pieDeCuello`…) que no estan en FICHAS_PRENDA. Si solo se imprime
+  // lo que la ficha reconoce, un contrato migrado sale con la tarjeta vacia
+  // ("Sin detalle tecnico cargado") aunque el dato exista. Lo que sobra se
+  // imprime igual, con la clave humanizada como etiqueta.
+  const conocidos=new Set([...(ficha?.campos||[]).map(f=>f.id),"corte","observacion"]);
+  for(const [k,v] of Object.entries(s.campos)){
+   const val=texto(v);
+   if(conocidos.has(k)||!val||/^no aplica$/i.test(val))continue;
+   const etq=k.replace(/[_-]+/g," ").replace(/([a-z])([A-Z])/g,"$1 $2");
+   filas.push({t:etq.charAt(0).toUpperCase()+etq.slice(1),v:val});
+  }
   const corte=texto(s.campos.corte);
   // Con mas de 5 filas la tabla de una columna deja media hoja vacia a su
   // derecha: se parte en dos columnas lado a lado, como _specs2col del legado.

@@ -667,11 +667,12 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
 
   return (
     <>
-      <div className="header-row">
-        <div><h2 style={{ color: "#1f3864", margin: 0 }}>Ventas desde XML</h2><p className="conteo">Concilia facturas autorizadas del SRI con el catálogo y descuenta el inventario una sola vez.</p></div>
-      </div>
+      <header className="page-heading workspace-heading">
+        <div><span className="eyebrow">VENTAS</span><h1>Ventas desde XML</h1><p>Concilia facturas autorizadas del SRI con el catálogo y descuenta el inventario una sola vez.</p></div>
+        <span className="operational-status"><i aria-hidden="true" />Control de inventario activo</span>
+      </header>
       {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
-      <div className="tabs">
+      <div className="tabs workflow-nav" aria-label="Etapas de ventas XML">
         {puedeImportar && <button className={`tab ${tab === "importar" ? "activo" : ""}`} onClick={() => setTab("importar")}>Importar XML</button>}
         <button className={`tab ${tab === "historial" ? "activo" : ""}`} onClick={() => setTab("historial")}>Historial aplicado</button>
       </div>

@@ -70,7 +70,7 @@ function Icono({ nombre, size = 19 }: { nombre: keyof typeof ICONOS; size?: numb
 // GrupoId es un subconjunto de ModuloId (todo grupo toma el nombre de su
 // modulo "principal"), asi que el icono del grupo es simplemente
 // Icono nombre={grupo.id} - no hace falta un mapa de iconos aparte.
-type GrupoId = Exclude<ModuloId, "inventario" | "mantenimiento">;
+type GrupoId = ModuloId;
 
 const GRUPO_DE_MODULO: Record<ModuloId, GrupoId> = {
   notificaciones: "notificaciones",
@@ -78,8 +78,8 @@ const GRUPO_DE_MODULO: Record<ModuloId, GrupoId> = {
   compras: "compras",
   finanzas: "finanzas",
   produccion: "produccion",
-  inventario: "compras",      // Compras: facturas/retenciones + bodega/inventario
-  mantenimiento: "produccion", // Producción: maquinaria, mantenimientos, contratos...
+  inventario: "inventario",
+  mantenimiento: "mantenimiento",
   franquicias: "franquicias",
   reportes: "reportes",
   nomina: "nomina",
@@ -88,31 +88,10 @@ const GRUPO_DE_MODULO: Record<ModuloId, GrupoId> = {
   contabilidad: "contabilidad",
 };
 
-// Como se reparten, DENTRO de cada grupo, las opciones que le corresponden
-// (por href) en sub-menus con nombre propio -un segundo nivel de acordeon.
-// Todo lo que un grupo reciba y no figure en ninguna lista de hrefs de abajo
-// se queda como opcion suelta del grupo (por eso "Dashboard de producción"
-// sigue siendo un item directo de Producción: no esta en ninguna lista).
-const SUBGRUPOS_POR_GRUPO: Partial<Record<GrupoId, { id: string; etiqueta: string; icono: ModuloId; hrefs: string[] }[]>> = {
-  compras: [
-    { id: "compras-inventario", etiqueta: "Inventario", icono: "inventario", hrefs: [
-      "/inventario", "/operaciones", "/conteos", "/movimientos", "/control", "/productos", "/configuracion/inventario",
-    ] },
-  ],
-  produccion: [
-    { id: "produccion-contratos", etiqueta: "Contratos", icono: "ventas", hrefs: ["/produccion/contratos", "/tablero"] },
-    { id: "produccion-reportes", etiqueta: "Reportes", icono: "reportes", hrefs: ["/produccion/reportes"] },
-    { id: "produccion-maquinaria", etiqueta: "Maquinaria y activos", icono: "mantenimiento", hrefs: ["/mantenimiento"] },
-    { id: "produccion-control", etiqueta: "Control", icono: "produccion", hrefs: [
-      "/produccion/cronograma", "/produccion/costos", "/produccion/cobros", "/produccion/calidad", "/produccion",
-    ] },
-  ],
-};
-
 const ORDEN_GRUPOS: GrupoId[] = [
-  "compras", "finanzas", "contabilidad", "ventas", "produccion",
-  "franquicias", "nomina", "administracion",
-  "notificaciones", "reportes", "importaciones",
+  "ventas", "produccion", "inventario", "reportes", "compras", "finanzas",
+  "franquicias", "nomina", "mantenimiento", "notificaciones",
+  "importaciones", "administracion", "contabilidad",
 ];
 
 const ETIQUETA_GRUPO: Record<GrupoId, string> = {
@@ -121,6 +100,8 @@ const ETIQUETA_GRUPO: Record<GrupoId, string> = {
   contabilidad: "Contabilidad",
   ventas: "Ventas",
   produccion: "Producción",
+  inventario: "Inventario",
+  mantenimiento: "Mantenimiento",
   franquicias: "Franquicias",
   nomina: "Talento Humano y Nómina",
   administracion: "Administración",
@@ -129,12 +110,34 @@ const ETIQUETA_GRUPO: Record<GrupoId, string> = {
   importaciones: "Importaciones",
 };
 
-type SubgrupoRenderizado = { id: string; etiqueta: string; icono: ModuloId; opciones: OpcionMenu[] };
+const PRINCIPALES_POR_ROL: Record<string, GrupoId[]> = {
+  admin: ["ventas", "produccion", "inventario", "reportes"],
+  gerencia: ["reportes", "finanzas", "produccion", "inventario"],
+  control: ["inventario", "produccion", "ventas", "reportes"],
+  bodega: ["inventario", "compras", "produccion", "notificaciones"],
+  logistica: ["inventario", "produccion", "notificaciones"],
+  tienda: ["ventas", "inventario", "compras", "notificaciones"],
+  nomina: ["nomina", "notificaciones", "importaciones"],
+  franquiciado: ["franquicias", "inventario", "notificaciones"],
+  vendedor_franquicia: ["franquicias", "inventario", "notificaciones"],
+};
+
+const RAPIDOS_POR_ROL: Record<string, string[]> = {
+  admin: ["/ventas/contratos", "/produccion/dashboard", "/inventario", "/reportes/comercial"],
+  gerencia: ["/dashboard", "/reportes/comercial", "/cuentas-por-pagar", "/produccion/dashboard"],
+  control: ["/control", "/conteos", "/produccion/calidad", "/reportes/comercial"],
+  bodega: ["/inventario", "/operaciones", "/movimientos", "/conteos"],
+  logistica: ["/operaciones", "/inventario", "/produccion/cronograma"],
+  tienda: ["/tienda", "/ventas", "/inventario"],
+  nomina: ["/nomina", "/notificaciones", "/importar"],
+  franquiciado: ["/franquicia", "/inventario", "/notificaciones"],
+  vendedor_franquicia: ["/franquicia", "/inventario", "/notificaciones"],
+};
+
 type GrupoRenderizado = {
   id: GrupoId;
   etiqueta: string;
-  opcionesDirectas: OpcionMenu[];
-  subgrupos: SubgrupoRenderizado[];
+  opciones: OpcionMenu[];
 };
 
 function nombreParaMenu(nombreCompleto: string) {
@@ -165,10 +168,17 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const [contraido, setContraido] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [moduloAbierto, setModuloAbierto] = useState<GrupoId | null>(null);
-  const [subgrupoAbierto, setSubgrupoAbierto] = useState<string | null>(null);
+  const [favoritos, setFavoritos] = useState<string[]>([]);
+  const [mostrarSecundarios, setMostrarSecundarios] = useState(false);
 
   useEffect(() => {
     setContraido(window.localStorage.getItem("boman-sidebar-contraido") === "1");
+    try {
+      const guardados = JSON.parse(window.localStorage.getItem("boman-nav-favoritos") || "[]");
+      if (Array.isArray(guardados)) setFavoritos(guardados.filter((x): x is string => typeof x === "string"));
+    } catch {
+      setFavoritos([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -207,8 +217,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     setModuloAbierto((actual) => (actual === id ? null : id));
   }
 
-  function alternarSubgrupo(id: string) {
-    setSubgrupoAbierto((actual) => (actual === id ? null : id));
+  function alternarFavorito(href: string) {
+    setFavoritos((actuales) => {
+      const siguientes = actuales.includes(href)
+        ? actuales.filter((item) => item !== href)
+        : [...actuales, href];
+      window.localStorage.setItem("boman-nav-favoritos", JSON.stringify(siguientes));
+      return siguientes;
+    });
   }
 
   const puedeEditarProductos = perfil.rol === "admin";
@@ -331,7 +347,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   function grupoDe(id: GrupoId): GrupoRenderizado {
     let grupo = gruposMapa.get(id);
     if (!grupo) {
-      grupo = { id, etiqueta: ETIQUETA_GRUPO[id], opcionesDirectas: [], subgrupos: [] };
+      grupo = { id, etiqueta: ETIQUETA_GRUPO[id], opciones: [] };
       gruposMapa.set(id, grupo);
     }
     return grupo;
@@ -341,21 +357,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       !consulta || `${modulo.etiqueta} ${opcion.etiqueta} ${opcion.descripcion}`.toLocaleLowerCase("es").includes(consulta)
     ));
     if (!opcionesFiltradas.length) return;
-    // Todo entra primero como opcion directa del grupo; el reparto en
-    // sub-menus (si el grupo tiene alguno declarado) se hace despues, sobre
-    // el resultado ya combinado de todos los modulos que caen en ese grupo.
-    grupoDe(GRUPO_DE_MODULO[modulo.id]).opcionesDirectas.push(...opcionesFiltradas);
+    grupoDe(GRUPO_DE_MODULO[modulo.id]).opciones.push(...opcionesFiltradas);
   });
-  for (const grupo of gruposMapa.values()) {
-    const config = SUBGRUPOS_POR_GRUPO[grupo.id];
-    if (!config) continue;
-    for (const sub of config) {
-      const opciones = grupo.opcionesDirectas.filter((opcion) => sub.hrefs.includes(opcion.href));
-      if (!opciones.length) continue;
-      grupo.subgrupos.push({ id: sub.id, etiqueta: sub.etiqueta, icono: sub.icono, opciones });
-      grupo.opcionesDirectas = grupo.opcionesDirectas.filter((opcion) => !sub.hrefs.includes(opcion.href));
-    }
-  }
   const grupos = ORDEN_GRUPOS
     .map((id) => gruposMapa.get(id))
     .filter((grupo): grupo is GrupoRenderizado => Boolean(grupo));
@@ -364,25 +367,77 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
-  const moduloActivo = modulosBase.find((modulo) =>
-    modulo.opciones.some((opcion) => opcion.visible && rutaActiva(opcion.href))
-  );
-  const grupoActivoId = moduloActivo ? GRUPO_DE_MODULO[moduloActivo.id] : undefined;
-  const opcionActiva = moduloActivo?.opciones.find((opcion) => opcion.visible && rutaActiva(opcion.href));
-  const subgrupoActivoId = grupoActivoId && opcionActiva
-    ? SUBGRUPOS_POR_GRUPO[grupoActivoId]?.find((sub) => sub.hrefs.includes(opcionActiva.href))?.id
+  const opcionActiva = modulosBase
+    .flatMap((modulo) => modulo.opciones)
+    .filter((opcion) => opcion.visible && rutaActiva(opcion.href))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  const moduloActivo = opcionActiva
+    ? modulosBase.find((modulo) => modulo.opciones.some((opcion) => opcion.href === opcionActiva.href))
     : undefined;
+  const grupoActivoId = moduloActivo ? GRUPO_DE_MODULO[moduloActivo.id] : undefined;
   const tituloActual = pathname === "/dashboard" ? "Panel principal" : opcionActiva?.etiqueta ?? "Boman ERP";
+  const idsPrincipales = PRINCIPALES_POR_ROL[perfil.rol] ?? ["ventas", "produccion", "inventario", "reportes"];
+  const gruposPrincipales = grupos.filter((grupo) => idsPrincipales.includes(grupo.id));
+  const gruposSecundarios = grupos.filter((grupo) => !idsPrincipales.includes(grupo.id));
+  const activoEsSecundario = Boolean(grupoActivoId && gruposSecundarios.some((grupo) => grupo.id === grupoActivoId));
+  const todasLasOpciones = modulosBase.flatMap((modulo) => modulo.opciones.filter((opcion) => opcion.visible));
+  const rutasRapidas = [...favoritos, ...(RAPIDOS_POR_ROL[perfil.rol] ?? [])]
+    .filter((href, indice, lista) => lista.indexOf(href) === indice);
+  const accesosRapidos = rutasRapidas
+    .map((href) => todasLasOpciones.find((opcion) => opcion.href === href))
+    .filter((opcion): opcion is OpcionMenu => Boolean(opcion))
+    .slice(0, 4);
 
   useEffect(() => {
     setModuloAbierto(pathname === "/dashboard" ? null : grupoActivoId ?? null);
-    setSubgrupoAbierto(pathname === "/dashboard" ? null : subgrupoActivoId ?? null);
-  }, [pathname, grupoActivoId, subgrupoActivoId]);
+    const principales = PRINCIPALES_POR_ROL[perfil.rol] ?? ["ventas", "produccion", "inventario", "reportes"];
+    if (grupoActivoId && !principales.includes(grupoActivoId)) setMostrarSecundarios(true);
+  }, [pathname, grupoActivoId, perfil.rol]);
+
+  function abrirMenuMovil() {
+    // En pantallas pequeñas el menú siempre debe abrirse completo, aunque el
+    // usuario lo haya dejado contraído previamente en el escritorio.
+    setContraido(false);
+    setMovilAbierto(true);
+  }
+
+  function renderOpcion(opcion: OpcionMenu) {
+    const esFavorito = favoritos.includes(opcion.href);
+    return (
+      <div className="nav-subenlace-fila" key={opcion.href}>
+        <Link
+          href={opcion.href}
+          className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
+          title={`${opcion.etiqueta} — ${opcion.descripcion}`}
+        >
+          <span className="nav-subenlace-marca" aria-hidden="true" />
+          <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
+        </Link>
+        <button type="button" className={`nav-favorito ${esFavorito ? "activo" : ""}`} onClick={() => alternarFavorito(opcion.href)} aria-label={`${esFavorito ? "Quitar" : "Agregar"} ${opcion.etiqueta} ${esFavorito ? "de" : "a"} favoritos`} title={esFavorito ? "Quitar de favoritos" : "Agregar a favoritos"}>{esFavorito ? "★" : "☆"}</button>
+      </div>
+    );
+  }
+
+  function renderGrupo(grupo: GrupoRenderizado) {
+    const expandido = Boolean(consulta) || moduloAbierto === grupo.id;
+    const activo = grupoActivoId === grupo.id;
+    return (
+      <section className={`nav-seccion ${expandido ? "abierta" : ""}`} key={grupo.id} aria-label={grupo.etiqueta}>
+        <button type="button" className={`nav-modulo ${activo ? "activo" : ""}`} onClick={() => alternarModulo(grupo.id)} aria-expanded={expandido} aria-controls={`nav-submenu-${grupo.id}`} title={grupo.etiqueta}>
+          <span className="nav-enlace-icono"><Icono nombre={grupo.id} /></span>
+          <span className="nav-modulo-texto">{grupo.etiqueta}</span>
+          <span className="nav-modulo-cantidad">{grupo.opciones.length}</span>
+          <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
+        </button>
+        {!contraido && <div className={`nav-submenu-envoltorio${expandido ? " abierta" : ""}`}><div className="nav-submenu" id={`nav-submenu-${grupo.id}`}>{grupo.opciones.map(renderOpcion)}</div></div>}
+      </section>
+    );
+  }
 
   return (
     <>
       <header className="nav-mobile-bar">
-        <button type="button" className="nav-mobile-trigger" onClick={() => setMovilAbierto(true)} aria-label="Abrir navegación" aria-controls="menu-principal" aria-expanded={movilAbierto}>
+        <button type="button" className="nav-mobile-trigger" onClick={abrirMenuMovil} aria-label="Abrir navegación" aria-controls="menu-principal" aria-expanded={movilAbierto}>
           <span aria-hidden="true">☰</span>
         </button>
         <BomanLogo className="nav-mobile-logo" priority />
@@ -409,79 +464,18 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
             <span className="nav-enlace-texto"><strong>Panel principal</strong><small>Resumen de tu operación</small></span>
           </Link>
 
-          {grupos.map((grupo) => {
-            const expandido = Boolean(consulta) || moduloAbierto === grupo.id;
-            const activo = grupoActivoId === grupo.id;
-            return (
-              <section className={`nav-seccion ${expandido ? "abierta" : ""}`} key={grupo.id} aria-label={grupo.etiqueta}>
-                <button
-                  type="button"
-                  className={`nav-modulo ${activo ? "activo" : ""}`}
-                  onClick={() => alternarModulo(grupo.id)}
-                  aria-expanded={expandido}
-                  aria-controls={`nav-submenu-${grupo.id}`}
-                  title={grupo.etiqueta}
-                >
-                  <span className="nav-enlace-icono"><Icono nombre={grupo.id} /></span>
-                  <span className="nav-modulo-texto">{grupo.etiqueta}</span>
-                  <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
-                </button>
-                {!contraido && (
-                  <div className={`nav-submenu-envoltorio${expandido ? " abierta" : ""}`}>
-                    <div className="nav-submenu" id={`nav-submenu-${grupo.id}`}>
-                      {grupo.opcionesDirectas.map((opcion) => (
-                        <Link
-                          key={opcion.href}
-                          href={opcion.href}
-                          className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
-                          title={`${opcion.etiqueta} — ${opcion.descripcion}`}
-                        >
-                          <span className="nav-subenlace-marca" aria-hidden="true" />
-                          <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
-                          <span className="nav-enlace-flecha" aria-hidden="true">›</span>
-                        </Link>
-                      ))}
-                      {grupo.subgrupos.map((subgrupo) => {
-                        const subExpandido = Boolean(consulta) || subgrupoAbierto === subgrupo.id;
-                        return (
-                          <div key={subgrupo.id}>
-                            <button
-                              type="button"
-                              className={`nav-modulo ${subgrupoActivoId === subgrupo.id ? "activo" : ""}`}
-                              onClick={() => alternarSubgrupo(subgrupo.id)}
-                              aria-expanded={subExpandido}
-                              aria-controls={`nav-submenu-${subgrupo.id}`}
-                              title={subgrupo.etiqueta}
-                            >
-                              <span className="nav-enlace-icono"><Icono nombre={subgrupo.icono} size={17} /></span>
-                              <span className="nav-modulo-texto">{subgrupo.etiqueta}</span>
-                              <span className="nav-modulo-flecha" aria-hidden="true">⌄</span>
-                            </button>
-                            <div className={`nav-submenu-envoltorio${subExpandido ? " abierta" : ""}`}>
-                              <div className="nav-submenu" id={`nav-submenu-${subgrupo.id}`}>
-                                {subgrupo.opciones.map((opcion) => (
-                                  <Link
-                                    key={opcion.href}
-                                    href={opcion.href}
-                                    className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
-                                    title={`${opcion.etiqueta} — ${opcion.descripcion}`}
-                                  >
-                                    <span className="nav-subenlace-marca" aria-hidden="true" />
-                                    <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
-                                    <span className="nav-enlace-flecha" aria-hidden="true">›</span>
-                                  </Link>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </section>
-            );
-          })}
+          {!contraido && accesosRapidos.length > 0 && <section className="nav-rapidos" aria-label="Accesos rápidos">
+            <span className="nav-seccion-titulo">Accesos rápidos</span>
+            <div>{accesosRapidos.map((opcion) => <Link href={opcion.href} className={rutaActiva(opcion.href) ? "activo" : ""} key={`rapido-${opcion.href}`} title={opcion.descripcion}><span>↗</span>{opcion.etiqueta}</Link>)}</div>
+          </section>}
+
+          {!contraido && <div className="nav-seccion-titulo nav-seccion-divisor">Principal</div>}
+          {gruposPrincipales.map(renderGrupo)}
+
+          {gruposSecundarios.length > 0 && !contraido && <button type="button" className={`nav-mas-opciones ${mostrarSecundarios || activoEsSecundario || consulta ? "abierto" : ""}`} onClick={() => setMostrarSecundarios((actual) => !actual)} aria-expanded={mostrarSecundarios || activoEsSecundario || Boolean(consulta)}>
+            <span>•••</span><strong>Más opciones</strong><small>{gruposSecundarios.length}</small><b>⌄</b>
+          </button>}
+          {(contraido || mostrarSecundarios || activoEsSecundario || Boolean(consulta)) && gruposSecundarios.map(renderGrupo)}
           {!grupos.length && <p className="nav-sin-resultados">No encontramos ese módulo.</p>}
         </div>
 

@@ -122,7 +122,7 @@ function enlacesValidos(...items: Array<EnlaceModulo | false>): EnlaceModulo[] {
 // prefiere devolver el nombre tal cual antes que inventar un orden y llamar mal
 // a alguien.
 function nombreParaSaludo(completo: string) {
-  const p = (completo || "").trim().split(/s+/).filter(Boolean);
+  const p = (completo || "").trim().split(/\s+/).filter(Boolean);
   if (p.length !== 4) return completo;
   return p[2].charAt(0).toUpperCase() + p[2].slice(1).toLowerCase();
 }
