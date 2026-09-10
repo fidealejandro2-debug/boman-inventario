@@ -13,6 +13,14 @@ from(values
  (112,'v112_despachos_entregas_contratos.sql', to_regclass('public.contrato_entregas_v112') is not null),
  (113,'v113_ficha_integral_clientes.sql',      to_regclass('public.clientes_v113') is not null),
  (114,'v114_cuentas_por_cobrar_contratos.sql', to_regclass('public.contrato_cartera_v114') is not null),
- (115,'v115_consolidado_comercial.sql',        to_regprocedure('public.catalogo_ingreso_contrato_v115()') is not null)
+ (115,'v115_consolidado_comercial.sql',        to_regprocedure('public.catalogo_ingreso_contrato_v115()') is not null),
+ (116,'v116_marcar_etapa_desde_vercel.sql',    to_regprocedure('public.marcar_etapa_contrato_v116(text,text,text,text,boolean,text,uuid)') is not null),
+ (117,'v117_estaciones_produccion.sql',        to_regprocedure('public.estaciones_produccion_v117()') is not null),
+ -- v118 reemplaza una funcion que ya existia desde v99, asi que el testigo no
+ -- puede ser "que exista": es que acepte los campos comerciales nuevos.
+ (118,'v118_gestion_datos_comerciales.sql',
+   coalesce((select position('nombre_contrato_v115' in pg_get_functiondef(p.oid))>0
+               from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public' and p.proname='guardar_gestion_contrato_v99' limit 1),false))
 )as v(orden,archivo,existe)
 order by v.orden;
