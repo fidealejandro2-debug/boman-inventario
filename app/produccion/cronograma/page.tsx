@@ -12,7 +12,7 @@ export default async function CronogramaProduccionPage() {
     <>
       <Navbar perfil={perfil} />
       <main className="container">
-        <CronogramaProduccionCliente esAdmin={perfil.rol === "admin"} />
+        <CronogramaProduccionCliente esAdmin={perfil.rol === "admin"} puedeEditar={tienePermiso(perfil, "contratos.editar")} />
       </main>
     </>
   );

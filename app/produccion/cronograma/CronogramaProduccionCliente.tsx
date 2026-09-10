@@ -7,14 +7,18 @@ import { fecha } from "@/lib/utils";
 type PrendaDia = { prenda: string; cantidad: number; capacidad: number; excede: boolean };
 type Dia = { fecha: string; contratos: number; total_prendas: number; excede: boolean; prendas: PrendaDia[] };
 type Capacidad = { prenda: string; capacidad_dia: number };
-type MockupPendiente = { numero: string; cliente: string; fecha_entrega: string; descripcion: string; url: string };
+type SinDisenador = {
+  id: string; numero: string; cliente: string; vendedor: string; estado: string;
+  total_prendas: number; fecha_inicio_produccion: string; fecha_entrega: string;
+};
 type Cronograma = {
   generado_at: string;
   rango: { desde: string; hasta: string };
   capacidad_defecto: number;
   dias: Dia[];
   capacidades: Capacidad[];
-  mockups_pendientes: MockupPendiente[];
+  sin_disenador: SinDisenador[];
+  disenadores: string[];
 };
 
 type ContratoDia = {
@@ -35,7 +39,8 @@ const VACIO: Cronograma = {
   capacidad_defecto: 100,
   dias: [],
   capacidades: [],
-  mockups_pendientes: [],
+  sin_disenador: [],
+  disenadores: [],
 };
 
 function isoLocal(d: Date) {
@@ -48,7 +53,7 @@ function rangoQuincena() {
   return { desde: isoLocal(hoy), hasta: isoLocal(fin) };
 }
 
-export default function CronogramaProduccionCliente({ esAdmin }: { esAdmin: boolean }) {
+export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = false }: { esAdmin: boolean; puedeEditar?: boolean }) {
   const supabase = useMemo(() => createClient(), []);
   const inicial = useMemo(rangoQuincena, []);
   const [desde, setDesde] = useState(inicial.desde);
@@ -64,6 +69,8 @@ export default function CronogramaProduccionCliente({ esAdmin }: { esAdmin: bool
 
   const [capacidadEdit, setCapacidadEdit] = useState<Record<string, string>>({});
   const [guardandoCapacidad, setGuardandoCapacidad] = useState<string | null>(null);
+  const [disenadorEdit, setDisenadorEdit] = useState<Record<string, string>>({});
+  const [asignando, setAsignando] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -101,6 +108,25 @@ export default function CronogramaProduccionCliente({ esAdmin }: { esAdmin: bool
     const { data, error: err } = await supabase.rpc("detalle_dia_produccion_v96", { p_dia: fechaDia });
     if (!err) setDetalle(data as DetalleDia);
     setCargandoDetalle(false);
+  }
+
+  // El motivo va fijo y no se pregunta: aqui el "por que" es siempre el mismo
+  // -el contrato entra a produccion sin diseñador- y quien y a quien ya quedan
+  // en el evento. Preguntarlo una vez por contrato haria que nadie lo use.
+  async function asignarDisenador(c: SinDisenador) {
+    const nombre = (disenadorEdit[c.id] ?? "").trim();
+    if (!nombre) return;
+    setAsignando(c.id);
+    const { error: err } = await supabase.rpc("guardar_gestion_contrato_v99", {
+      p_contrato_id: c.id,
+      p_cambios: { disenador: nombre },
+      p_motivo: "Asignación de diseñador desde el cronograma de producción",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    setAsignando(null);
+    if (err) { setError(err.message); return }
+    setDisenadorEdit((prev) => ({ ...prev, [c.id]: "" }));
+    void cargar();
   }
 
   async function guardarCapacidad(prenda: string) {
@@ -250,18 +276,65 @@ export default function CronogramaProduccionCliente({ esAdmin }: { esAdmin: bool
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Mockups pendientes de aprobar en el rango</h3>
-        {datos.mockups_pendientes.length ? (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {datos.mockups_pendientes.map((m, idx) => (
-              <li key={`${m.numero}-${idx}`}>
-                <strong>{m.numero}</strong> — {m.cliente} · entrega {fecha(m.fecha_entrega)} ·{" "}
-                <a href={m.url} target="_blank" rel="noreferrer">{m.descripcion || "ver mockup"}</a>
-              </li>
-            ))}
-          </ul>
+        <div className="header-row">
+          <div>
+            <h3 style={{ margin: 0 }}>Contratos sin diseñador asignado</h3>
+            <p className="conteo">Entran a producción en este rango y todavía no tienen a quién.</p>
+          </div>
+          <span className="conteo">{datos.sin_disenador.length} contrato(s)</span>
+        </div>
+        {datos.sin_disenador.length ? (
+          <div className="tabla-scroll">
+            <datalist id="lista-disenadores">
+              {datos.disenadores.map((d) => <option key={d} value={d} />)}
+            </datalist>
+            <table>
+              <thead>
+                <tr>
+                  <th>Contrato</th><th>Inicia</th><th>Entrega</th>
+                  <th className="num">Prendas</th>
+                  {puedeEditar && <th style={{ minWidth: 230 }}>Diseñador</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {datos.sin_disenador.map((c) => (
+                  <tr key={c.id}>
+                    <td>
+                      <strong>{c.numero}</strong>
+                      <div>{c.cliente}</div>
+                      <div className="conteo">{c.vendedor || "Sin vendedor"} · {c.estado}</div>
+                    </td>
+                    <td>{fecha(c.fecha_inicio_produccion)}</td>
+                    <td>{fecha(c.fecha_entrega)}</td>
+                    <td className="num">{c.total_prendas}</td>
+                    {puedeEditar && (
+                      <td>
+                        <div className="form-inline">
+                          <input
+                            list="lista-disenadores"
+                            placeholder="Escribe o elige"
+                            value={disenadorEdit[c.id] ?? ""}
+                            onChange={(e) => setDisenadorEdit((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") void asignarDisenador(c) }}
+                            style={{ minWidth: 140 }}
+                          />
+                          <button
+                            className="secondary btn-mini"
+                            disabled={asignando === c.id || !(disenadorEdit[c.id] ?? "").trim()}
+                            onClick={() => void asignarDisenador(c)}
+                          >
+                            {asignando === c.id ? "Asignando…" : "Asignar"}
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <div className="vacio">Sin mockups pendientes en este rango.</div>
+          <div className="vacio">Todos los contratos del rango tienen diseñador.</div>
         )}
       </div>
     </>

@@ -27,6 +27,12 @@ from(values
  (118,'v118_gestion_datos_comerciales.sql',
    coalesce((select position('nombre_contrato_v115' in pg_get_functiondef(p.oid))>0
                from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-              where n.nspname='public' and p.proname='guardar_gestion_contrato_v99' limit 1),false))
+              where n.nspname='public' and p.proname='guardar_gestion_contrato_v99' limit 1),false)),
+ -- v119 tambien reemplaza una funcion existente (la de v96): el testigo es que
+ -- ya devuelva los contratos sin diseñador en vez de los mockups por aprobar.
+ (119,'v119_cronograma_sin_disenador.sql',
+   coalesce((select position('sin_disenador' in pg_get_functiondef(p.oid))>0
+               from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public' and p.proname='cronograma_produccion_v96' limit 1),false))
 )as v(orden,archivo,existe)
 order by v.orden;
