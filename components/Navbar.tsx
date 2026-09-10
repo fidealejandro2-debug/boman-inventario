@@ -261,6 +261,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/ventas/contratos", etiqueta: "Ingreso de contratos", descripcion: "Nuevo pedido, brief, tallas y diseños", visible: tienePermiso(perfil, "contratos.editar") && modoBoman },
       { href: "/ventas/seguimiento", etiqueta: "Panel de vendedores", descripcion: "Entregas, mockups, prendas y saldos", visible: tienePermiso(perfil, "contratos.acceder") && modoBoman },
       { href: "/ventas/entregas", etiqueta: "Despachos y entregas", descripcion: "Entregas parciales, evidencias y reversión", visible: (tienePermiso(perfil, "contratos.entregar") || tienePermiso(perfil, "contratos.revertir_entrega")) && modoBoman },
+      { href: "/ventas/clientes", etiqueta: "Clientes", descripcion: "Ficha integral, contactos e historial", visible: tienePermiso(perfil, "clientes.acceder") && modoBoman },
+      { href: "/ventas/cartera", etiqueta: "Cuentas por cobrar", descripcion: "Saldos, promesas, abonos y recordatorios", visible: tienePermiso(perfil, "contratos.cartera.ver") && modoBoman },
       { href: "/tienda", etiqueta: "Caja de tienda", descripcion: "Ingresos, egresos y cierre diario", visible: puedeVerCajaTienda },
     ] },
     { id: "compras", etiqueta: "Compras", opciones: [
@@ -299,6 +301,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "reportes", etiqueta: "Análisis", opciones: [
       { href: "/reportes", etiqueta: "Reportes", descripcion: "Indicadores y cumplimiento", visible: tienePermiso(perfil, "reportes.acceder") },
+      { href: "/reportes/comercial", etiqueta: "Consolidado comercial", descripcion: "Ventas, entregas, cobros y comisiones", visible: tienePermiso(perfil, "reportes.comercial.ver") && modoBoman },
     ] },
     { id: "nomina", etiqueta: "Talento Humano y Nómina", opciones: [
       { href: "/nomina", etiqueta: "Personal y nómina", descripcion: "Expedientes, novedades y roles", visible: puedeVerNomina },

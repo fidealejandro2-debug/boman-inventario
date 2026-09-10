@@ -1,0 +1,8 @@
+-- Verificacion v113 - Ficha integral de clientes. Solo lectura.
+select to_regclass('public.clientes_v113')is not null clientes_ok,to_regclass('public.cliente_contactos_v113')is not null contactos_ok,to_regclass('public.cliente_direcciones_v113')is not null direcciones_ok,to_regclass('public.cliente_eventos_v113')is not null eventos_ok;
+select to_regprocedure('public.listar_clientes_v113(text,boolean,integer,integer)')is not null listar_ok,to_regprocedure('public.obtener_cliente_v113(uuid)')is not null detalle_ok,to_regprocedure('public.guardar_cliente_v113(uuid,jsonb,text,uuid)')is not null guardar_ok,to_regprocedure('public.fusionar_clientes_v113(uuid,uuid,text,uuid)')is not null fusionar_ok;
+select has_function_privilege('authenticated','public.listar_clientes_v113(text,boolean,integer,integer)','execute')consulta_ok,not has_function_privilege('anon','public.guardar_cliente_v113(uuid,jsonb,text,uuid)','execute')anon_bloqueado_ok,not has_table_privilege('authenticated','public.clientes_v113','update')edicion_directa_bloqueada_ok;
+select count(*)as contratos_sin_cliente_debe_ser_cero from public.contratos where cliente_id_v113 is null;
+select count(*)as identificaciones_activas_duplicadas_debe_ser_cero from(select public.normalizar_cliente_v113(identificacion)id from public.clientes_v113 where estado='activo'and nullif(public.normalizar_cliente_v113(identificacion),'')is not null group by 1 having count(*)>1)x;
+select count(*)as fusionados_invalidos_debe_ser_cero from public.clientes_v113 where(estado='activo'and fusionado_en_id is not null)or(estado='fusionado'and fusionado_en_id is null);
+select count(*)clientes,count(*)filter(where estado='activo')activos,count(*)filter(where estado='fusionado')fusionados from public.clientes_v113;

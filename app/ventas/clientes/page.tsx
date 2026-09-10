@@ -1,0 +1,3 @@
+export const dynamic="force-dynamic";
+import{redirect}from"next/navigation";import Navbar from"@/components/Navbar";import{getPerfilActual,tienePermiso}from"@/lib/getPerfil";import ClientesCliente from"./ClientesCliente";
+export default async function ClientesPage(){const perfil=await getPerfilActual();if(!perfil.modo_boman_especifico||!tienePermiso(perfil,"clientes.acceder"))redirect("/dashboard");return <><Navbar perfil={perfil}/><main className="container"><ClientesCliente puedeEditar={tienePermiso(perfil,"clientes.editar")}puedeFusionar={tienePermiso(perfil,"clientes.fusionar")}/></main></>}

@@ -76,7 +76,11 @@ function filaContratoV79(c: ContratoTipado, avisos: string[]) {
   }
   return {
     numero: c.numero,
+    // La fuente histórica de Sheets solo tiene una columna descriptiva. Su
+    // contenido corresponde al nombre del contrato, no al cliente real.
+    nombre_contrato_v115: c.cliente || "(sin nombre)",
     cliente: c.cliente || "(sin nombre)",
+    cliente_confirmado_v115: false,
     vendedor: c.vendedor,
     vendedor_responsable: c.vendedor_responsable,
     canal: c.canal || null,

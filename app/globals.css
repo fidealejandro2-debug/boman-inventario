@@ -585,6 +585,8 @@ tr.fila-alerta td { color: var(--msg-error-fg); }
 .badge.bajo { background: var(--badge-rojo-bg); color: var(--badge-rojo-fg); }
 .badge.cero { background: var(--badge-gris-bg); color: var(--badge-gris-fg); }
 .badge.ok   { background: var(--badge-verde-bg); color: var(--badge-verde-fg); }
+.badge.warning { background: var(--badge-amarillo-bg); color: var(--badge-amarillo-fg); }
+.badge.error { background: var(--badge-rojo-bg); color: var(--badge-rojo-fg); margin: 0; border: 0; font-size: 11px; }
 
 .header-row {
   display: flex;

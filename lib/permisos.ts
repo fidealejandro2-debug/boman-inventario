@@ -31,6 +31,13 @@ export type PermisoCodigo =
   | "contratos.finanzas.editar"
   | "contratos.entregar"
   | "contratos.revertir_entrega"
+  | "clientes.acceder"
+  | "clientes.editar"
+  | "clientes.fusionar"
+  | "contratos.cartera.ver"
+  | "contratos.cartera.editar"
+  | "reportes.comercial.ver"
+  | "reportes.comercial.comisiones"
   | "control.acceder"
   | "reportes.acceder"
   | "nomina.acceder"
@@ -75,6 +82,13 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "contratos.finanzas.editar",
   "contratos.entregar",
   "contratos.revertir_entrega",
+  "clientes.acceder",
+  "clientes.editar",
+  "clientes.fusionar",
+  "contratos.cartera.ver",
+  "contratos.cartera.editar",
+  "reportes.comercial.ver",
+  "reportes.comercial.comisiones",
   "control.acceder",
   "reportes.acceder",
   "nomina.acceder",

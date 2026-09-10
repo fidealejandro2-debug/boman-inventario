@@ -21,11 +21,12 @@ export default function ExpedienteContrato({ datos, publico = false }: { datos: 
   return <div className={estilos.expediente}>
     <article className={estilos.briefDocumento}>
       <header className={estilos.briefEncabezado}><div className={estilos.briefCalidad}>{calidades.join(" / ") || c.calidad || "PRODUCCIÓN"}</div><div className={estilos.briefAdvertencia}>ANTES DEL ENSAMBLE, CORROBORAR QUE EL MOCKUP SEA EL CORRECTO</div></header>
-      <h2 className={estilos.briefTitulo}>Detalle de contrato: {c.cliente || "Sin cliente"}</h2>
+      <h2 className={estilos.briefTitulo}>Detalle de contrato: {c.nombre_contrato_v115 || c.cliente || "Sin contrato"}</h2>
       <table className={estilos.briefFicha}><tbody>
-        <tr><th>CONTRATO:</th><td><strong>{c.cliente || "—"}</strong>{c.prioridad === "Urgente" && <span className={estilos.selloRojo}>URGENTE</span>}{c.reposicion === true && <span className={estilos.selloRojo}>REPOSICIÓN</span>}</td><td className={estilos.briefResponsable}><strong>{c.numero}</strong><span>RESPONSABLE</span></td></tr>
+        <tr><th>CONTRATO:</th><td><strong>{c.nombre_contrato_v115 || c.cliente || "—"}</strong>{c.prioridad === "Urgente" && <span className={estilos.selloRojo}>URGENTE</span>}{c.reposicion === true && <span className={estilos.selloRojo}>REPOSICIÓN</span>}</td><td className={estilos.briefResponsable}><strong>{c.numero}</strong><span>RESPONSABLE</span></td></tr>
         <tr><th>FECHA DE INGRESO:</th><td>{fecha(c.fecha_ingreso || c.created_at)}</td><td rowSpan={2} className={estilos.briefResponsableNombre}>{c.vendedor || "—"}</td></tr>
         <tr><th>FECHA DE ENTREGA:</th><td className={estilos.fechaEntrega}>{fecha(c.fecha_entrega)}</td></tr>
+        <tr><th>CLIENTE:</th><td colSpan={2}>{c.cliente || "—"}</td></tr>
         <tr><th>ENTREGA:</th><td colSpan={2}>{[c.forma_entrega, c.direccion].filter(Boolean).join(" · ") || "—"}</td></tr>
       </tbody></table>
       {(c.observacion || c.observaciones || c.observaciones_lili) && <div className={estilos.observacionPrincipal}><strong>OBSERVACIÓN:</strong> {c.observacion || c.observaciones || c.observaciones_lili}</div>}

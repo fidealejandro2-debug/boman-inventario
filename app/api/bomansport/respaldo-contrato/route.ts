@@ -19,7 +19,10 @@ export async function POST(request: NextRequest) {
   const tablas=["contrato_prendas","contrato_jugadores","contrato_archivos","contrato_specs","contrato_facturacion"] as const;
   const {data:contrato,error}=await admin.from("contratos").select("*").eq("id",body.contrato_id).single();
   if(error)return NextResponse.json({ok:false,error:error.message},{status:404});
-  const detalle:Record<string,unknown>={contrato};
+  // Compatibilidad con la hoja histórica: su campo `cliente` en realidad
+  // representa el nombre del contrato. El cliente real queda preservado con
+  // nombre explícito dentro del JSON, incluso si Apps Script aún no se actualiza.
+  const detalle:Record<string,unknown>={contrato:{...contrato,cliente_real_v115:contrato.cliente,cliente:contrato.nombre_contrato_v115||contrato.cliente}};
   for(const tabla of tablas){const r=await admin.from(tabla).select("*").eq("contrato_id",body.contrato_id);if(r.error)return NextResponse.json({ok:false,error:r.error.message},{status:500});detalle[tabla]=r.data??[]}
   try{
     const respuesta=await fetch(`${base}?api=respaldo-contrato&token=${encodeURIComponent(token)}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(detalle),cache:"no-store"});
