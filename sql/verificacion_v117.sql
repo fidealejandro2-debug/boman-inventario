@@ -39,11 +39,16 @@ select a.estacion, a.estacion = any(public.estaciones_produccion_v117()) as en_c
                             'Estampado final','Pendiente entrega','Entregado']) as e) a
  order by a.estacion;
 
--- 6) El tablero ya no devuelve areas vacias. Antes de v117 todas salian ''.
---    (Requiere sesion con permiso de produccion; desde el editor de Supabase
---    puede fallar por auth.uid() nulo, eso es esperado.)
-select x->>'nombre' as etapa, x->>'area' as area
-  from jsonb_array_elements((public.tablero_produccion_v102())->'etapas') x;
+-- 6) El tablero ya reparte por estacion. NO se llama a la funcion: en el editor
+--    de Supabase no hay sesion (auth.uid() es null), asi que siempre respondia
+--    "No tienes permiso para consultar produccion" y parecia un fallo de v117
+--    cuando era solo la puerta haciendo su trabajo. Se comprueba leyendo su
+--    definicion, que es lo que de verdad interesa saber aqui.
+select
+  position('public.area_etapa_v117(e.nombre)' in pg_get_functiondef(p.oid)) > 0 as reparte_por_estacion_ok,
+  position($q$'area',''$q$ in pg_get_functiondef(p.oid)) = 0 as sin_areas_vacias_ok
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'tablero_produccion_v102';
 
 -- 7) El permiso existe y NO se hereda de ningun rol.
 select

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { useRouter } from "next/navigation";
+import estilos from "./Tablero.module.css";
 
 export type Etapa = {
   nombre: string; etiqueta: string; emoji: string; bg: string; fg: string;
@@ -101,6 +102,20 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
     [etapas, estacion],
   );
 
+  // Tramos de columnas por estacion, para la fila de encabezado que las
+  // agrupa. Las etapas ya vienen en orden de proceso, asi que basta con juntar
+  // las consecutivas de la misma area.
+  const grupos = useMemo(() => {
+    const salida: { area: string; ancho: number }[] = [];
+    for (const { et } of columnas) {
+      const area = String(et.area || "").split(" · ")[0];
+      const ultimo = salida[salida.length - 1];
+      if (ultimo && ultimo.area === area) ultimo.ancho++;
+      else salida.push({ area, ancho: 1 });
+    }
+    return salida;
+  }, [columnas]);
+
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     // Una columna de Exteriores en un contrato sin chompas no es trabajo
@@ -141,7 +156,10 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
     <div className="card">
       <div className="header-row">
         <div>
-          <h3 style={{ margin: 0 }}>Tablero de producción{estacion ? ` — ${estacion}` : ""}</h3>
+          <h3 className={estilos.tituloEstacion} style={{ margin: 0 }}>
+            Tablero de producción
+            {!!estacion && <span className={estilos.chipEstacion}>{estacion}</span>}
+          </h3>
           <p className="conteo">{visibles.length} de {datos.total} contratos · datos de {datos.hora}</p>
         </div>
         <button className="secondary" onClick={() => refrescar(() => router.refresh())} disabled={refrescando}>
@@ -189,15 +207,22 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
         <table>
           <thead>
             <tr>
-              <th style={{ minWidth: 230 }}>Contrato</th>
-              <th style={{ minWidth: 120 }}>Entrega</th>
-              <th style={{ minWidth: 110 }}>Diseño</th>
+              <th className={estilos.colContrato} rowSpan={2}>Contrato</th>
+              <th style={{ minWidth: 110 }} rowSpan={2}>Entrega</th>
+              <th style={{ minWidth: 105 }} rowSpan={2}>Diseño</th>
+              {grupos.map((g, k) => (
+                <th key={`${g.area}-${k}`} colSpan={g.ancho} className={`${estilos.grupo} ${g.area ? "" : estilos.grupoSinDueno}`}>
+                  {g.area || "Sin estación"}
+                </th>
+              ))}
+            </tr>
+            <tr>
               {columnas.map(({ et, i }) => (
-                <th key={`${et.area}-${et.nombre}-${i}`} className="num" style={{ minWidth: 62 }} title={et.area}>
-                  <span style={{ background: et.bg, color: et.fg, borderRadius: 4, padding: "1px 5px", display: "inline-block", fontSize: 10 }}>
+                <th key={`${et.area}-${et.nombre}-${i}`} className={estilos.etapaCab} title={et.area || "No la marca el taller"}>
+                  <span className={estilos.etapaPill} style={{ background: et.bg, color: et.fg }}>
                     {et.emoji} {et.etiqueta}
                   </span>
-                  <div className="conteo" style={{ marginTop: 2 }}>{et.hechos}/{datos.total}</div>
+                  <div className={estilos.etapaConteo}><b>{et.hechos}</b>/{datos.total}</div>
                 </th>
               ))}
             </tr>
@@ -205,16 +230,15 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
           <tbody>
             {visibles.map((f) => (
               <tr key={f.numero} className={f.atrasado ? "fila-alerta" : ""}>
-                <td>
-                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <td className={estilos.colContrato}>
+                  <div className={estilos.identidad}>
                     {f.mks[0]?.i && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`https://drive.google.com/thumbnail?id=${f.mks[0].i}&sz=w120`} alt="" loading="lazy"
-                        style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, flex: "0 0 auto", background: "var(--superficie-suave)" }} />
+                      <img className={estilos.miniatura} src={`https://drive.google.com/thumbnail?id=${f.mks[0].i}&sz=w120`} alt="" loading="lazy" />
                     )}
-                    <div style={{ minWidth: 0 }}>
-                      <strong>{f.urgente ? "🔴 " : ""}{f.numero}</strong>
-                      <div>{f.cliente}</div>
+                    <div className={estilos.datos}>
+                      <strong className={estilos.numero}>{f.urgente ? "🔴 " : ""}{f.numero}</strong>
+                      <div className={estilos.cliente} title={f.cliente}>{f.cliente}</div>
                       <div className="conteo">{f.vendedor} · {f.prendas} pr.{f.calidad.length ? ` · ${f.calidad.join(" · ")}` : ""}</div>
                       {f.obs && <div className="badge bajo" style={{ marginTop: 3, whiteSpace: "normal", lineHeight: 1.3 }}>📝 {f.obs}</div>}
                     </div>
@@ -230,18 +254,18 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
                   {f.maquila && <div className="conteo">🏭 {f.maquila}</div>}
                 </td>
                 {columnas.map(({ et, i }) => (
-                  <td key={`${f.numero}-${i}`} className="num">
+                  <td key={`${f.numero}-${i}`} className={estilos.celda}>
                     {/* Columnas de Exteriores: un contrato sin chompas no las lleva,
                         y un vacio se confunde con "pendiente". El punto dice "no aplica". */}
                     {et.exterior && !f.esExterior
-                      ? <span className="conteo">·</span>
+                      ? <span className={`${estilos.marca} ${estilos.noAplica}`} title="No aplica a este contrato">·</span>
                       : puedeMarcar
-                        ? <button className="celdaEtapa" disabled={marcando !== ""} title={f.hechas[i] ? `Quitar ${et.etiqueta}` : `Marcar ${et.etiqueta}`} onClick={() => void alternarEtapa(f.numero, et, f.hechas[i])}>
-                            {f.hechas[i] ? <span style={{ color: "var(--rol-verde)", fontWeight: 900 }}>✓</span> : <span className="conteo">▫</span>}
+                        ? <button className={`${estilos.marca} ${f.hechas[i] ? estilos.hecha : estilos.pendiente}`} disabled={marcando !== ""}
+                            title={f.hechas[i] ? `Quitar ${et.etiqueta}` : `Marcar ${et.etiqueta}`}
+                            onClick={() => void alternarEtapa(f.numero, et, f.hechas[i])}>
+                            {f.hechas[i] ? "✓" : ""}
                           </button>
-                        : f.hechas[i]
-                          ? <span style={{ color: "var(--rol-verde)", fontWeight: 900 }}>✓</span>
-                          : <span className="conteo">▫</span>}
+                        : <span className={`${estilos.marca} ${f.hechas[i] ? estilos.hecha : estilos.pendiente}`}>{f.hechas[i] ? "✓" : ""}</span>}
                   </td>
                 ))}
               </tr>
