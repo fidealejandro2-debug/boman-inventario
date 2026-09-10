@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
+import { mostrarAvisoDialogo } from "@/components/Dialogo";
+import IconoPanel from "./IconoPanel";
+import styles from "./Dashboard.module.css";
 
 type ResumenPanel = {
   generado_at: string;
@@ -134,13 +137,15 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [verTodosPendientes, setVerTodosPendientes] = useState(false);
   const [notificaciones, setNotificaciones] = useState<ResumenNotificaciones>(NOTIFICACIONES_VACIO);
   const [mantenimiento, setMantenimiento] = useState<ResumenMantenimiento>(MANTENIMIENTO_VACIO);
   const [tesoreria, setTesoreria] = useState<ResumenTesoreria>(TESORERIA_VACIO);
 
-  const cargar = useCallback(async () => {
+  const cargar = useCallback(async (manual = false) => {
     setCargando(true);
     setError(null);
+    try {
     const [panel, avisos, activos, cuentasPagar] = await Promise.all([
       supabase.rpc("resumen_panel_principal_v51"),
       supabase.rpc("resumen_notificaciones_v53"),
@@ -149,11 +154,15 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     ]);
     const { data, error: errorCarga } = panel;
     if (errorCarga) {
-      setError(errorCarga.message.includes("resumen_panel_principal_v51")
+      const mensaje = errorCarga.message.includes("resumen_panel_principal_v51")
         ? "Falta instalar la migración v51 para mostrar indicadores. Los accesos siguen disponibles."
-        : errorCarga.message);
+        : errorCarga.message;
+      setError(mensaje);
+      if (manual) void mostrarAvisoDialogo(mensaje, "No se pudo actualizar el panel", true);
     } else if (data) {
       setResumen(data as ResumenPanel);
+    } else {
+      setError("No se recibió el resumen. Intenta actualizar en un momento.");
     }
     if (!avisos.error && avisos.data) setNotificaciones(avisos.data as ResumenNotificaciones);
     if (!activos.error && activos.data) setMantenimiento(activos.data as ResumenMantenimiento);
@@ -162,14 +171,21 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
       saldo_vencido: acc.saldo_vencido + (cuenta.estado === "vencida" ? Number(cuenta.saldo_pendiente) : 0),
       efectivo_comprometido: acc.efectivo_comprometido + Number(cuenta.total_comprometido ?? 0),
     }), { ...TESORERIA_VACIO }));
-    setCargando(false);
+    } catch {
+      const mensaje = "No pudimos conectar para actualizar el resumen. Intenta nuevamente.";
+      setError(mensaje);
+      if (manual) void mostrarAvisoDialogo(mensaje, "No se pudo actualizar el panel", true);
+    } finally {
+      setCargando(false);
+    }
   }, [supabase]);
 
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
     function enfocarBuscador(evento: KeyboardEvent) {
       const objetivo = evento.target as HTMLElement | null;
-      if (evento.key === "/" && objetivo?.tagName !== "INPUT" && objetivo?.tagName !== "TEXTAREA") {
+      if (evento.key === "/" && !evento.ctrlKey && !evento.metaKey && !evento.altKey
+        && !objetivo?.closest("input, textarea, select, [contenteditable=true]")) {
         evento.preventDefault();
         buscadorRef.current?.focus();
       }
@@ -193,6 +209,23 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     const totalFranquicia = numero(resumen.franquicia.alertas) + numero(resumen.franquicia.cierres_pendientes_hoy);
 
     return [
+      {
+        id: "contratos", titulo: "Contratos", subtitulo: "Gestión comercial",
+        descripcion: "Da seguimiento a tus contratos, entregas y compromisos con clientes.",
+        href: "/ventas/seguimiento", icono: "CTR", tono: "azul", visible: Boolean(perfil.modo_boman_especifico) && puede("contratos.acceder"),
+        pendiente: 0, pendienteTexto: "",
+        enlaces: enlacesValidos(
+          { href: "/ventas/seguimiento", etiqueta: "Panel de vendedores" },
+          puede("contratos.editar") && { href: "/ventas/contratos", etiqueta: "Ingresar contrato" },
+          puede("contratos.entregar") && { href: "/ventas/entregas", etiqueta: "Entregas" }
+        ),
+      },
+      {
+        id: "importar", titulo: "Importaciones", subtitulo: "Carga de información",
+        descripcion: "Carga archivos y revisa los datos antes de incorporarlos al sistema.",
+        href: "/importar", icono: "IMP", tono: "celeste", visible: puede("importaciones.acceder"),
+        pendiente: 0, pendienteTexto: "", enlaces: [{ href: "/importar", etiqueta: "Importar datos" }],
+      },
       {
         id: "notificaciones", titulo: "Notificaciones", subtitulo: "Centro general de avisos",
         descripcion: "Reúne pendientes, vencimientos y comunicados de todos tus módulos.",
@@ -293,7 +326,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
         ),
       },
     ];
-  }, [esFranquicia, perfil.rol, puede, resumen, notificaciones, mantenimiento, tesoreria]);
+  }, [esFranquicia, perfil.rol, perfil.modo_boman_especifico, puede, resumen, notificaciones, mantenimiento, tesoreria]);
 
   const modulosVisibles = useMemo(() => {
     const consulta = busqueda.trim().toLocaleLowerCase("es");
@@ -407,11 +440,33 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
 
   const alcanceAlmacenes = resumen.ambito.almacenes.length ? resumen.ambito.almacenes.join(", ") : "Sin almacenes asignados";
   const alcanceEmpresas = resumen.ambito.empresas.length ? resumen.ambito.empresas.join(", ") : "Sin empresas visibles";
+  const ordenPorRol: Record<string, string[]> = {
+    admin: ["contratos", "produccion", "inventario", "tesoreria"],
+    gerencia: ["reportes", "contratos", "produccion", "tesoreria"],
+    bodega: ["inventario", "operaciones", "compras", "produccion"],
+    logistica: ["operaciones", "inventario", "contratos", "compras"],
+    control: ["operaciones", "inventario", "compras", "produccion"],
+    nomina: ["nomina", "notificaciones", "reportes"],
+    tienda: ["ventas", "inventario", "operaciones", "contratos"],
+    franquiciado: ["franquicia", "inventario", "operaciones", "notificaciones"],
+    vendedor_franquicia: ["franquicia", "inventario", "notificaciones"],
+  };
+  const orden = ordenPorRol[perfil.rol] ?? [];
+  const accesos = modulos.filter((m) => m.visible).sort((a, b) => {
+    const posicion = (id: string) => orden.includes(id) ? orden.indexOf(id) : orden.length;
+    return posicion(a.id) - posicion(b.id);
+  }).slice(0, 4);
+  const prioridad = !cargando && !error ? pendientes[0] : undefined;
+  const listo = !cargando && !error;
 
   return (
-    <main className="panel-principal">
+    <main className={`panel-principal ${styles.dashboard}`}>
+      <div className={styles.topline}>
+        <span><span className={styles.brandDot} /> BOMAN <span className={styles.topDivider}>/</span> Tu espacio de trabajo</span>
+        <time>{fechaLarga()}</time>
+      </div>
       <section className="panel-portada">
-        <div>
+        <div className={styles.welcome}>
           <span className="panel-saludo">
             {resumen.ambito.almacenes.length === 1
               ? resumen.ambito.almacenes[0]
@@ -419,25 +474,33 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
             · {ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}
           </span>
           <h1>Hola, {nombreParaSaludo(perfil.nombre_completo)}</h1>
-          <p>{fechaLarga()}. Aquí tienes tus accesos y pendientes en un solo lugar.</p>
-        </div>
-        <div className="panel-portada-acciones">
-          <div className="panel-actualizado">
-            <span className={cargando ? "panel-pulso cargando" : "panel-pulso"} />
-            {resumen.generado_at ? `Actualizado ${horaEcuador(resumen.generado_at)}` : "Preparando resumen"}
+          <p>Todo conectado. Tu próximo paso, más claro.</p>
+          <div className={styles.heroActions}>
+            {accesos[0] && <Link className={styles.primaryAction} href={accesos[0].href}>
+              {accesos[0].enlaces[0]?.etiqueta ?? `Abrir ${accesos[0].titulo}`} <IconoPanel nombre="flecha" />
+            </Link>}
+            <a className={styles.secondaryAction} href="#mis-modulos">Explorar módulos <span aria-hidden="true">↗</span></a>
           </div>
-          <button type="button" className="panel-refrescar" onClick={cargar} disabled={cargando}>
-            {cargando ? "Actualizando…" : "Actualizar"}
-          </button>
+          <div className={styles.heroStatus} role="status">
+            <span className={styles.statusDot} data-state={cargando ? "loading" : error ? "error" : "ready"} />
+            {cargando ? "Actualizando tu resumen…" : error ? "Resumen no disponible" : `Actualizado ${horaEcuador(resumen.generado_at)}`}
+          </div>
+        </div>
+        <div className={styles.focusCard}>
+          <div className={styles.focusTop}><span>EN TU RADAR</span><IconoPanel nombre="reloj" /></div>
+          <strong>{cargando ? "Preparando tu día" : error ? "Tus accesos están listos" : prioridad ? prioridad.titulo : "Un buen momento para avanzar"}</strong>
+          <p>{cargando ? "Consultando los indicadores de tu operación." : error ? "Puedes seguir entrando a tus módulos mientras recuperamos el resumen." : prioridad ? prioridad.detalle : "No hay pendientes reportados en tu resumen. Continúa con tu siguiente tarea."}</p>
+          {prioridad && <Link href={prioridad.href}><span>{ENTERO.format(prioridad.cantidad)} por atender</span><IconoPanel nombre="flecha" /></Link>}
+          {!prioridad && <span className={styles.focusFoot}>Tu operación, a tu alcance.</span>}
         </div>
       </section>
 
       <section className="panel-ambito" aria-label="Ámbito de información">
         <div title={alcanceAlmacenes}>
-          <span>ALMACENES</span><strong>{resumen.ambito.almacenes_total || "—"}</strong><small>{alcanceAlmacenes}</small>
+          <span>ALMACENES</span><strong>{listo ? resumen.ambito.almacenes_total : "—"}</strong><small>{listo ? alcanceAlmacenes : "Consultando ámbito"}</small>
         </div>
         <div title={alcanceEmpresas}>
-          <span>EMPRESAS</span><strong>{resumen.ambito.empresas_total || "—"}</strong><small>{alcanceEmpresas}</small>
+          <span>EMPRESAS</span><strong>{listo ? resumen.ambito.empresas_total : "—"}</strong><small>{listo ? alcanceEmpresas : "Consultando ámbito"}</small>
         </div>
         <label className="panel-buscador">
           <span>Buscar un módulo o acción</span>
@@ -453,34 +516,51 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
 
       {error && <div className="error-box panel-error">{error}</div>}
 
-      <section className="panel-kpis" aria-label="Resumen de hoy">
+      <div className={styles.sectionHeading}>
+        <div><span className={styles.eyebrow}>PANORAMA</span><h2>Tu operación de un vistazo</h2></div>
+        <button type="button" className={styles.refresh} onClick={() => cargar(true)} disabled={cargando}>
+          <IconoPanel nombre="actualizar" className={cargando ? styles.spinning : undefined} />{cargando ? "Actualizando" : "Actualizar"}
+        </button>
+      </div>
+      <section className="panel-kpis" aria-label="Resumen de hoy" aria-busy={cargando}>
         {kpis.map((kpi) => (
           <article className={`panel-kpi ${kpi.tono}`} key={kpi.etiqueta}>
-            <span>{kpi.etiqueta}</span><strong>{cargando ? "···" : kpi.valor}</strong><small>{kpi.nota}</small>
+            <span>{kpi.etiqueta}</span><strong key={cargando ? "loading" : kpi.valor} className={cargando ? styles.skeleton : styles.value}>{listo ? kpi.valor : "—"}</strong><small>{listo ? kpi.nota : cargando ? "Consultando…" : "Sin datos actualizados"}</small>
           </article>
         ))}
       </section>
 
+      {accesos.length > 0 && <nav className={styles.quickAccess} aria-label="Accesos rápidos por rol">
+        {accesos.map((modulo, indice) => <Link href={modulo.href} key={modulo.id}>
+          <span className={styles.quickIcon}><IconoPanel nombre={modulo.id} /></span>
+          <span><small>0{indice + 1} / ACCESO RÁPIDO</small><strong>{modulo.titulo}</strong></span>
+          <IconoPanel nombre="flecha" />
+        </Link>)}
+      </nav>}
+
       <div className="panel-contenido">
-        <section className="panel-modulos-seccion">
+        <section className="panel-modulos-seccion" id="mis-modulos">
           <div className="panel-seccion-titulo">
-            <div><span>ACCESOS</span><h2>Mis módulos</h2></div>
+            <div><span>EXPLORA TU ESPACIO</span><h2>Mis módulos</h2></div>
             <small>{modulosVisibles.length} disponibles según tu rol</small>
           </div>
           <div className="panel-modulos-grid">
             {modulosVisibles.map((modulo) => (
               <article className={`panel-modulo ${modulo.tono}`} key={modulo.id}>
                 <div className="panel-modulo-cabecera">
-                  <span className="panel-modulo-icono">{modulo.icono}</span>
-                  {modulo.pendiente > 0 && <span className="panel-modulo-contador">
+                  <span className="panel-modulo-icono"><IconoPanel nombre={modulo.id} /></span>
+                  {listo && modulo.pendiente > 0 && <span className="panel-modulo-contador">
                     {ENTERO.format(modulo.pendiente)} {modulo.pendienteTexto}
                   </span>}
                 </div>
                 <span className="panel-modulo-subtitulo">{modulo.subtitulo}</span>
-                <h3>{modulo.titulo}</h3><p>{modulo.descripcion}</p>
-                <div className="panel-modulo-enlaces">
+                <h3><Link href={modulo.href}>{modulo.titulo}</Link></h3><p>{modulo.descripcion}</p>
+                <details className={styles.moduleOptions}>
+                  <summary>Opciones de {modulo.titulo}<span aria-hidden="true">+</span></summary>
+                  <div className="panel-modulo-enlaces">
                   {modulo.enlaces.map((enlace) => <Link href={enlace.href} key={`${modulo.id}-${enlace.href}`}>{enlace.etiqueta}</Link>)}
-                </div>
+                  </div>
+                </details>
                 <Link href={modulo.href} className="panel-modulo-abrir" aria-label={`Abrir ${modulo.titulo}`}>
                   Abrir <span aria-hidden="true">→</span>
                 </Link>
@@ -497,31 +577,34 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
           <section className="panel-pendientes">
             <div className="panel-seccion-titulo compacto">
               <div><span>PRIORIDAD</span><h2>Por atender</h2></div>
-              <strong>{pendientes.reduce((total, item) => total + item.cantidad, 0)}</strong>
+              <strong>{listo ? pendientes.length : "—"}</strong>
             </div>
             <div className="panel-pendientes-lista">
-              {pendientes.slice(0, 8).map((item) => <Link href={item.href} className={`panel-pendiente ${item.nivel}`} key={item.id}>
+              {listo && pendientes.slice(0, verTodosPendientes ? undefined : 4).map((item) => <Link href={item.href} className={`panel-pendiente ${item.nivel}`} key={item.id}>
                 <span className="panel-pendiente-marca" />
                 <span className="panel-pendiente-texto"><strong>{item.titulo}</strong><small>{item.detalle}</small></span>
                 <b>{ENTERO.format(item.cantidad)}</b>
               </Link>)}
-              {!cargando && pendientes.length === 0 && <div className="panel-al-dia">
+              {listo && pendientes.length === 0 && <div className="panel-al-dia">
                 <span>✓</span><strong>Todo al día</strong><small>No tienes pendientes críticos en este momento.</small>
               </div>}
               {cargando && <div className="panel-cargando-lineas"><i /><i /><i /></div>}
+              {error && <p className="panel-actividad-vacia">No pudimos consultar los pendientes. Actualiza para intentarlo de nuevo.</p>}
+              {listo && pendientes.length > 4 && <button className={styles.showAll} type="button" aria-expanded={verTodosPendientes} onClick={() => setVerTodosPendientes(!verTodosPendientes)}>{verTodosPendientes ? "Mostrar menos" : `Ver las ${pendientes.length} categorías pendientes`} <span aria-hidden="true">↗</span></button>}
             </div>
           </section>
 
           <section className="panel-actividad">
             <div className="panel-seccion-titulo compacto"><div><span>TRAZABILIDAD</span><h2>Actividad reciente</h2></div></div>
             <div className="panel-actividad-lista">
-              {resumen.actividad.slice(0, 6).map((item, indice) => <Link href={item.href} className="panel-actividad-item" key={`${item.fecha}-${indice}`}>
-                <span className="panel-actividad-icono">{item.tipo === "venta" ? "$" : "↕"}</span>
+              {listo && resumen.actividad.slice(0, 5).map((item, indice) => <Link href={item.href} className="panel-actividad-item" key={`${item.fecha}-${indice}`}>
+                <span className="panel-actividad-icono"><IconoPanel nombre={item.tipo === "venta" ? "ventas" : "operaciones"} /></span>
                 <span><strong>{item.titulo}</strong><small>{item.detalle}</small><time>{horaEcuador(item.fecha)}</time></span>
               </Link>)}
-              {!cargando && !resumen.actividad.length && <div className="panel-actividad-vacia">
+              {listo && !resumen.actividad.length && <div className="panel-actividad-vacia">
                 Todavía no existe actividad visible para tu ámbito.
               </div>}
+              {cargando && <div className="panel-cargando-lineas"><i /><i /></div>}
             </div>
           </section>
         </aside>
