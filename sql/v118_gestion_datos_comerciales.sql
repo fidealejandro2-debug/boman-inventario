@@ -23,10 +23,14 @@
 begin;
 select pg_advisory_xact_lock(1181142026);
 
+-- Un mensaje que nombra dos culpables no sirve de nada: hay que ir a buscar
+-- cual de los dos es. Cada requisito avisa por separado.
 do $$begin
-  if to_regprocedure('public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid)') is null
-     or to_regprocedure('public.ajustar_finanzas_contrato_v100(uuid,numeric,numeric,text,uuid)') is null then
-    raise exception 'Faltan v99 o v100 antes de v118';
+  if to_regprocedure('public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid)') is null then
+    raise exception 'Falta v99_gestion_contratos.sql (no existe guardar_gestion_contrato_v99). Correla antes de v118';
+  end if;
+  if to_regprocedure('public.ajustar_finanzas_contrato_v100(uuid,numeric,numeric,text,uuid)') is null then
+    raise exception 'Falta v100_abonos_presupuesto_contratos.sql (no existe ajustar_finanzas_contrato_v100). Correla antes de v118';
   end if;
   if not exists (select 1 from information_schema.columns
                   where table_schema='public' and table_name='contratos'

@@ -5,6 +5,12 @@
 select v.orden,v.archivo,
  case when v.existe then 'YA ESTA' else '>>> FALTA CORRER' end as estado
 from(values
+ -- Estas cuatro son de antes pero varias migraciones nuevas dependen de ellas,
+ -- asi que se vigilan igual: si falta una, lo de arriba falla sin explicar por que.
+ (96, 'v96_cronograma_produccion.sql',           to_regclass('public.capacidad_produccion_diaria_v96') is not null),
+ (99, 'v99_gestion_contratos.sql',               to_regprocedure('public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid)') is not null),
+ (100,'v100_abonos_presupuesto_contratos.sql',   to_regprocedure('public.ajustar_finanzas_contrato_v100(uuid,numeric,numeric,text,uuid)') is not null),
+ (102,'v102_sincronizacion_definitiva_bomansport.sql', to_regprocedure('public.tablero_produccion_v102()') is not null),
  (107,'v107_permisos_persona_y_marca_blanca.sql',to_regclass('public.configuracion_sistema') is not null),
  (108,'v108_ingreso_contratos.sql',            to_regclass('public.contrato_ingresos_v108') is not null),
  (109,'v109_productos_franquicia.sql',         to_regclass('public.productos_creados_franquicia_v109') is not null),
