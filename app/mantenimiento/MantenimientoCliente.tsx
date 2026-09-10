@@ -230,10 +230,10 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
   }
 
   return <section className="mantenimiento-centro">
-    <div className="header-row mantenimiento-cabecera">
-      <div><span className="modulo-kicker">GESTIÓN DE ACTIVOS</span><h1>Mantenimiento</h1><p className="conteo">Maquinaria, equipos, prevención, órdenes de trabajo, costos y paradas.</p></div>
+    <header className="page-heading workspace-heading mantenimiento-cabecera">
+      <div><span className="eyebrow">GESTIÓN DE ACTIVOS</span><h1>Mantenimiento</h1><p>Maquinaria, equipos, prevención, órdenes de trabajo, costos y paradas.</p></div>
       <div className="mantenimiento-acciones">{puedeEditar && <><button className="secondary" onClick={nuevoActivo}>Nuevo activo</button><button onClick={() => nuevaOrden()}>Nueva orden</button></>}<button className="secondary" onClick={cargar} disabled={cargando}>Actualizar</button></div>
-    </div>
+    </header>
     {error && <div className="error-box">{error}</div>}{mensaje && <div className="success-box">{mensaje}</div>}
 
     <div className="kpis compactos mantenimiento-kpis">
@@ -245,11 +245,11 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
       <div className={`kpi ${resumen.ordenes_atrasadas ? "alerta" : "ok"}`}><div className="label">Órdenes atrasadas</div><div className="valor">{resumen.ordenes_atrasadas}</div></div>
     </div>
 
-    <div className="tabs">
+    <div className="tabs workflow-nav" aria-label="Áreas de mantenimiento">
       {([['resumen', 'Resumen'], ['activos', `Activos (${activos.length})`], ['ordenes', `Órdenes (${ordenes.length})`]] as const).map(([v, l]) => <button className={`tab ${tab === v ? "activo" : ""}`} onClick={() => { setTab(v); setEstado(""); }} key={v}>{l}</button>)}
     </div>
 
-    {tab !== "resumen" && <div className="card"><div className="filtros">
+    {tab !== "resumen" && <div className="card filter-panel"><div className="filtros filter-bar">
       <div className="field buscador"><label>Buscar</label><input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Código, activo, orden o detalle…" /></div>
       <div className="field"><label>Estado</label><select value={estado} onChange={(e) => setEstado(e.target.value)}><option value="">Todos</option>{(tab === "activos" ? ["operativo", "detenido", "mantenimiento", "fuera_servicio", "vencido", "proximo", "sin_plan"] : ["solicitada", "programada", "en_proceso", "en_espera", "completada", "cancelada"]).map((v) => <option value={v} key={v}>{etiqueta(v)}</option>)}</select></div>
     </div></div>}

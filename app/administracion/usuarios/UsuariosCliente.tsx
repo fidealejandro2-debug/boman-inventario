@@ -285,15 +285,15 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
 
   return (
     <>
-      <div className="header-row">
+      <header className="page-heading workspace-heading">
         <div>
-          <h2 style={{ color: "#1f3864", margin: 0 }}>Administración de usuarios</h2>
-          <div className="conteo" style={{ marginTop: 4 }}>{usuarios.length} usuario(s) registrado(s)</div>
+          <span className="eyebrow">ADMINISTRACIÓN</span><h1>Usuarios y accesos</h1>
+          <p>{usuarios.length} usuario(s) registrado(s). Gestiona sus roles, almacenes y estado de acceso.</p>
         </div>
         <button onClick={() => setMostrarInvitacion((valor) => !valor)}>
           {mostrarInvitacion ? "Cancelar" : "+ Invitar usuario"}
         </button>
-      </div>
+      </header>
 
       {msg && <div className={msg.tipo === "error" ? "error" : "success"} style={{ marginBottom: 14 }}>{msg.texto}</div>}
 

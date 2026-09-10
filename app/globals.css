@@ -479,6 +479,21 @@ table {
 .context-help summary { color: var(--azul-fuerte); font-weight: 700; cursor: pointer; }
 .context-help p { max-width: 920px; margin: 8px 0 2px; line-height: 1.55; }
 .workflow-nav { margin-bottom: 20px; }
+.inline-tabs {
+  position: static;
+  margin: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.filter-panel .filtros { margin-bottom: 0; }
+.admin-workspace-card > .eyebrow + h1,
+.admin-workspace-card .workspace-heading h1 {
+  margin: 3px 0 5px;
+  color: var(--texto);
+  font-size: clamp(25px, 3vw, 34px);
+  letter-spacing: -.035em;
+}
+.admin-workspace-card > .ayuda { max-width: 900px; }
 .nomina-workspace { min-width: 0; }
 .nomina-areas { margin-bottom: 8px; }
 .nomina-subnav {

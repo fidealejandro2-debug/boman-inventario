@@ -107,11 +107,11 @@ export default function NotificacionesCliente({ perfil }: { perfil: Perfil }) {
   }
 
   return <section className="notificaciones-centro">
-    <div className="header-row">
+    <header className="page-heading workspace-heading">
       <div>
-        <span className="modulo-kicker">CENTRO GENERAL</span>
+        <span className="eyebrow">CENTRO GENERAL</span>
         <h1>Notificaciones</h1>
-        <p className="conteo">Pendientes, alertas, vencimientos y comunicados de todos tus módulos.</p>
+        <p>Pendientes, alertas, vencimientos y comunicados de todos tus módulos.</p>
       </div>
       <div className="notificaciones-acciones">
         {puedePublicar && <button className="secondary" onClick={() => setMostrarPublicacion((v) => !v)}>
@@ -119,7 +119,7 @@ export default function NotificacionesCliente({ perfil }: { perfil: Perfil }) {
         </button>}
         <button onClick={cargar} disabled={cargando}>{cargando ? "Actualizando…" : "Actualizar"}</button>
       </div>
-    </div>
+    </header>
 
     {error && <div className="error-box">{error}</div>}
     {mensaje && <div className="success-box">{mensaje}</div>}
@@ -147,7 +147,7 @@ export default function NotificacionesCliente({ perfil }: { perfil: Perfil }) {
 
     <div className="card">
       <div className="notificaciones-filtros">
-        <div className="tabs">
+        <div className="tabs inline-tabs">
           {([['todas', 'Todas'], ['no_leidas', 'Sin leer'], ['criticas', 'Críticas']] as const).map(([valor, etiqueta]) =>
             <button className={`tab ${filtro === valor ? "activo" : ""}`} onClick={() => setFiltro(valor)} key={valor}>{etiqueta}</button>)}
         </div>

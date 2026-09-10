@@ -153,9 +153,9 @@ export default function PermisosCliente() {
   if (cargando) return <div className="card"><p className="ayuda">Cargando permisos…</p></div>;
 
   return (
-    <div className="card">
-      <div className="header-row">
-        <h2 style={{ margin: 0 }}>Permisos por rol</h2>
+    <div className="card admin-workspace-card">
+      <div className="header-row workspace-heading">
+        <div><span className="eyebrow">ADMINISTRACIÓN</span><h1 style={{ margin: 0 }}>Permisos por rol</h1></div>
         <a href="/administracion/permisos-personas">Permisos por persona →</a>
       </div>
       <p className="ayuda">

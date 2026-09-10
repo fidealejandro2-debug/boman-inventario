@@ -40,7 +40,7 @@ export default function ImportadorGeneralCliente({ perfil }: { perfil: Perfil })
 
   return (
     <div className="import-page">
-      <header className="page-heading">
+      <header className="page-heading workspace-heading">
         <div>
           <span className="eyebrow">DATOS Y MIGRACIONES</span>
           <h1>Centro de importaciones</h1>

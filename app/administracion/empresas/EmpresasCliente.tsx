@@ -473,22 +473,20 @@ export default function EmpresasCliente() {
 
   return (
     <>
-      <div className="header-row">
+      <header className="page-heading workspace-heading">
         <div>
-          <h2 style={{ color: "#1f3864", margin: 0 }}>Grupo económico y empresas</h2>
-          <p className="conteo" style={{ marginTop: 4 }}>
+          <span className="eyebrow">ADMINISTRACIÓN</span><h1>Grupo económico y empresas</h1>
+          <p>
             {grupo ? `${grupo.nombre} · ${empresas.length} RUC registrado(s)` : "Configuración multiempresa"}
           </p>
         </div>
         <div className="acciones-documento"><button onClick={nuevoAlmacen}>+ Crear tienda / bodega</button><button className="secondary" onClick={nuevaEmpresa}>+ Registrar empresa / RUC</button></div>
-      </div>
+      </header>
 
-      <div className="info-box" style={{ marginBottom: 14 }}>
-        <strong>Modelo consolidado:</strong> el catálogo y el stock físico siguen compartidos por todo el grupo.
+      <details className="context-help" style={{ marginBottom: 14 }}><summary>Cómo funciona el modelo consolidado</summary><p>El catálogo y el stock físico siguen compartidos por todo el grupo.
         Cada factura, documento y movimiento queda identificado con el RUC responsable. Cada RUC puede tener
         varios establecimientos SRI vinculados a sus tiendas o bodegas físicas. La empresa predeterminada de una
-        ubicación solo clasifica operaciones ambiguas y no declara la propiedad contable de sus unidades.
-      </div>
+        ubicación solo clasifica operaciones ambiguas y no declara la propiedad contable de sus unidades.</p></details>
 
       {msg && <div className={msg.tipo === "error" ? "error" : "success"} style={{ marginBottom: 14 }}>{msg.texto}</div>}
 

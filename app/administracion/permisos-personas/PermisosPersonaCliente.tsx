@@ -118,8 +118,8 @@ export default function PermisosPersonaCliente() {
   }
 
   return (
-    <div className="card">
-      <h2>Permisos por persona</h2>
+    <div className="card admin-workspace-card">
+      <span className="eyebrow">ADMINISTRACIÓN</span><h1>Permisos por persona</h1>
       <p className="ayuda">
         Excepciones puntuales sobre el permiso que ya da el rol de esa persona. Sin excepción, se
         usa siempre el valor del rol (ver Permisos por rol).

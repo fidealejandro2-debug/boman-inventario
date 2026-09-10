@@ -118,8 +118,8 @@ export default function FranquiciasCliente() {
   if (cargando) return <p className="ayuda">Cargando franquicias…</p>;
 
   return (
-    <div className="card">
-      <h2>Franquicias</h2>
+    <div className="card admin-workspace-card">
+      <span className="eyebrow">ADMINISTRACIÓN</span><h1>Configurar franquicias</h1>
       <p className="ayuda">
         Cada franquicia es un local aislado: su usuario solo ve el stock de{" "}
         <strong>su almacén</strong> y su propia caja. La vinculación se hace por almacén,
@@ -135,7 +135,7 @@ export default function FranquiciasCliente() {
         </p>
       )}
 
-      <div className="filtros">
+      <div className="filtros filter-bar">
         <button
           onClick={() => {
             setForm({ ...VACIO });
