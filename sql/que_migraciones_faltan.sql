@@ -10,7 +10,13 @@ from(values
  (96, 'v96_cronograma_produccion.sql',           to_regclass('public.capacidad_produccion_diaria_v96') is not null),
  (99, 'v99_gestion_contratos.sql',               to_regprocedure('public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid)') is not null),
  (100,'v100_abonos_presupuesto_contratos.sql',   to_regprocedure('public.ajustar_finanzas_contrato_v100(uuid,numeric,numeric,text,uuid)') is not null),
- (102,'v102_sincronizacion_definitiva_bomansport.sql', to_regprocedure('public.tablero_produccion_v102()') is not null),
+ -- v124 reemplazo la firma sin parametros de v102 por una con boolean. La
+ -- presencia de cualquiera de las dos demuestra que el tablero base existe.
+ (102,'v102_sincronizacion_definitiva_bomansport.sql',
+   exists (
+     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+     where n.nspname='public' and p.proname='tablero_produccion_v102'
+   )),
  (107,'v107_permisos_persona_y_marca_blanca.sql',to_regclass('public.configuracion_sistema') is not null),
  (108,'v108_ingreso_contratos.sql',            to_regclass('public.contrato_ingresos_v108') is not null),
  (109,'v109_productos_franquicia.sql',         to_regclass('public.productos_creados_franquicia_v109') is not null),
@@ -67,6 +73,10 @@ from(values
    )),
  (131,'v131_cola_sincronizacion_bomansport.sql', to_regclass('public.bomansport_sincronizaciones') is not null),
  (132,'v132_inicio_atomico_importador.sql',      to_regprocedure('public.iniciar_importacion_bomansport_v132(text,uuid)') is not null),
- (133,'v133_cheques_sin_factura.sql',           to_regprocedure('public.regularizar_cheque_v133(uuid,uuid,text,uuid)') is not null)
+ (133,'v133_cheques_sin_factura.sql',           to_regprocedure('public.regularizar_cheque_v133(uuid,uuid,text,uuid)') is not null),
+ (134,'v134_registro_migraciones.sql',           to_regclass('public.schema_migrations_boman') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v134')),
+ (135,'v135_intentos_respaldo_contratos.sql',    to_regprocedure('public.registrar_intento_respaldo_v135(uuid,boolean,text)') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v135'))
 )as v(orden,archivo,existe)
 order by v.orden;

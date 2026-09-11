@@ -15,6 +15,7 @@ import {aplanarSpec,leerSpec,valorDeCampo,grupoPrendaJugador,etiquetaGrupo,cuent
 import estilos from "./IngresoContrato.module.css";
 import {TODOS_LOS_COLORES} from "./colores";
 import {FICHAS_PRENDA,fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPrenda} from "./specsPrendas";
+import { fechaISOEcuador } from "@/lib/utils";
 
 // Todas estas listas son copia literal de BomanSport/index.html: son la fuente
 // de verdad del negocio. Si aqui difieren aunque sea en una tilde o un espacio,
@@ -868,7 +869,7 @@ export function BriefHoja({form}:{form:Form}){
       <td className={estilos.bhVal}>{c.nombre_contrato_v115||c.cliente||"—"}{c.prioridad==="Urgente"&&<span className={estilos.bBadgeRojo}>⚠️ URGENTE</span>}{c.reposicion&&<span className={estilos.bBadgeRojo}>🔄 REPOSICIÓN</span>}</td>
       <td className={estilos.bhRespH} rowSpan={2}><div className={estilos.bhCod}>NUEVO CONTRATO</div>RESPONSABLE<div className={estilos.bhResp}>{c.vendedor_responsable||c.vendedor||"—"}</div></td>
      </tr>
-     <tr><td className={estilos.bhLbl}>FECHA DE INGRESO:</td><td className={estilos.bhVal}>{fechaCorta(new Date().toISOString().slice(0,10))}</td></tr>
+     <tr><td className={estilos.bhLbl}>FECHA DE INGRESO:</td><td className={estilos.bhVal}>{fechaCorta(fechaISOEcuador())}</td></tr>
      <tr><td className={estilos.bhLbl}>CLIENTE:</td><td className={estilos.bhVal} colSpan={2}>{c.cliente||"—"}</td></tr>
      <tr><td className={estilos.bhLbl}>FECHA DE ENTREGA:</td><td className={`${estilos.bhVal} ${estilos.bhEnt}`} colSpan={2}>{fechaCorta(c.fecha_entrega)||"—"}</td></tr>
      <tr><td className={estilos.bhLbl}>ENTREGA:</td><td className={estilos.bhVal} colSpan={2}>{c.forma_entrega||"—"}{c.direccion&&` · ${c.direccion}`}</td></tr>
@@ -952,7 +953,7 @@ export function BriefHoja({form}:{form:Form}){
      </div>)}</div>
     </section>}
 
-    <div className={estilos.bPie}>Brief generado {fechaCorta(new Date().toISOString().slice(0,10))} · Boman Sport</div>
+    <div className={estilos.bPie}>Brief generado {fechaCorta(fechaISOEcuador())} · Boman Sport</div>
    </article>
   </>;
 }

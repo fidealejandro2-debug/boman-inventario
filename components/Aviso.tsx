@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { mostrarAvisoDialogo } from "@/components/Dialogo";
 
 /**
  * Mensaje flotante de error o confirmación.
@@ -28,6 +29,22 @@ export default function Aviso({
   /** Encabezado de la confirmación: "Venta registrada", "Caja cerrada"… */
   titulo?: string;
 }) {
+  const cerrarRef = useRef(onCerrar);
+  const errorMostradoRef = useRef<string | null>(null);
+  cerrarRef.current = onCerrar;
+
+  useEffect(() => {
+    if (!error) {
+      errorMostradoRef.current = null;
+      return;
+    }
+    if (errorMostradoRef.current === error) return;
+    errorMostradoRef.current = error;
+    void mostrarAvisoDialogo(error, "No se pudo completar", true).finally(() => {
+      cerrarRef.current("error");
+    });
+  }, [error]);
+
   useEffect(() => {
     if (!aviso) return;
     const t = setTimeout(() => onCerrar("aviso"), segundos * 1000);
@@ -45,26 +62,10 @@ export default function Aviso({
     return () => window.removeEventListener("keydown", alTeclado);
   }, [error, aviso, onCerrar]);
 
-  if (!error && !aviso) return null;
+  if (!aviso) return null;
 
   return (
     <div className="aviso-flotante no-imprimir">
-      {error && (
-        <div className="aviso-tarjeta es-error" role="alert">
-          <span className="aviso-icono" aria-hidden="true">!</span>
-          <div className="aviso-cuerpo">
-            <strong>No se pudo completar</strong>
-            <p>{error}</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Cerrar mensaje"
-            onClick={() => onCerrar("error")}
-          >
-            ×
-          </button>
-        </div>
-      )}
       {aviso && (
         <div className="aviso-tarjeta es-ok" role="status">
           {/* El check se dibuja, no es un carácter: así se anima el trazo y la

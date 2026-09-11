@@ -125,3 +125,10 @@ El callback de la aplicación también acepta los enlaces estándar de Supabase,
 Si la base real ya tiene v11, ejecuta **una sola vez y en orden** las migraciones v12 a v17.
 Después de cada una ejecuta su archivo `sql/verificacion_vNN.sql`. Instala v16 antes de publicar
 la interfaz actual: las pantallas de Operaciones, Control y Stock consultan sus nuevas columnas.
+
+### Control de migraciones actuales
+
+- Ejecuta las migraciones siempre en orden y nunca en pestañas paralelas del SQL Editor.
+- Después de cada `vNNN_*.sql`, ejecuta su `verificacion_vNNN.sql` antes de publicar la interfaz que la consume.
+- `sql/que_migraciones_faltan.sql` comprueba los objetos testigo de la cadena reciente.
+- Desde v134, cada nueva migración debe insertar su propia fila en `public.schema_migrations_boman` dentro de la misma transacción. Las versiones anteriores quedan representadas por `baseline-v133`; no se inventan registros históricos individuales.

@@ -2,13 +2,17 @@
   "name": "boman-inventario",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "verificar": "node scripts/verificar-todo.js && npm test",
-    "test": "node --test \"lib/*.test.ts\""
+    "test": "node --test \"lib/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

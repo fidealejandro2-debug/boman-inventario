@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { mensajeError } from "./lib";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
+import { normalizarBeneficiosNomina } from "@/lib/integridadOperativa";
 
 /**
  * Décimos y fondos de reserva: mensualizados o acumulados.
@@ -51,15 +52,21 @@ export default function BeneficiosForm({
       return;
     }
     setGuardando(true);
+    const beneficios = normalizarBeneficiosNomina({
+      afiliado: esAfiliado,
+      decimoTercero: form.decimoTercero,
+      decimoCuarto: form.decimoCuarto,
+      fondosMensual: form.fondosMensual,
+    });
     const { error: fallo } = await supabase.rpc("configurar_beneficios_empleado_v30", {
       p_empleado_id: empleadoId,
       // La base también impone esta condición (v129). Se replica aquí para
       // que la solicitud y lo que ve el usuario sean exactamente lo mismo.
-      p_mensualiza_decimo_tercero: esAfiliado ? form.decimoTercero : false,
-      p_mensualiza_decimo_cuarto: esAfiliado ? form.decimoCuarto : false,
+      p_mensualiza_decimo_tercero: beneficios.decimoTercero,
+      p_mensualiza_decimo_cuarto: beneficios.decimoCuarto,
       // Sin afiliación no hay fondos de reserva que mensualizar; se manda el
       // default para no dejar el campo en un estado que la pantalla no mostró.
-      p_paga_fondos_reserva_mensual: esAfiliado ? form.fondosMensual : true,
+      p_paga_fondos_reserva_mensual: beneficios.fondosMensual,
       p_motivo: form.motivo.trim(),
       p_idempotency_key: nuevaClaveIdempotencia(),
     });

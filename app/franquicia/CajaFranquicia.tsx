@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { exportarCSV } from "@/lib/utils";
+import { calcularCierreCaja } from "@/lib/integridadOperativa";
 import Aviso from "@/components/Aviso";
 import type { Franquicia } from "./FranquiciaCliente";
 import {
@@ -297,11 +298,12 @@ export default function CajaFranquicia({
   }
 
   const cierreSeleccionado = cierres.find((c) => c.fecha === fechaCierre);
-  const saldoEsperado =
-    Number(saldoInicial || 0) +
-    Number(resumenDia.ingresos_efectivo || 0) -
-    Number(resumenDia.egresos_efectivo || 0);
-  const diferenciaCierre = Number(efectivoContado || 0) - saldoEsperado;
+  const { saldoEsperado, diferencia: diferenciaCierre } = calcularCierreCaja({
+    saldoInicial: Number(saldoInicial || 0),
+    ingresosEfectivo: Number(resumenDia.ingresos_efectivo || 0),
+    egresosEfectivo: Number(resumenDia.egresos_efectivo || 0),
+    efectivoContado: Number(efectivoContado || 0),
+  });
 
   async function cerrarCaja() {
     if (cierreSeleccionado?.estado === "cerrado") {

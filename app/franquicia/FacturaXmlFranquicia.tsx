@@ -11,6 +11,7 @@ import Aviso from "@/components/Aviso";
 import { pedirTextoDialogo } from "@/components/Dialogo";
 import type { Franquicia } from "./FranquiciaCliente";
 import { dinero, MEDIOS_PAGO, mensajeError } from "./lib";
+import { diferenciaPagos as calcularDiferenciaPagos } from "@/lib/integridadOperativa";
 
 type Producto = {
   producto_id: string;
@@ -223,7 +224,7 @@ export default function FacturaXmlFranquicia({
     (s, p) => s + Number(p.monto || 0),
     0
   );
-  const diferenciaPagos = Math.round((totalPagosMixtos - totalFactura) * 100) / 100;
+  const diferenciaPagos = calcularDiferenciaPagos(totalFactura, [totalPagosMixtos]);
   const pagos =
     medioPago === "mixto"
       ? (Object.entries(pagosMixtos) as [keyof PagoMixto, PagoMixto[keyof PagoMixto]][])

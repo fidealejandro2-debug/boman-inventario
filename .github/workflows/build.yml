@@ -16,13 +16,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          # package.json no fija una versión de Node (sin "engines" ni .nvmrc);
-          # se usa 20 LTS, la misma familia mayor que Vercel usa por defecto.
-          node-version: 20
+          # Node 24 ejecuta directamente las pruebas TypeScript con node:test
+          # y satisface el mínimo declarado en package.json.
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify SQL references and business rules
+        run: npm run verificar
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Build
         env:
