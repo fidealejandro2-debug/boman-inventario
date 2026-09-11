@@ -75,8 +75,19 @@ from(values
  (132,'v132_inicio_atomico_importador.sql',      to_regprocedure('public.iniciar_importacion_bomansport_v132(text,uuid)') is not null),
  (133,'v133_cheques_sin_factura.sql',           to_regprocedure('public.regularizar_cheque_v133(uuid,uuid,text,uuid)') is not null),
  (134,'v134_registro_migraciones.sql',           to_regclass('public.schema_migrations_boman') is not null
-   and exists (select 1 from public.schema_migrations_boman where id='v134')),
+   and exists (select 1 from public.schema_migrations_boman where id in ('v134','v134_registro'))),
+ (134,'v134_cronograma_prendas_multiplicadas.sql',
+   coalesce((select position('contratos_dia' in pg_get_functiondef(p.oid)) > 0
+               and position('totales_dia' in pg_get_functiondef(p.oid)) > 0
+               from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public' and p.proname='cronograma_produccion_v96'
+                and pg_get_function_identity_arguments(p.oid)='p_desde date, p_hasta date'
+              limit 1), false)),
  (135,'v135_intentos_respaldo_contratos.sql',    to_regprocedure('public.registrar_intento_respaldo_v135(uuid,boolean,text)') is not null
-   and exists (select 1 from public.schema_migrations_boman where id='v135'))
+   and exists (select 1 from public.schema_migrations_boman where id='v135')),
+ (136,'v136_reconciliar_registro_migraciones.sql',
+   exists (select 1 from public.schema_migrations_boman where id='v136')
+   and exists (select 1 from public.schema_migrations_boman where id='v134_registro')
+   and exists (select 1 from public.schema_migrations_boman where id='v134_cronograma'))
 )as v(orden,archivo,existe)
 order by v.orden;
