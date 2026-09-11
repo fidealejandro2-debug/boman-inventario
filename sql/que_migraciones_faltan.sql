@@ -35,6 +35,12 @@ from(values
                from pg_proc p join pg_namespace n on n.oid=p.pronamespace
               where n.nspname='public' and p.proname='cronograma_produccion_v96' limit 1),false)),
  (120,'v120_editar_contenido_contrato.sql',      to_regprocedure('public.actualizar_contrato_v120(uuid,jsonb,text,uuid)') is not null),
- (121,'v121_subestaciones_tablero.sql',           to_regprocedure('public.columnas_tablero_v121()') is not null)
+ (121,'v121_subestaciones_tablero.sql',           to_regprocedure('public.columnas_tablero_v121()') is not null),
+ -- v122 tambien reemplaza el tablero: el testigo es que ya devuelva el id del
+ -- contrato, que es lo que permite editar en la fila.
+ (122,'v122_tablero_editable.sql',
+   coalesce((select position($$'id',a.id$$ in pg_get_functiondef(p.oid))>0
+               from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public' and p.proname='tablero_produccion_v102' limit 1),false))
 )as v(orden,archivo,existe)
 order by v.orden;

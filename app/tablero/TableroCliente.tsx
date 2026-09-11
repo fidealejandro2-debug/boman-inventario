@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import estilos from "./Tablero.module.css";
 
 export type Etapa = {
@@ -11,18 +12,21 @@ export type Etapa = {
 };
 
 export type Fila = {
+  id: string;
   numero: string; corto: string; cliente: string; vendedor: string;
   mks: { i: string; d: string }[];
   prendas: number; prendasTxt: string; calidad: string[];
   urgente: boolean; atrasado: boolean; esExterior: boolean;
-  ingreso: string; entrega: string; entregaMs: number; inicio: string;
+  ingreso: string; entrega: string; entregaISO: string | null; entregaMs: number;
+  inicio: string; inicioISO: string | null;
   disenador: string; autorMockup: string; fabrica: number;
   obs: string; maquila: string; marca: string;
   muestras: { tpu: boolean; dtf: boolean };
   hechas: boolean[];
 };
 
-export type DatosTablero = { etapas: Etapa[]; filas: Fila[]; total: number; hora: string };
+export type DatosTablero = { etapas: Etapa[]; filas: Fila[]; total: number; hora: string;
+  disenadores?: string[]; autoresMockup?: string[] };
 
 type Filtro = "pend" | "todos" | "urg" | "tarde" | "fab2" | "muestras";
 
@@ -35,16 +39,48 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
   { valor: "muestras", etiqueta: "🧪 Faltan muestras" },
 ];
 
-export default function TableroCliente({ datos, puedeMarcar = false, estacionesPermitidas }: {
+export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar = false, estacionesPermitidas }: {
   datos: DatosTablero | { error: string };
   puedeMarcar?: boolean;
+  /** v122. Habilita el modo edicion: diseñador, autor de mockup, observacion
+   *  y fechas se cambian en la propia fila. */
+  puedeEditar?: boolean;
   /** v117. Con valores, la pantalla es la de un operario: solo sus estaciones
    *  y sin la opcion de ver el taller completo. Sin valores, tablero normal. */
   estacionesPermitidas?: string[];
 }) {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
   const [refrescando, refrescar] = useTransition();
   const [marcando, setMarcando] = useState("");
+  const [edicion, setEdicion] = useState(false);
+  const [guardando, setGuardando] = useState("");
+
+  // Todos los cambios de la fila pasan por la MISMA funcion que el editor del
+  // expediente (v99): las validaciones, el evento en el historial y el control
+  // de permiso viven en un solo sitio, no en dos que puedan discrepar.
+  //
+  // El motivo va fijo y no se pregunta. Aqui se corrige un dato suelto sobre la
+  // marcha; pedir diez caracteres por cada fecha haria que nadie use el tablero
+  // y se siga corrigiendo en la hoja. Quien cambio que y cuando si queda.
+  async function guardarCampo(f: Fila, cambios: Record<string, string>, etiqueta: string) {
+    if (!puedeEditar || guardando) return;
+    setGuardando(f.numero + etiqueta);
+    const { error } = await supabase.rpc("guardar_gestion_contrato_v99", {
+      p_contrato_id: f.id,
+      p_cambios: cambios,
+      p_motivo: "Cambio rápido desde el tablero de producción",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    setGuardando("");
+    if (error) {
+      await mostrarAvisoDialogo(
+        error.message.includes("guardar_gestion_contrato_v99") ? "Falta instalar v99 en Supabase." : error.message,
+        `No se pudo cambiar ${etiqueta}`, true);
+      return;
+    }
+    refrescar(() => router.refresh());
+  }
   // Marcar escribe en Supabase Y devuelve la marca a la hoja, porque las
   // estaciones del taller siguen trabajando en el tablero de Apps Script: si
   // solo se guardara aqui, el operario de Corte no veria el avance. La ruta
@@ -170,9 +206,16 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
           </h3>
           <p className="conteo">{visibles.length} de {datos.total} contratos · datos de {datos.hora}</p>
         </div>
-        <button className="secondary" onClick={() => refrescar(() => router.refresh())} disabled={refrescando}>
-          {refrescando ? "Actualizando..." : "🔄 Actualizar"}
-        </button>
+        <div className="form-inline">
+          {puedeEditar && (
+            <button className={edicion ? "" : "secondary"} onClick={() => setEdicion((x) => !x)}>
+              {edicion ? "🔒 Salir de edición" : "✏️ Modo edición"}
+            </button>
+          )}
+          <button className="secondary" onClick={() => refrescar(() => router.refresh())} disabled={refrescando}>
+            {refrescando ? "Actualizando..." : "🔄 Actualizar"}
+          </button>
+        </div>
       </div>
 
       <div className="grid-2">
@@ -211,6 +254,11 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
     )}
 
     <div className="card">
+      {edicion && <>
+        <datalist id="tablero-disenadores">{(hayError ? [] : datos.disenadores ?? []).map((d) => <option key={d} value={d} />)}</datalist>
+        <datalist id="tablero-autores">{(hayError ? [] : datos.autoresMockup ?? []).map((d) => <option key={d} value={d} />)}</datalist>
+        <p className="conteo" style={{ marginTop: 0 }}>Modo edición: los cambios se guardan al salir del campo y quedan en el historial del contrato.</p>
+      </>}
       <div className="tabla-scroll">
         <table>
           <thead>
@@ -248,18 +296,57 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
                       <strong className={estilos.numero}>{f.urgente ? "🔴 " : ""}{f.numero}</strong>
                       <div className={estilos.cliente} title={f.cliente}>{f.cliente}</div>
                       <div className="conteo">{f.vendedor} · {f.prendas} pr.{f.calidad.length ? ` · ${f.calidad.join(" · ")}` : ""}</div>
-                      {f.obs && <div className="badge bajo" style={{ marginTop: 3, whiteSpace: "normal", lineHeight: 1.3 }}>📝 {f.obs}</div>}
+                      {edicion ? (
+                        <input className={estilos.obsInput} defaultValue={f.obs} placeholder="📝 Observación para producción" disabled={guardando !== ""}
+                          onBlur={(e) => { const v = e.target.value.trim(); if (v !== f.obs) void guardarCampo(f, { observacion: v }, "la observación") }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} />
+                      ) : f.obs ? (
+                        <div className="badge bajo" style={{ marginTop: 3, whiteSpace: "normal", lineHeight: 1.3 }}>📝 {f.obs}</div>
+                      ) : null}
                     </div>
                   </div>
                 </td>
                 <td>
-                  <span className={f.atrasado ? "badge bajo" : "badge ok"}>{f.entrega || "sin fecha"}</span>
-                  {f.inicio && <div className="conteo">inicia {f.inicio}</div>}
+                  {edicion ? (
+                    <div className={estilos.campos}>
+                      <label className={estilos.campoMini}><span>Entrega</span>
+                        <input type="date" defaultValue={f.entregaISO ?? ""} disabled={guardando !== ""}
+                          onChange={(e) => void guardarCampo(f, { fecha_entrega: e.target.value }, "la entrega")} />
+                      </label>
+                      <label className={estilos.campoMini}><span>Inicia</span>
+                        <input type="date" defaultValue={f.inicioISO ?? ""} disabled={guardando !== ""}
+                          onChange={(e) => void guardarCampo(f, { fecha_inicio_produccion: e.target.value }, "el inicio")} />
+                      </label>
+                    </div>
+                  ) : (
+                    <>
+                      <span className={f.atrasado ? "badge bajo" : "badge ok"}>{f.entrega || "sin fecha"}</span>
+                      {f.inicio && <div className="conteo">inicia {f.inicio}</div>}
+                    </>
+                  )}
                 </td>
                 <td>
-                  {f.disenador || <span className="conteo">sin asignar</span>}
-                  {f.fabrica === 2 && <div className="badge ajuste">Fábrica 2</div>}
-                  {f.maquila && <div className="conteo">🏭 {f.maquila}</div>}
+                  {edicion ? (
+                    <div className={estilos.campos}>
+                      <label className={estilos.campoMini}><span>Diseñador</span>
+                        <input list="tablero-disenadores" defaultValue={f.disenador} placeholder="sin asignar" disabled={guardando !== ""}
+                          onBlur={(e) => { const v = e.target.value.trim(); if (v !== f.disenador) void guardarCampo(f, { disenador: v }, "el diseñador") }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} />
+                      </label>
+                      <label className={estilos.campoMini}><span>Mockup por</span>
+                        <input list="tablero-autores" defaultValue={f.autorMockup} placeholder="sin registrar" disabled={guardando !== ""}
+                          onBlur={(e) => { const v = e.target.value.trim(); if (v !== f.autorMockup) void guardarCampo(f, { autor_mockup: v }, "el autor del mockup") }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} />
+                      </label>
+                    </div>
+                  ) : (
+                    <>
+                      {f.disenador || <span className="conteo">sin asignar</span>}
+                      {f.autorMockup && <div className="conteo">🖌️ {f.autorMockup}</div>}
+                      {f.fabrica === 2 && <div className="badge ajuste">Fábrica 2</div>}
+                      {f.maquila && <div className="conteo">🏭 {f.maquila}</div>}
+                    </>
+                  )}
                 </td>
                 {columnas.map(({ et, i }) => (
                   <td key={`${f.numero}-${i}`} className={estilos.celda}>
