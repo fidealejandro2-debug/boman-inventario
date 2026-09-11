@@ -52,6 +52,16 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
 ];
 
 type FilaPrenda = { prenda: string; calidad: string; cantidad: number };
+type ArchivoDet = { id: string; drive: string; url: string; descripcion: string; prenda?: string; posicion?: string; tecnica?: string; observacion?: string };
+type EtapaDet = { area: string; etapa: string; operario: string; noAplica: boolean; cuando: string };
+type Detalle = { mockups: ArchivoDet[]; logos: ArchivoDet[]; etapas: EtapaDet[] };
+
+// Una imagen puede venir de Drive (lo importado de la hoja) o del bucket de
+// Supabase (lo ingresado en Vercel). El id de Drive manda porque de ahi sale la
+// miniatura publica; si no lo hay, la url guardada sirve tal cual.
+function fuenteImagen(a: ArchivoDet, ancho: number) {
+  return a.drive ? `https://drive.google.com/thumbnail?id=${a.drive}&sz=w${ancho}` : a.url;
+}
 
 export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar = false, puedeEditarContenido = false, estacionesPermitidas }: {
   datos: DatosTablero | { error: string };
@@ -76,6 +86,10 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
   const [filasPrenda, setFilasPrenda] = useState<FilaPrenda[]>([]);
   const [detalladas, setDetalladas] = useState(false);
   const [cargandoPrendas, setCargandoPrendas] = useState(false);
+  const [lupa, setLupa] = useState<Fila | null>(null);
+  const [detalle, setDetalle] = useState<Detalle | null>(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
   const [guardando, setGuardando] = useState("");
 
   // Todos los cambios de la fila pasan por la MISMA funcion que el editor del
@@ -132,6 +146,43 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
       if (d.aviso) await mostrarAvisoDialogo(d.aviso, "Ojo", true);
     }
     refrescar(() => router.refresh());
+  }
+
+  async function abrirLupa(f: Fila) {
+    setLupa(f); setDetalle(null); setCargandoDetalle(true);
+    const { data, error } = await supabase.rpc("archivos_contrato_v125", { p_contrato_id: f.id });
+    setCargandoDetalle(false);
+    if (error) { setLupa(null); return void mostrarAvisoDialogo(error.message.includes("archivos_contrato_v125") ? "Falta instalar v125 en Supabase." : error.message, "No se pudo abrir el contrato", true) }
+    setDetalle(data as Detalle);
+  }
+
+  // Misma cadena que el asistente de ingreso: la base reserva la ruta, el
+  // archivo sube al bucket y recien despues se apenda la fila. Si la subida
+  // falla, no queda una fila apuntando a un archivo que no existe.
+  async function subirFoto(f: Fila, file: File | null) {
+    if (!file || subiendo) return;
+    setSubiendo(true);
+    try {
+      const clave = crypto.randomUUID();
+      const prep = await supabase.rpc("preparar_archivo_contrato_v108", {
+        p_nombre_archivo: file.name, p_mime_type: file.type,
+        p_tamano_bytes: file.size, p_idempotency_key: clave,
+      });
+      if (prep.error) throw prep.error;
+      const path = (prep.data as { path: string; id: string }).path;
+      const subida = await supabase.storage.from("contratos-archivos").upload(path, file, { contentType: file.type, upsert: false });
+      if (subida.error) throw subida.error;
+      const publica = supabase.storage.from("contratos-archivos").getPublicUrl(path).data.publicUrl;
+      const alta = await supabase.rpc("agregar_archivo_contrato_v125", {
+        p_contrato_id: f.id, p_pendiente_id: (prep.data as { id: string }).id,
+        p_url: publica, p_descripcion: `Foto de ${f.numero}`, p_idempotency_key: crypto.randomUUID(),
+      });
+      if (alta.error) throw alta.error;
+      if (lupa?.id === f.id) await abrirLupa(f);
+      refrescar(() => router.refresh());
+    } catch (e) {
+      await mostrarAvisoDialogo(e instanceof Error ? e.message : "No se pudo subir la foto", "Error al subir", true);
+    } finally { setSubiendo(false) }
   }
 
   async function abrirPrendas(f: Fila) {
@@ -399,10 +450,12 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
         {visibles.map((f) => (
           <article key={`c-${f.numero}`} className={`${estilos.tarjeta} ${f.urgente ? estilos.urgente : f.atrasado ? estilos.atrasada : ""}`}>
             <div className={estilos.tFila}>
-              {f.mks[0]?.i && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className={estilos.tFoto} src={`https://drive.google.com/thumbnail?id=${f.mks[0].i}&sz=w160`} alt="" loading="lazy" />
-              )}
+              <button className={estilos.botonFoto} onClick={() => void abrirLupa(f)} title="Ver mockups, logos y avance">
+                {f.mks[0]?.i
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img className={estilos.tFoto} src={`https://drive.google.com/thumbnail?id=${f.mks[0].i}&sz=w160`} alt="" loading="lazy" />
+                  : <span className={`${estilos.tFoto} ${estilos.sinFoto}`}>🖼️</span>}
+              </button>
               <div className={estilos.tDatos}>
                 <div className={estilos.tNumero}>{f.urgente ? "🔴 " : ""}{f.numero}</div>
                 <div className={estilos.tCliente}>{f.cliente}</div>
@@ -471,10 +524,13 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
               <tr key={f.numero} className={f.atrasado ? "fila-alerta" : ""}>
                 <td className={estilos.colContrato}>
                   <div className={estilos.identidad}>
-                    {f.mks[0]?.i && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className={estilos.miniatura} src={`https://drive.google.com/thumbnail?id=${f.mks[0].i}&sz=w120`} alt="" loading="lazy" />
-                    )}
+                    <button className={estilos.botonFoto} onClick={() => void abrirLupa(f)} title="Ver mockups, logos y avance">
+                      {f.mks[0]?.i
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img className={estilos.miniatura} src={`https://drive.google.com/thumbnail?id=${f.mks[0].i}&sz=w120`} alt="" loading="lazy" />
+                        : <span className={estilos.sinFoto}>🖼️</span>}
+                      {f.mks.length > 1 && <span className={estilos.contadorFotos}>{f.mks.length}</span>}
+                    </button>
                     <div className={estilos.datos}>
                       <strong className={estilos.numero}>{f.urgente ? "🔴 " : ""}{f.numero}</strong>
                       <div className={estilos.cliente} title={f.cliente}>{f.cliente}</div>
@@ -560,6 +616,83 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
         </table>
       </div>
     </div>
+    {lupa && (
+      <div className={estilos.modalFondo} role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) setLupa(null) }}>
+        <div className={`${estilos.modal} ${estilos.modalAncho}`}>
+          <div className="header-row">
+            <div>
+              <h3 style={{ margin: 0 }}>{lupa.urgente ? "🔴 " : ""}{lupa.numero}</h3>
+              <p className="conteo">{lupa.cliente} · {lupa.vendedor || "sin vendedor"}</p>
+            </div>
+            <button className="secondary" onClick={() => setLupa(null)}>Cerrar</button>
+          </div>
+
+          <div className={estilos.fichaChips}>
+            <span className={lupa.atrasado ? "badge bajo" : "badge ok"}>🚚 Entrega {lupa.entrega || "sin fecha"}</span>
+            {lupa.inicio && <span className="badge">▶️ Inicia {lupa.inicio}</span>}
+            <span className="badge">{lupa.prendas} prendas</span>
+            {lupa.disenador ? <span className="badge">🎨 {lupa.disenador}</span> : <span className="badge bajo">🎨 sin asignar</span>}
+            {lupa.autorMockup && <span className="badge">🖌️ {lupa.autorMockup}</span>}
+            {lupa.maquila && <span className="badge">🏭 {lupa.maquila}</span>}
+            {lupa.fabrica === 2 && <span className="badge ajuste">Fábrica 2</span>}
+          </div>
+          {lupa.prendasTxt && <p className="conteo">🧵 {lupa.prendasTxt}</p>}
+          {lupa.obs && <div className="badge bajo" style={{ display: "block", whiteSpace: "normal", lineHeight: 1.4, margin: "8px 0" }}>📝 {lupa.obs}</div>}
+
+          {puedeEditarContenido && (
+            <label className={estilos.subirFoto}>
+              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={subiendo}
+                onChange={(e) => { void subirFoto(lupa, e.target.files?.[0] ?? null); e.target.value = "" }} />
+              {subiendo ? "Subiendo…" : "📷 Agregar foto del diseño"}
+            </label>
+          )}
+
+          {cargandoDetalle ? <p className="conteo">Cargando el contrato…</p> : detalle && <>
+            <h4 className={estilos.tituloBloque}>Mockups ({detalle.mockups.length})</h4>
+            {detalle.mockups.length ? (
+              <div className={estilos.galeria}>
+                {detalle.mockups.map((m) => (
+                  <figure key={m.id}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={fuenteImagen(m, 900)} alt={m.descripcion} loading="lazy" />
+                    <figcaption>{m.descripcion || "Mockup"}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : <p className="conteo">Este contrato no tiene mockups.</p>}
+
+            {!!detalle.logos.length && <>
+              <h4 className={estilos.tituloBloque}>Logos y sellos ({detalle.logos.length})</h4>
+              <div className={estilos.galeriaChica}>
+                {detalle.logos.map((l) => (
+                  <figure key={l.id}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={fuenteImagen(l, 320)} alt={l.descripcion} loading="lazy" />
+                    <figcaption>
+                      {[l.prenda, l.posicion].filter(Boolean).join(" · ") || l.descripcion || "Logo"}
+                      {l.tecnica && <span className="conteo"> · {l.tecnica}</span>}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </>}
+
+            <h4 className={estilos.tituloBloque}>Avance registrado ({detalle.etapas.length})</h4>
+            {detalle.etapas.length ? (
+              <ul className={estilos.avance}>
+                {detalle.etapas.map((e, k) => (
+                  <li key={k}>
+                    <strong>{e.area || "—"}</strong> · {e.etapa}{e.noAplica ? " (no aplica)" : ""}
+                    <span className="conteo"> — {e.operario || "sin registrar"}, {e.cuando}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="conteo">Todavía nadie marcó una etapa de este contrato.</p>}
+          </>}
+        </div>
+      </div>
+    )}
+
     {editandoPrendas && (
       <div className={estilos.modalFondo} role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditandoPrendas(null) }}>
         <div className={estilos.modal}>

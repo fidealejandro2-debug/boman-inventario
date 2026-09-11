@@ -47,6 +47,7 @@ from(values
  -- sigue existiendo, la migracion no se corrio (o se corrio a medias).
  (124,'v124_tablero_entregados.sql',
    to_regprocedure('public.tablero_produccion_v102(boolean)') is not null
-   and to_regprocedure('public.tablero_produccion_v102()') is null)
+   and to_regprocedure('public.tablero_produccion_v102()') is null),
+ (125,'v125_foto_y_detalle_tablero.sql',         to_regprocedure('public.agregar_archivo_contrato_v125(uuid,uuid,text,text,uuid)') is not null)
 )as v(orden,archivo,existe)
 order by v.orden;

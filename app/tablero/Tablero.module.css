@@ -229,3 +229,52 @@ button.tChip:disabled { opacity: .45; cursor: progress; }
    nadie prueba a hacer clic en un titulo "por si acaso". */
 .ordenable { cursor: pointer; user-select: none; }
 .ordenable:hover { color: var(--azul); text-decoration: underline; }
+
+/* La miniatura es el disparador de la lupa, asi que tiene que parecer
+   pulsable -y seguir pareciendolo cuando el contrato no tiene foto. */
+.botonFoto {
+  position: relative; padding: 0; border: 0; background: none;
+  cursor: pointer; border-radius: 8px; flex: 0 0 auto;
+}
+.botonFoto:hover { outline: 2px solid var(--azul); outline-offset: 1px; }
+.sinFoto {
+  display: flex; align-items: center; justify-content: center;
+  width: 42px; height: 42px; border-radius: 7px; font-size: 18px;
+  border: 1px dashed var(--borde); background: var(--superficie-suave);
+}
+.contadorFotos {
+  position: absolute; right: -4px; bottom: -4px;
+  min-width: 17px; padding: 0 4px; border-radius: 999px;
+  font-size: 10px; font-weight: 800; line-height: 17px;
+  background: var(--azul); color: #fff; border: 2px solid var(--superficie);
+}
+
+.modalAncho { max-width: 900px; }
+.fichaChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.tituloBloque {
+  margin: 16px 0 8px; padding-bottom: 4px;
+  font-size: 13px; border-bottom: 1px solid var(--borde);
+}
+.galeria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.galeriaChica { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.galeria figure, .galeriaChica figure {
+  margin: 0; padding: 8px; text-align: center;
+  border: 1px solid var(--borde); border-radius: 10px; background: var(--superficie-suave);
+}
+.galeria img { width: 100%; border-radius: 7px; display: block; }
+.galeriaChica img { width: 100%; height: 84px; object-fit: contain; display: block; }
+.galeria figcaption, .galeriaChica figcaption {
+  margin-top: 6px; font-size: 11.5px; line-height: 1.3; color: var(--texto-secundario);
+}
+
+/* El input de archivo nativo es feo e inconsistente entre navegadores; la
+   etiqueta hace de boton y el input queda oculto pero funcional. */
+.subirFoto {
+  display: inline-block; margin: 4px 0 8px; padding: 9px 16px;
+  border: 1px dashed var(--azul); border-radius: 9px; cursor: pointer;
+  font-weight: 700; font-size: 13px; color: var(--azul);
+}
+.subirFoto:hover { background: var(--superficie-suave); }
+.subirFoto input { display: none; }
+
+.avance { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
