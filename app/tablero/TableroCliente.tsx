@@ -90,6 +90,9 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [panel, setPanel] = useState<"" | "produccion" | "diseno">("");
+  const [pDesde, setPDesde] = useState(hoyISO());
+  const [pHasta, setPHasta] = useState(masDias(6));
   const [guardando, setGuardando] = useState("");
 
   // Todos los cambios de la fila pasan por la MISMA funcion que el editor del
@@ -361,6 +364,36 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
     });
   }, [filas, busqueda, filtro, orden, asc, columnas, desde, hasta]);
 
+  // Los dos informes salen de las filas que el tablero YA tiene en memoria, no
+  // de una consulta nueva: todo lo que piden -dia de inicio, prendas,
+  // diseñador, avance- ya viaja en el payload. Lo que no cubren es lo
+  // entregado, porque el tablero no lo trae; se avisa en cada panel.
+  const porDia = useMemo(() => {
+    const mapa = new Map<string, Fila[]>();
+    for (const f of filas) {
+      const d = f.inicioISO || "";
+      if (!d || d < pDesde || d > pHasta) continue;
+      (mapa.get(d) ?? mapa.set(d, []).get(d)!).push(f);
+    }
+    return Array.from(mapa.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [filas, pDesde, pHasta]);
+
+  const porDisenador = useMemo(() => {
+    const mapa = new Map<string, { contratos: number; prendas: number; pendientes: number; atrasados: number; urgentes: number }>();
+    for (const f of filas) {
+      const clave = f.disenador || "— Sin asignar";
+      const x = mapa.get(clave) ?? { contratos: 0, prendas: 0, pendientes: 0, atrasados: 0, urgentes: 0 };
+      x.contratos++; x.prendas += f.prendas;
+      if (columnas.some(({ et, i }) => !f.hechas[i] && !(et.exterior && !f.esExterior))) x.pendientes++;
+      if (f.atrasado) x.atrasados++;
+      if (f.urgente) x.urgentes++;
+      mapa.set(clave, x);
+    }
+    // Sin asignar primero: es lo que hay que repartir, no un diseñador mas.
+    return Array.from(mapa.entries()).sort((a, b) =>
+      a[0].startsWith("—") ? -1 : b[0].startsWith("—") ? 1 : b[1].prendas - a[1].prendas);
+  }, [filas, columnas]);
+
   if (hayError) {
     return <div className="card"><div className="header-row"><h3 style={{ margin: 0 }}>Tablero de producción</h3></div>
       <p className="conteo">No se pudo leer el tablero desde Boman Sport.</p>
@@ -430,6 +463,8 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
         <button className="secondary" onClick={exportar} disabled={!visibles.length} title="Descarga lo que está a la vista">
           ⬇️ Exportar
         </button>
+        <button className="secondary" onClick={() => setPanel("produccion")}>📅 Producción por día</button>
+        <button className="secondary" onClick={() => setPanel("diseno")}>🎨 Informe de diseño</button>
       </div>
       {filtro === "ent" && cargandoEnt && <p className="conteo">Cargando los entregados…</p>}
     </div>
@@ -616,6 +651,92 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
         </table>
       </div>
     </div>
+    {panel === "produccion" && (
+      <div className={estilos.modalFondo} role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) setPanel("") }}>
+        <div className={`${estilos.modal} ${estilos.modalAncho}`}>
+          <div className="header-row">
+            <div>
+              <h3 style={{ margin: 0 }}>Producción por día</h3>
+              <p className="conteo">Contratos según su fecha de inicio de producción.</p>
+            </div>
+            <button className="secondary" onClick={() => setPanel("")}>Cerrar</button>
+          </div>
+          <div className="form-inline" style={{ marginBottom: 10 }}>
+            <input type="date" value={pDesde} onChange={(e) => setPDesde(e.target.value)} aria-label="Desde" />
+            <input type="date" value={pHasta} onChange={(e) => setPHasta(e.target.value)} aria-label="Hasta" />
+            <button className="secondary btn-mini" onClick={() => { setPDesde(hoyISO()); setPHasta(hoyISO()) }}>Hoy</button>
+            <button className="secondary btn-mini" onClick={() => { setPDesde(hoyISO()); setPHasta(masDias(6)) }}>7 días</button>
+            <button className="secondary btn-mini"
+              onClick={() => exportarCSV(`produccion_${pDesde}_${pHasta}`, porDia.flatMap(([d, fs]) => fs.map((f) => ({
+                Dia: d, Contrato: f.numero, Cliente: f.cliente, Disenador: f.disenador,
+                Prendas: f.prendas, Desglose: f.prendasTxt, Entrega: f.entrega, Observacion: f.obs,
+              }))))}
+              disabled={!porDia.length}>⬇️ Excel</button>
+          </div>
+          <p className="conteo">No incluye lo entregado: el tablero no lo carga.</p>
+          {porDia.length ? porDia.map(([dia, fs]) => (
+            <section key={dia} style={{ marginTop: 12 }}>
+              <h4 className={estilos.tituloBloque}>
+                📅 {dia.split("-").reverse().join("/")} · {fs.length} contrato(s) · {fs.reduce((t, x) => t + x.prendas, 0)} prendas
+              </h4>
+              <ul className={estilos.avance}>
+                {fs.map((f) => (
+                  <li key={f.numero}>
+                    <strong>{f.urgente ? "🔴 " : ""}{f.numero}</strong> — {f.cliente}
+                    <span className="conteo"> · {f.disenador || "sin diseñador"} · {f.prendas} pr. · entrega {f.entrega || "—"}</span>
+                    {f.obs && <div className="badge bajo" style={{ whiteSpace: "normal", lineHeight: 1.3 }}>📝 {f.obs}</div>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )) : <div className="vacio">Ningún contrato inicia producción en ese rango.</div>}
+        </div>
+      </div>
+    )}
+
+    {panel === "diseno" && (
+      <div className={estilos.modalFondo} role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) setPanel("") }}>
+        <div className={`${estilos.modal} ${estilos.modalAncho}`}>
+          <div className="header-row">
+            <div>
+              <h3 style={{ margin: 0 }}>Informe de diseño</h3>
+              <p className="conteo">Carga por diseñador sobre los contratos en producción.</p>
+            </div>
+            <button className="secondary" onClick={() => setPanel("")}>Cerrar</button>
+          </div>
+          <div className="tabla-scroll">
+            <table>
+              <thead><tr>
+                <th>Diseñador</th><th className="num">Contratos</th><th className="num">Prendas</th>
+                <th className="num">Pendientes</th><th className="num">Atrasados</th><th className="num">Urgentes</th>
+              </tr></thead>
+              <tbody>
+                {porDisenador.map(([nombre, x]) => (
+                  <tr key={nombre} className={x.atrasados ? "fila-alerta" : ""}>
+                    <td><strong>{nombre}</strong></td>
+                    <td className="num">{x.contratos}</td>
+                    <td className="num">{x.prendas}</td>
+                    <td className="num">{x.pendientes}</td>
+                    <td className="num">{x.atrasados || ""}</td>
+                    <td className="num">{x.urgentes || ""}</td>
+                  </tr>
+                ))}
+                {!porDisenador.length && <tr><td colSpan={6} className="vacio">Sin contratos que repartir.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="form-inline" style={{ marginTop: 10 }}>
+            <button className="secondary btn-mini" disabled={!porDisenador.length}
+              onClick={() => exportarCSV(`informe_diseno_${hoyISO()}`, porDisenador.map(([nombre, x]) => ({
+                Disenador: nombre, Contratos: x.contratos, Prendas: x.prendas,
+                Pendientes: x.pendientes, Atrasados: x.atrasados, Urgentes: x.urgentes,
+              })))}>⬇️ Excel</button>
+            <span className="conteo">No incluye lo entregado: el tablero no lo carga.</span>
+          </div>
+        </div>
+      </div>
+    )}
+
     {lupa && (
       <div className={estilos.modalFondo} role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) setLupa(null) }}>
         <div className={`${estilos.modal} ${estilos.modalAncho}`}>
