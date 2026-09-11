@@ -89,6 +89,7 @@ const RESUMEN_VACIO: ResumenPanel = {
 const ETIQUETAS_ROL: Record<string, string> = {
   admin: "Administración", bodega: "Bodega", logistica: "Logística", gerencia: "Gerencia",
   tienda: "Tienda", control: "Control", nomina: "Nómina", franquiciado: "Franquiciado",
+  produccion: "Producción",
   vendedor_franquicia: "Vendedor de franquicia",
 };
 const ENTERO = new Intl.NumberFormat("es-EC", { maximumFractionDigits: 0 });
@@ -452,13 +453,19 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
       { etiqueta: "Documentos", valor: ENTERO.format(numero(resumen.nomina.documentos_por_vencer) + numero(resumen.nomina.documentos_vencidos)), nota: "vencidos o por vencer", tono: "rojo" },
       { etiqueta: "Roles", valor: ENTERO.format(numero(resumen.nomina.periodos_pendientes)), nota: "períodos abiertos", tono: "morado" },
     ];
+    if (perfil.rol === "produccion") return [
+      { etiqueta: "Órdenes activas", valor: ENTERO.format(numero(resumen.produccion.ordenes_activas)), nota: "en planta", tono: "azul" },
+      { etiqueta: "Atrasadas", valor: ENTERO.format(numero(resumen.produccion.ordenes_atrasadas)), nota: "requieren atención", tono: resumen.produccion.ordenes_atrasadas ? "rojo" : "verde" },
+      { etiqueta: "Por aprobar", valor: ENTERO.format(numero(resumen.produccion.pendientes_aprobacion)), nota: "órdenes", tono: "naranja" },
+      { etiqueta: "Alertas", valor: ENTERO.format(numero(notificaciones.no_leidas)), nota: "notificaciones sin leer", tono: "morado" },
+    ];
     return [
       { etiqueta: "Stock físico", valor: ENTERO.format(numero(resumen.inventario.stock_fisico)), nota: "unidades", tono: "azul" },
       { etiqueta: "Disponible", valor: ENTERO.format(numero(resumen.inventario.stock_disponible)), nota: "después de reservas", tono: "verde" },
       { etiqueta: "Bajo mínimo", valor: ENTERO.format(numero(resumen.inventario.productos_bajo_minimo)), nota: "productos", tono: resumen.inventario.productos_bajo_minimo ? "rojo" : "verde" },
       { etiqueta: "Actividad de hoy", valor: ENTERO.format(numero(resumen.inventario.movimientos_hoy)), nota: `${ENTERO.format(numero(resumen.inventario.transito_entrada))} un. en tránsito`, tono: "morado" },
     ];
-  }, [esFranquicia, perfil.rol, resumen]);
+  }, [esFranquicia, notificaciones.no_leidas, perfil.rol, resumen]);
 
   const alcanceAlmacenes = resumen.ambito.almacenes.length ? resumen.ambito.almacenes.join(", ") : "Sin almacenes asignados";
   const alcanceEmpresas = resumen.ambito.empresas.length ? resumen.ambito.empresas.join(", ") : "Sin empresas visibles";
@@ -468,6 +475,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     bodega: ["inventario", "operaciones", "compras", "produccion"],
     logistica: ["operaciones", "inventario", "contratos", "compras"],
     control: ["operaciones", "inventario", "compras", "produccion"],
+    produccion: ["produccion", "notificaciones"],
     nomina: ["nomina", "notificaciones", "reportes"],
     tienda: ["ventas", "inventario", "operaciones", "contratos"],
     franquiciado: ["franquicia", "inventario", "operaciones", "notificaciones"],

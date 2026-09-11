@@ -5,6 +5,7 @@ export type RolUsuario =
   | "gerencia"
   | "tienda"
   | "control"
+  | "produccion"
   | "nomina"
   | "franquiciado"
   | "vendedor_franquicia";

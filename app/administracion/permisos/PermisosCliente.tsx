@@ -16,7 +16,7 @@ type FilaMatriz = {
   configurable: boolean;
 };
 
-const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "nomina", "franquiciado", "vendedor_franquicia"];
+const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "produccion", "nomina", "franquiciado", "vendedor_franquicia"];
 const ETIQUETAS_ROL: Record<string, string> = {
   admin: "Administrador",
   bodega: "Bodega",
@@ -24,6 +24,7 @@ const ETIQUETAS_ROL: Record<string, string> = {
   gerencia: "Gerencia",
   tienda: "Tienda",
   control: "Control",
+  produccion: "Producción",
   nomina: "Nómina",
   franquiciado: "Franquiciado",
   vendedor_franquicia: "Vendedor de franquicia",

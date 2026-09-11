@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { mensajeError } from "./lib";
-import Aviso from "@/components/Aviso";
+import { mostrarAvisoDialogo } from "@/components/Dialogo";
 
 /**
  * Décimos y fondos de reserva: mensualizados o acumulados.
@@ -36,27 +36,27 @@ export default function BeneficiosForm({
 }) {
   const supabase = createClient();
   const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const esAfiliado = Boolean(afiliado);
   const [form, setForm] = useState({
-    decimoTercero: Boolean(decimoTerceroActual),
-    decimoCuarto: Boolean(decimoCuartoActual),
+    decimoTercero: esAfiliado && Boolean(decimoTerceroActual),
+    decimoCuarto: esAfiliado && Boolean(decimoCuartoActual),
     // El default de la base es true, pero solo aplica a afiliados.
     fondosMensual: fondosMensualActual ?? true,
     motivo: "",
   });
 
-  const esAfiliado = Boolean(afiliado);
-
   async function guardar() {
     if (form.motivo.trim().length < 10) {
-      return setError("Explica el motivo con al menos 10 caracteres: queda auditado.");
+      await mostrarAvisoDialogo("Explica el motivo con al menos 10 caracteres: queda auditado.", "Motivo incompleto", true);
+      return;
     }
     setGuardando(true);
-    setError(null);
     const { error: fallo } = await supabase.rpc("configurar_beneficios_empleado_v30", {
       p_empleado_id: empleadoId,
-      p_mensualiza_decimo_tercero: form.decimoTercero,
-      p_mensualiza_decimo_cuarto: form.decimoCuarto,
+      // La base también impone esta condición (v129). Se replica aquí para
+      // que la solicitud y lo que ve el usuario sean exactamente lo mismo.
+      p_mensualiza_decimo_tercero: esAfiliado ? form.decimoTercero : false,
+      p_mensualiza_decimo_cuarto: esAfiliado ? form.decimoCuarto : false,
       // Sin afiliación no hay fondos de reserva que mensualizar; se manda el
       // default para no dejar el campo en un estado que la pantalla no mostró.
       p_paga_fondos_reserva_mensual: esAfiliado ? form.fondosMensual : true,
@@ -64,28 +64,25 @@ export default function BeneficiosForm({
       p_idempotency_key: nuevaClaveIdempotencia(),
     });
     setGuardando(false);
-    if (fallo) return setError(mensajeError(fallo));
+    if (fallo) {
+      await mostrarAvisoDialogo(mensajeError(fallo), "No se pudo guardar", true);
+      return;
+    }
     onListo();
   }
 
   return (
     <div className="card-interna">
-      <Aviso
-        error={error}
-        aviso={null}
-        titulo="Listo"
-        onCerrar={() => setError(null)}
-      />
       <h4>Décimos y fondos de reserva — {nombre}</h4>
-      <p className="ayuda">
+      {esAfiliado && <p className="ayuda">
         Define si estos beneficios se pagan <strong>cada mes junto al sueldo</strong> o se
         acumulan para pagarse en su fecha. El décimo tercero acumulado se paga hasta el 24
         de diciembre; el décimo cuarto, hasta el 15 de marzo en la Costa e Insular y el 15
-        de agosto en la Sierra y Amazonía. Es una decisión del trabajador.
-      </p>
+        de agosto en la Sierra y Amazonía.
+      </p>}
 
       <div className="form-grid">
-        <label className="check-inline">
+        {esAfiliado && <label className="check-inline">
           <input
             type="checkbox"
             checked={form.decimoTercero}
@@ -97,9 +94,9 @@ export default function BeneficiosForm({
               ? "Se paga cada mes junto al sueldo."
               : "Se acumula y se paga hasta el 24 de diciembre."}
           </small>
-        </label>
+        </label>}
 
-        <label className="check-inline">
+        {esAfiliado && <label className="check-inline">
           <input
             type="checkbox"
             checked={form.decimoCuarto}
@@ -111,7 +108,7 @@ export default function BeneficiosForm({
               ? "Se paga cada mes junto al sueldo."
               : "Se acumula y se paga según la región del trabajador."}
           </small>
-        </label>
+        </label>}
 
         {esAfiliado ? (
           <label className="check-inline">
@@ -129,8 +126,9 @@ export default function BeneficiosForm({
           </label>
         ) : (
           <p className="aviso ancho-total">
-            Esta persona no está afiliada al IESS, así que no hay fondos de reserva que
-            configurar. Los décimos sí se mantienen: son un derecho de todo trabajador.
+            Esta persona no está afiliada al IESS. Según la regla operativa de la empresa,
+            el rol no calculará décimo tercero ni décimo cuarto —mensualizados o acumulados—
+            ni fondos de reserva. La mensualización de décimos quedará desactivada.
           </p>
         )}
 

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "nomina", "franquiciado", "vendedor_franquicia"] as const;
+const ROLES = ["admin", "bodega", "logistica", "gerencia", "tienda", "control", "produccion", "nomina", "franquiciado", "vendedor_franquicia"] as const;
 type Rol = (typeof ROLES)[number];
 const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "nomina"];
 const ROLES_UN_SOLO_ALMACEN: Rol[] = ["franquiciado", "vendedor_franquicia"];

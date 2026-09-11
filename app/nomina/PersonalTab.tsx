@@ -451,7 +451,7 @@ export default function PersonalTab({
                         >
                           Sueldo / IESS
                         </button>
-                        <button
+                        {f.afiliado && <button
                           className="btn-mini secondary"
                           onClick={() => {
                             setEditando(null);
@@ -461,7 +461,7 @@ export default function PersonalTab({
                           }}
                         >
                           Décimos
-                        </button>
+                        </button>}
                       </>
                     )}
                   </td>

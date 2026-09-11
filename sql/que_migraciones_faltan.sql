@@ -51,6 +51,19 @@ from(values
  (125,'v125_foto_y_detalle_tablero.sql',         to_regprocedure('public.agregar_archivo_contrato_v125(uuid,uuid,text,text,uuid)') is not null),
  (126,'v126_estacion_exteriores.sql',            to_regprocedure('public.es_contrato_exterior_v126(text)') is not null),
  (127,'v127_personal_diseno_nomina.sql',          to_regprocedure('public.asignar_personal_diseno_v127(uuid,text,uuid,text,uuid)') is not null),
- (128,'v128_colaboradores_diseno_externos.sql',   to_regclass('public.colaboradores_diseno_v128') is not null)
+ (128,'v128_colaboradores_diseno_externos.sql',   to_regclass('public.colaboradores_diseno_v128') is not null),
+ (129,'v129_decimos_mensualizados_solo_afiliados.sql', to_regprocedure('public.normalizar_beneficios_rol_v129()') is not null),
+ (130,'v130_paso1 + v130_paso2_rol_produccion.sql',
+   exists (
+     select 1
+     from pg_enum e join pg_type t on t.oid=e.enumtypid
+     join pg_namespace n on n.oid=t.typnamespace
+     where n.nspname='public' and t.typname='rol_usuario' and e.enumlabel='produccion'
+   )
+   and exists (
+     select 1 from public.rol_permisos rp
+     where rp.rol::text='produccion' and rp.permiso_codigo='produccion.acceder'
+       and rp.permitido
+   ))
 )as v(orden,archivo,existe)
 order by v.orden;

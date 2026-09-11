@@ -310,7 +310,7 @@ export default function RolImpresion({
           </tbody>
         </table>
 
-        {beneficios && (
+        {beneficios && real.afiliado && (
           <table className="rol-tabla">
             <thead>
               <tr className="rol-verde">
