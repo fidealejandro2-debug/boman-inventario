@@ -146,7 +146,7 @@ begin
   return jsonb_build_object('ok',true,'duplicado',false,'numero',v_c.numero_documento);
 end;$v133$;
 
--- La vista agrega las dos columnas nuevas. Copia de v104 con eso mas.
+-- La vista agrega las columnas nuevas. Copia de v104 con eso mas.
 create or replace view public.vista_instrumentos_tesoreria_v104
 with(security_invoker = true) as
 select i.id, i.grupo_id, i.cuenta_bancaria_id,
@@ -159,8 +159,13 @@ select i.id, i.grupo_id, i.cuenta_bancaria_id,
   coalesce(a.monto_aplicado,0)::numeric(16,2) as monto_aplicado,
   greatest(i.monto-coalesce(a.monto_aplicado,0),0)::numeric(16,2) as monto_sin_asignar,
   i.pago_v73_id, i.importacion_linea_id, i.reemplaza_instrumento_id,
-  i.comprobante_estado, i.comprobante_id, c.numero_documento as comprobante_numero,
-  i.nota, i.created_at, i.updated_at
+  i.nota, i.created_at, i.updated_at,
+  -- Las tres nuevas van AL FINAL y no junto a lo que se parece. No es estetica:
+  -- create or replace view solo admite AGREGAR columnas al final. Ponerlas en
+  -- medio significa renombrar las que venian despues, y Postgres lo rechaza con
+  -- "cannot change name of view column". Borrar la vista tampoco vale:
+  -- vista_resumen_compromisos_v104 depende de esta.
+  i.comprobante_estado, i.comprobante_id, c.numero_documento as comprobante_numero
 from public.tesoreria_instrumentos_pago i
 left join public.tesoreria_cuentas_bancarias cb on cb.id=i.cuenta_bancaria_id
 join public.empresas e on e.id=i.empresa_pagadora_id
