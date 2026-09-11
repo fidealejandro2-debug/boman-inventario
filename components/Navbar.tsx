@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
 import BomanLogo from "@/components/BomanLogo";
@@ -164,6 +164,7 @@ function nombreParaMenu(nombreCompleto: string) {
 export default function Navbar({ perfil }: { perfil: Perfil }) {
   const router = useRouter();
   const pathname = usePathname();
+  const buscarRef = useRef<HTMLInputElement>(null);
   const [movilAbierto, setMovilAbierto] = useState(false);
   const [contraido, setContraido] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -187,7 +188,16 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     function cerrarConEscape(evento: KeyboardEvent) {
-      if (evento.key === "Escape") setMovilAbierto(false);
+      if (evento.key === "Escape") {
+        setMovilAbierto(false);
+        setBusqueda("");
+        buscarRef.current?.blur();
+      }
+      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLocaleLowerCase() === "k") {
+        evento.preventDefault();
+        if (window.matchMedia("(max-width: 859px)").matches) abrirMenuMovil();
+        window.setTimeout(() => buscarRef.current?.focus(), 40);
+      }
     }
     document.addEventListener("keydown", cerrarConEscape);
     return () => document.removeEventListener("keydown", cerrarConEscape);
@@ -458,7 +468,9 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
 
         <div className="nav-busqueda">
           <Icono nombre="buscar" size={17} />
-          <input value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} placeholder="Buscar módulo…" aria-label="Buscar módulo" />
+          <input ref={buscarRef} value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} placeholder="Buscar módulo o tarea…" aria-label="Buscar módulo o tarea" />
+          {!busqueda && <kbd>Ctrl K</kbd>}
+          {busqueda && <button type="button" onClick={() => { setBusqueda(""); buscarRef.current?.focus(); }} aria-label="Limpiar búsqueda">×</button>}
         </div>
 
         <div className="nav-scroll">
