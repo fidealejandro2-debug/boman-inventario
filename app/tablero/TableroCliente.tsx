@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
+// El MISMO catálogo que usa el ingreso de contratos. Escribir el nombre a mano
+// dejaba "Camiseta", "camisetas" y "Camiseta Jugador" como tres prendas
+// distintas para el dashboard y el cronograma, que agrupan por el texto exacto.
+import { CALIDADES_CONTRATO, PRENDAS_CONTRATO } from "@/lib/catalogosContrato";
 import estilos from "./Tablero.module.css";
 
 export type Etapa = {
@@ -55,6 +59,7 @@ type FilaPrenda = { prenda: string; calidad: string; cantidad: number };
 type ArchivoDet = { id: string; drive: string; url: string; descripcion: string; prenda?: string; posicion?: string; tecnica?: string; observacion?: string };
 type EtapaDet = { area: string; etapa: string; operario: string; noAplica: boolean; cuando: string };
 type Detalle = { mockups: ArchivoDet[]; logos: ArchivoDet[]; etapas: EtapaDet[] };
+type PersonaDiseno = { id: string; nombre: string; cargo: string; departamento: string; disenador: boolean; mockup: boolean };
 
 // Una imagen puede venir de Drive (lo importado de la hoja) o del bucket de
 // Supabase (lo ingresado en Vercel). El id de Drive manda porque de ahi sale la
@@ -94,6 +99,47 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
   const [pDesde, setPDesde] = useState(hoyISO());
   const [pHasta, setPHasta] = useState(masDias(6));
   const [guardando, setGuardando] = useState("");
+  const [personalDiseno, setPersonalDiseno] = useState<PersonaDiseno[] | null>(null);
+
+  useEffect(() => {
+    let vigente = true;
+    void supabase.rpc("listar_personal_diseno_v127").then(({ data, error }) => {
+      if (vigente) setPersonalDiseno(!error && Array.isArray(data) ? data as PersonaDiseno[] : null);
+    });
+    return () => { vigente = false };
+  }, [supabase]);
+
+  const personasPara = (tipo: "disenador" | "mockup") => {
+    const todas = personalDiseno ?? [];
+    const recomendadas = todas.filter((persona) => persona[tipo]);
+    return recomendadas.length ? recomendadas : todas;
+  };
+
+  function idPersonaActual(nombre: string, tipo: "disenador" | "mockup") {
+    const normal = nombre.trim().toLocaleLowerCase("es");
+    return personasPara(tipo).find((persona) => persona.nombre.trim().toLocaleLowerCase("es") === normal)?.id ?? (nombre ? `historico:${nombre}` : "");
+  }
+
+  async function asignarPersonal(f: Fila, tipo: "disenador" | "mockup", empleadoId: string) {
+    if (!puedeEditar || guardando || empleadoId.startsWith("historico:")) return;
+    const etiqueta = tipo === "disenador" ? "el diseñador" : "el responsable del mockup";
+    setGuardando(f.numero + etiqueta);
+    const { error } = await supabase.rpc("asignar_personal_diseno_v127", {
+      p_contrato_id: f.id,
+      p_tipo: tipo,
+      p_empleado_id: empleadoId || null,
+      p_motivo: "Asignación desde el tablero de producción",
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    setGuardando("");
+    if (error) {
+      await mostrarAvisoDialogo(
+        error.message.includes("asignar_personal_diseno_v127") ? "Falta instalar v127 en Supabase." : error.message,
+        `No se pudo cambiar ${etiqueta}`, true);
+      return;
+    }
+    refrescar(() => router.refresh());
+  }
 
   // Todos los cambios de la fila pasan por la MISMA funcion que el editor del
   // expediente (v99): las validaciones, el evento en el historial y el control
@@ -477,9 +523,13 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
 
     <div className="card">
       {edicion && <>
-        <datalist id="tablero-disenadores">{(hayError ? [] : datos.disenadores ?? []).map((d) => <option key={d} value={d} />)}</datalist>
-        <datalist id="tablero-autores">{(hayError ? [] : datos.autoresMockup ?? []).map((d) => <option key={d} value={d} />)}</datalist>
-        <p className="conteo" style={{ marginTop: 0 }}>Modo edición: los cambios se guardan al salir del campo y quedan en el historial del contrato.</p>
+        {personalDiseno === null && <>
+          <datalist id="tablero-disenadores">{(hayError ? [] : datos.disenadores ?? []).map((d) => <option key={d} value={d} />)}</datalist>
+          <datalist id="tablero-autores">{(hayError ? [] : datos.autoresMockup ?? []).map((d) => <option key={d} value={d} />)}</datalist>
+        </>}
+        <p className="conteo" style={{ marginTop: 0 }}>{personalDiseno
+          ? "Modo edición: diseño y mockups se asignan al personal activo registrado en Nómina."
+          : "Modo edición: instala v127 para seleccionar responsables directamente desde Nómina."}</p>
       </>}
       <div className={estilos.tarjetas}>
         {visibles.map((f) => (
@@ -608,14 +658,24 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
                   {edicion ? (
                     <div className={estilos.campos}>
                       <label className={estilos.campoMini}><span>Diseñador</span>
-                        <input list="tablero-disenadores" defaultValue={f.disenador} placeholder="sin asignar" disabled={guardando !== ""}
+                        {personalDiseno ? <select value={idPersonaActual(f.disenador, "disenador")} disabled={guardando !== ""}
+                          onChange={(e) => void asignarPersonal(f, "disenador", e.target.value)}>
+                          <option value="">Sin asignar</option>
+                          {idPersonaActual(f.disenador, "disenador").startsWith("historico:") && <option value={`historico:${f.disenador}`} disabled>{f.disenador} · sin vínculo</option>}
+                          {personasPara("disenador").map((persona) => <option key={persona.id} value={persona.id}>{persona.nombre} · {persona.cargo}</option>)}
+                        </select> : <input list="tablero-disenadores" defaultValue={f.disenador} placeholder="sin asignar" disabled={guardando !== ""}
                           onBlur={(e) => { const v = e.target.value.trim(); if (v !== f.disenador) void guardarCampo(f, { disenador: v }, "el diseñador") }}
-                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} />
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} />}
                       </label>
                       <label className={estilos.campoMini}><span>Mockup por</span>
-                        <input list="tablero-autores" defaultValue={f.autorMockup} placeholder="sin registrar" disabled={guardando !== ""}
+                        {personalDiseno ? <select value={idPersonaActual(f.autorMockup, "mockup")} disabled={guardando !== ""}
+                          onChange={(e) => void asignarPersonal(f, "mockup", e.target.value)}>
+                          <option value="">Sin registrar</option>
+                          {idPersonaActual(f.autorMockup, "mockup").startsWith("historico:") && <option value={`historico:${f.autorMockup}`} disabled>{f.autorMockup} · sin vínculo</option>}
+                          {personasPara("mockup").map((persona) => <option key={persona.id} value={persona.id}>{persona.nombre} · {persona.cargo}</option>)}
+                        </select> : <input list="tablero-autores" defaultValue={f.autorMockup} placeholder="sin registrar" disabled={guardando !== ""}
                           onBlur={(e) => { const v = e.target.value.trim(); if (v !== f.autorMockup) void guardarCampo(f, { autor_mockup: v }, "el autor del mockup") }}
-                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} />
+                          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }} />}
                       </label>
                     </div>
                   ) : (
@@ -833,16 +893,28 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
           {cargandoPrendas ? <p className="conteo">Leyendo las prendas…</p> : <>
             {filasPrenda.map((x, i) => (
               <div className="form-inline" key={i} style={{ marginBottom: 6 }}>
-                <input value={x.prenda} placeholder="Prenda" style={{ flex: 1, minWidth: 150 }}
-                  onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, prenda: e.target.value } : y))} />
-                <input value={x.calidad} placeholder="Calidad" style={{ width: 130 }}
-                  onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, calidad: e.target.value } : y))} />
+                <select value={x.prenda} style={{ flex: 1, minWidth: 170 }}
+                  onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, prenda: e.target.value } : y))}>
+                  <option value="">Selecciona la prenda…</option>
+                  {PRENDAS_CONTRATO.map((n) => <option key={n} value={n}>{n}</option>)}
+                  {/* Un contrato viejo puede traer un nombre que ya no esta en
+                      el catalogo. Se agrega como opcion propia para no
+                      perderlo ni cambiarlo sin querer al editar otra fila. */}
+                  {!!x.prenda && !PRENDAS_CONTRATO.includes(x.prenda as typeof PRENDAS_CONTRATO[number]) && <option value={x.prenda}>{x.prenda} (nombre antiguo)</option>}
+                </select>
+                <select value={x.calidad} style={{ width: 150 }}
+                  onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, calidad: e.target.value } : y))}>
+                  <option value="">Sin calidad</option>
+                  {CALIDADES_CONTRATO.map((n) => <option key={n} value={n}>{n}</option>)}
+                  {!!x.calidad && !CALIDADES_CONTRATO.includes(x.calidad as typeof CALIDADES_CONTRATO[number]) && <option value={x.calidad}>{x.calidad}</option>}
+                </select>
                 <input type="number" min={0} value={x.cantidad} style={{ width: 80 }}
                   onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, cantidad: Number(e.target.value) } : y))} />
                 <button className="secondary btn-mini" onClick={() => setFilasPrenda((p) => p.filter((_, k) => k !== i))}>Quitar</button>
               </div>
             ))}
-            <button className="secondary btn-mini" onClick={() => setFilasPrenda((p) => [...p, { prenda: "", calidad: "", cantidad: 0 }])}>+ Agregar prenda</button>
+            <button className="secondary btn-mini" onClick={() => setFilasPrenda((p) => [...p, { prenda: "", calidad: "", cantidad: 0 }])}>＋ Agregar prenda</button>
+            <p className="conteo">Elige cada prenda de la lista y su cantidad. Pensado para contratos digitados a mano.</p>
             <div className="header-row" style={{ marginTop: 12 }}>
               <strong>Total: {filasPrenda.reduce((s, x) => s + (Number(x.cantidad) || 0), 0)} prendas</strong>
               <button disabled={guardando === "prendas"} onClick={() => void guardarPrendas(false)}>

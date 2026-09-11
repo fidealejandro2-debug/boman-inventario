@@ -49,6 +49,7 @@ from(values
    to_regprocedure('public.tablero_produccion_v102(boolean)') is not null
    and to_regprocedure('public.tablero_produccion_v102()') is null),
  (125,'v125_foto_y_detalle_tablero.sql',         to_regprocedure('public.agregar_archivo_contrato_v125(uuid,uuid,text,text,uuid)') is not null),
- (126,'v126_estacion_exteriores.sql',            to_regprocedure('public.es_contrato_exterior_v126(text)') is not null)
+ (126,'v126_estacion_exteriores.sql',            to_regprocedure('public.es_contrato_exterior_v126(text)') is not null),
+ (127,'v127_personal_diseno_nomina.sql',          to_regprocedure('public.asignar_personal_diseno_v127(uuid,text,uuid,text,uuid)') is not null)
 )as v(orden,archivo,existe)
 order by v.orden;

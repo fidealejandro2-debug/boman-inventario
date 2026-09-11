@@ -14,7 +14,7 @@ import {FICHAS_PRENDA,fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPren
 // el brief y la migracion v94 dejan de cuadrar (paso con "Semi profesional" vs
 // "Semiprofesional" y con "Sin calidad" vs "Estandar").
 const PASOS=["Vendedor","Contrato","Prendas","Mockups","Especificaciones","Jugadores","Cierre"];
-const PRENDAS=["Camiseta Jugador","Camiseta Jugador M/L","Pantaloneta Jugador","Camiseta Arquero","Camiseta Arquero M/L","Pantaloneta Arquero","Arquero Completo","Uniformes Completos","Camiseta Polo","Camiseta Polo M/L","Chompa","Pantalón","Exterior Completo","Rompevientos","Chompa de Frío","Chompa Frío 3/4","Chompas Retro","Chompa Deportiva","Hoodie","Buzo de Compresión","Chaleco","Medias","Bandera","Cinta Capitán","Bermudas","Falda Short","Licra","Bolsos","BVDS"];
+export const PRENDAS=["Camiseta Jugador","Camiseta Jugador M/L","Pantaloneta Jugador","Camiseta Arquero","Camiseta Arquero M/L","Pantaloneta Arquero","Arquero Completo","Uniformes Completos","Camiseta Polo","Camiseta Polo M/L","Chompa","Pantalón","Exterior Completo","Rompevientos","Chompa de Frío","Chompa Frío 3/4","Chompas Retro","Chompa Deportiva","Hoodie","Buzo de Compresión","Chaleco","Medias","Bandera","Cinta Capitán","Bermudas","Falda Short","Licra","Bolsos","BVDS"];
 // Rompevientos se muestra como "Chompa de Lluvia" pero se guarda con su nombre
 // interno: el resto del sistema (brief, tallas, facturacion) usa el interno.
 const PRENDA_LABEL_ESPECIAL:Record<string,string>={"Rompevientos":"Chompa de Lluvia"};
@@ -23,7 +23,7 @@ const etiquetaPrenda=(p:string)=>PRENDA_LABEL_ESPECIAL[p]||p;
 const PRENDA_EXPANSION:Record<string,string[]>={"Uniformes Completos":["Camiseta Jugador","Pantaloneta Jugador"],"Arquero Completo":["Camiseta Arquero","Pantaloneta Arquero"],"Exterior Completo":["Chompa","Pantalón"]};
 const PRENDAS_SIN_TALLA=["Medias","Bandera","Cinta Capitán"];
 const PRENDAS_CANTIDAD_GENERAL=["Bolsos"];
-const CALIDADES=["Semiprofesional","Competición","Profesional","Amateur","Estándar"];
+export const CALIDADES=["Semiprofesional","Competición","Profesional","Amateur","Estándar"];
 // Las prendas "conjunto" se expanden en sus componentes y las que no llevan
 // talla (medias, bandera, cinta) no generan seccion de tallas.
 // Logos: posiciones validas segun la prenda, tal cual index.html
@@ -346,26 +346,39 @@ const texto=(v:unknown)=>String(v??"").trim();
 // Compatibilidad al cargar una reposición: el jsonb `spec` guardado puede venir con la
 // forma nueva {campos,observacion}, con la vieja {indicaciones:"…"} o con cualquier otra.
 // Nunca se vuelca JSON crudo en pantalla — eso era justo lo que el vendedor veía antes.
+// Las specs migradas de BomanSport vienen ANIDADAS:
+//   {"cuello":{"tipo":"Normal","forma":"Redondo","botones":{"tiene":"Sí"}}}
+// Antes se aplanaban juntando los valores con " · ", y eso producia dos
+// desastres: un solo campo "Cuello" con seis valores pegados, y un
+// "[object Object]" en medio cuando el valor anidado tenia otro objeto dentro
+// (botones). Ahora se aplana a claves COMPUESTAS en snake_case
+// (cuello_tipo, cuello_forma, punos_tecnica, talla_origen...), que son
+// exactamente los ids que usa FICHAS_PRENDA: un contrato migrado se imprime
+// con las mismas etiquetas y el mismo orden que uno cargado en el sistema.
+const aSnake=(k:string)=>k.replace(/([a-z0-9])([A-Z])/g,"$1_$2").toLowerCase();
+function aplanarSpec(o:Record<string,unknown>,prefijo=""):Record<string,string>{
+ const out:Record<string,string>={};
+ for(const [k,v] of Object.entries(o)){
+  if(!prefijo&&(k==="observacion"||k==="indicaciones"))continue;
+  if(v===null||v===undefined)continue;
+  const id=prefijo?`${prefijo}_${aSnake(k)}`:aSnake(k);
+  if(Array.isArray(v)){const t=v.map(texto).filter(Boolean).join(" · ");if(t)out[id]=t}
+  else if(typeof v==="object")Object.assign(out,aplanarSpec(v as Record<string,unknown>,id));
+  else{const t=texto(v);if(t)out[id]=t}
+ }
+ return out;
+}
+// Compatibilidad al cargar una reposición o un contrato guardado: el jsonb
+// `spec` puede venir con la forma nueva {campos,observacion}, con la vieja
+// {indicaciones:"…"}, anidada, o con cualquier otra. Nunca se vuelca JSON
+// crudo en pantalla — eso era justo lo que el vendedor veía antes.
 function leerSpec(spec:unknown):{campos:Record<string,string>;observacion:string}{
  if(!spec||typeof spec!=="object")return{campos:{},observacion:texto(spec)};
  const o=spec as Record<string,unknown>;
  const crudo=o.campos&&typeof o.campos==="object"?o.campos as Record<string,unknown>:null;
- const campos=crudo?Object.fromEntries(Object.entries(crudo).map(([k,v])=>[k,texto(v)])):{};
- let observacion=texto(o.observacion)||texto(o.indicaciones);
- // Las specs migradas de BomanSport vienen anidadas ({"punos":{"tipo":"Aparte
- // Rib","tecnica":"Sublimado"}}). Se aplanan a "Aparte Rib · Sublimado" en vez
- // de descartarlas: si no, una reposicion de un contrato viejo perderia toda
- // su ficha tecnica en silencio.
- if(!Object.keys(campos).length){
-  for(const [clave,valor] of Object.entries(o)){
-   if(clave==="observacion"||clave==="indicaciones"||valor==null)continue;
-   const plano=typeof valor==="object"
-    ?Object.values(valor as Record<string,unknown>).map(texto).filter(Boolean).join(" · ")
-    :texto(valor);
-   if(plano)campos[clave]=plano;
-  }
- }
- return{campos,observacion};
+ const observacion=texto(o.observacion)||texto(o.indicaciones);
+ if(crudo)return{campos:aplanarSpec(crudo),observacion};
+ return{campos:aplanarSpec(o),observacion};
 }
 function Campo({titulo,children,ancho=false}:{titulo:string;children:ReactNode;ancho?:boolean}){return <label className={ancho?estilos.ancho:""}><span>{titulo}</span>{children}</label>}
 
@@ -852,7 +865,24 @@ export function BriefHoja({form}:{form:Form}){
  const mockupsPortada=agrupado?[]:mockups.slice(0,2);
  // En portada el legado muestra Mockup 1 (y 2) grandes; los demas bajan a la
  // cuadricula de la segunda pagina, no desaparecen.
- const mockupsCuadricula=agrupado?mockupsSoloFoto:mockups.slice(2).map((m,k)=>({m,i:k+2}));
+ const mockupsCuadricula=agrupado?[]:mockups.slice(2).map((m,k)=>({m,i:k+2}));
+ // En orden de mockup, sin excepciones. Antes los que solo tienen foto se
+ // pintaban TODOS juntos antes de las secciones con contenido, asi que el
+ // Mockup 3 aparecia solo, arriba del Mockup 1. Ahora se recorre la lista una
+ // vez y los solo-foto consecutivos se agrupan en una fila compartida, en el
+ // lugar que les toca (mismo criterio que _flushFotoSolo_ del legado: juntos
+ // para no gastar media hoja en una foto sola, pero sin salirse del orden).
+ type BloqueMk={clave:string;seccion?:typeof porMockup[number];fotos?:typeof porMockup};
+ const bloquesMockup:BloqueMk[]=[];
+ if(agrupado){
+  let buffer:typeof porMockup=[];
+  const volcar=()=>{if(buffer.length){bloquesMockup.push({clave:`f${buffer[0].i}`,fotos:buffer});buffer=[]}};
+  for(const x of porMockup){
+   if(x.jugadores.length||x.specs.length){volcar();bloquesMockup.push({clave:`s${x.i}`,seccion:x})}
+   else buffer.push(x);
+  }
+  volcar();
+ }
  const jugadoresSueltos=form.jugadores.filter(j=>indiceMockup(j.mockup,mockups)<0);
  const specsSueltas=form.specs.filter(s=>indiceMockup(s.mockup,mockups)<0);
  const grupos=agruparTallas(form.prendas);
@@ -916,7 +946,9 @@ export function BriefHoja({form}:{form:Form}){
         specs, la lista sube al costado de la foto: antes se pintaba un cartel de
         "sin especificaciones tecnicas" y media hoja quedaba vacia mientras los
         jugadores se iban solos abajo. */}
-    {mockupsConContenido.map(({m,i,jugadores,specs})=><section key={m.id} className={estilos.bSeccion}>
+    {bloquesMockup.map(b=><Fragment key={b.clave}>
+     {!!b.fotos&&<div className={estilos.bFotosSolo}>{b.fotos.map(({m,i})=><figure key={m.id}><img src={imagenDe(m)} alt=""/><figcaption>MOCKUP {i+1}{m.descripcion?` · ${m.descripcion}`:""}</figcaption></figure>)}</div>}
+     {!!b.seccion&&(()=>{const {m,i,jugadores,specs}=b.seccion!;return <section className={estilos.bSeccion}>
      <div className={estilos.bMk}>
       <div>
        <div className={estilos.bMkCab}><span>MOCKUP {i+1}</span>{texto(m.descripcion)&&` ${m.descripcion}`}</div>
@@ -928,7 +960,8 @@ export function BriefHoja({form}:{form:Form}){
       <div>{specs.length?<BloqueSpecs specs={specs} titulo={`🧵 Especificaciones técnicas — Mockup ${i+1}`}/>:<TablaJugadores jugadores={jugadores}/>}</div>
      </div>
      {!!specs.length&&!!jugadores.length&&<div className={estilos.bTablaAncha}><TablaJugadores jugadores={jugadores}/></div>}
-    </section>)}
+    </section>})()}
+    </Fragment>)}
 
     {!mockups.length&&!!form.specs.length&&<section className={estilos.bSeccion}><BloqueSpecs specs={form.specs} titulo="🧵 Especificaciones técnicas"/></section>}
     {!!mockups.length&&!!specsSueltas.length&&<section className={estilos.bSeccion}><BloqueSpecs specs={specsSueltas} titulo="🧵 Especificaciones técnicas — todas las prendas"/></section>}
@@ -1019,19 +1052,32 @@ function BloqueSpecs({specs,titulo}:{specs:Spec[];titulo:string}){
   // propio catalogo con otros ids, asi que lo capturado no se imprimia.
   const ficha=FICHAS_PRENDA.find(f=>f.clave===s.prenda_clave);
   const marca=FAMILIA_MARCA[familiaPrenda(ficha?.label||s.prenda_clave)];
+  // El legado guarda {basta:{tipo:"Normal"}} y {pieDeCuello:{tiene:"Sí"}}, que
+  // al aplanarse quedan como basta_tipo / pie_de_cuello_tiene, mientras que la
+  // ficha del sistema llama a esos campos "basta" y "pie_de_cuello" a secas.
+  // Se prueban los dos alias para que el valor caiga en su etiqueta correcta en
+  // vez de imprimirse suelto al final como "Basta Tipo".
+  const usadas=new Set<string>(["observacion","corte"]);
+  const valorDe=(id:string)=>{
+   for(const k of [id,`${id}_tipo`,`${id}_tiene`]){
+    const v=texto(s.campos[k]);
+    if(v){usadas.add(k);return v}
+    if(k in s.campos)usadas.add(k);
+   }
+   return "";
+  };
   const filas=(ficha?.campos||[])
    .filter(f=>f.id!=="observacion"&&f.id!=="corte")
-   .map(f=>({t:f.label,v:texto(s.campos[f.id])}))
+   .map(f=>({t:f.label,v:valorDe(f.id)}))
    .filter(x=>x.v&&!/^no aplica$/i.test(x.v));
   // Las specs que vienen de BomanSport usan otros nombres de campo (`cuello`,
   // `punos`, `pieDeCuello`…) que no estan en FICHAS_PRENDA. Si solo se imprime
   // lo que la ficha reconoce, un contrato migrado sale con la tarjeta vacia
   // ("Sin detalle tecnico cargado") aunque el dato exista. Lo que sobra se
   // imprime igual, con la clave humanizada como etiqueta.
-  const conocidos=new Set([...(ficha?.campos||[]).map(f=>f.id),"corte","observacion"]);
   for(const [k,v] of Object.entries(s.campos)){
    const val=texto(v);
-   if(conocidos.has(k)||!val||/^no aplica$/i.test(val))continue;
+   if(usadas.has(k)||!val||/^no aplica$/i.test(val))continue;
    const etq=k.replace(/[_-]+/g," ").replace(/([a-z])([A-Z])/g,"$1 $2");
    filas.push({t:etq.charAt(0).toUpperCase()+etq.slice(1),v:val});
   }

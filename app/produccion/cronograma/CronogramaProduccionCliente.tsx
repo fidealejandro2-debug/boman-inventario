@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { mostrarAvisoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
 import { fecha } from "@/lib/utils";
 
@@ -32,6 +33,14 @@ type ContratoDia = {
   prendas: Record<string, number>;
 };
 type DetalleDia = { fecha: string; contratos: ContratoDia[] };
+type PersonaDiseno = {
+  id: string;
+  nombre: string;
+  cargo: string;
+  departamento: string;
+  disenador: boolean;
+  mockup: boolean;
+};
 
 const VACIO: Cronograma = {
   generado_at: "",
@@ -71,6 +80,7 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
   const [guardandoCapacidad, setGuardandoCapacidad] = useState<string | null>(null);
   const [disenadorEdit, setDisenadorEdit] = useState<Record<string, string>>({});
   const [asignando, setAsignando] = useState<string | null>(null);
+  const [personalDiseno, setPersonalDiseno] = useState<PersonaDiseno[] | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -90,6 +100,15 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  useEffect(() => {
+    let vigente = true;
+    void supabase.rpc("listar_personal_diseno_v127").then(({ data, error: err }) => {
+      if (!vigente) return;
+      setPersonalDiseno(!err && Array.isArray(data) ? data as PersonaDiseno[] : null);
+    });
+    return () => { vigente = false };
+  }, [supabase]);
 
   function aplicar() {
     if (!desde || !hasta || hasta < desde) return;
@@ -114,17 +133,35 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
   // -el contrato entra a produccion sin diseñador- y quien y a quien ya quedan
   // en el evento. Preguntarlo una vez por contrato haria que nadie lo use.
   async function asignarDisenador(c: SinDisenador) {
-    const nombre = (disenadorEdit[c.id] ?? "").trim();
-    if (!nombre) return;
+    const seleccion = (disenadorEdit[c.id] ?? "").trim();
+    if (!seleccion) return;
     setAsignando(c.id);
-    const { error: err } = await supabase.rpc("guardar_gestion_contrato_v99", {
-      p_contrato_id: c.id,
-      p_cambios: { disenador: nombre },
-      p_motivo: "Asignación de diseñador desde el cronograma de producción",
-      p_idempotency_key: crypto.randomUUID(),
-    });
+    const llamada = personalDiseno
+      ? supabase.rpc("asignar_personal_diseno_v127", {
+          p_contrato_id: c.id,
+          p_tipo: "disenador",
+          p_empleado_id: seleccion,
+          p_motivo: "Asignación de diseñador desde el cronograma de producción",
+          p_idempotency_key: crypto.randomUUID(),
+        })
+      : supabase.rpc("guardar_gestion_contrato_v99", {
+          p_contrato_id: c.id,
+          p_cambios: { disenador: seleccion },
+          p_motivo: "Asignación de diseñador desde el cronograma de producción",
+          p_idempotency_key: crypto.randomUUID(),
+        });
+    const { error: err } = await llamada;
     setAsignando(null);
-    if (err) { setError(err.message); return }
+    if (err) {
+      await mostrarAvisoDialogo(
+        err.message.includes("asignar_personal_diseno_v127")
+          ? "Falta instalar v127 en Supabase."
+          : err.message,
+        "No se pudo asignar el diseñador",
+        true,
+      );
+      return;
+    }
     setDisenadorEdit((prev) => ({ ...prev, [c.id]: "" }));
     void cargar();
   }
@@ -285,9 +322,11 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
         </div>
         {datos.sin_disenador.length ? (
           <div className="tabla-scroll">
-            <datalist id="lista-disenadores">
-              {datos.disenadores.map((d) => <option key={d} value={d} />)}
-            </datalist>
+            {!personalDiseno && (
+              <datalist id="lista-disenadores">
+                {datos.disenadores.map((d) => <option key={d} value={d} />)}
+              </datalist>
+            )}
             <table>
               <thead>
                 <tr>
@@ -310,14 +349,31 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
                     {puedeEditar && (
                       <td>
                         <div className="form-inline">
-                          <input
-                            list="lista-disenadores"
-                            placeholder="Escribe o elige"
-                            value={disenadorEdit[c.id] ?? ""}
-                            onChange={(e) => setDisenadorEdit((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                            onKeyDown={(e) => { if (e.key === "Enter") void asignarDisenador(c) }}
-                            style={{ minWidth: 140 }}
-                          />
+                          {personalDiseno ? (
+                            <select
+                              aria-label={`Diseñador para ${c.numero}`}
+                              value={disenadorEdit[c.id] ?? ""}
+                              onChange={(e) => setDisenadorEdit((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                              style={{ minWidth: 190 }}
+                            >
+                              <option value="">Selecciona de Nómina</option>
+                              {(personalDiseno.some((p) => p.disenador)
+                                ? personalDiseno.filter((p) => p.disenador)
+                                : personalDiseno
+                              ).map((p) => (
+                                <option key={p.id} value={p.id}>{p.nombre} · {p.cargo || p.departamento}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              list="lista-disenadores"
+                              placeholder="Escribe o elige"
+                              value={disenadorEdit[c.id] ?? ""}
+                              onChange={(e) => setDisenadorEdit((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                              onKeyDown={(e) => { if (e.key === "Enter") void asignarDisenador(c) }}
+                              style={{ minWidth: 140 }}
+                            />
+                          )}
                           <button
                             className="secondary btn-mini"
                             disabled={asignando === c.id || !(disenadorEdit[c.id] ?? "").trim()}
