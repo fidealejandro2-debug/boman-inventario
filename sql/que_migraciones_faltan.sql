@@ -41,6 +41,7 @@ from(values
  (122,'v122_tablero_editable.sql',
    coalesce((select position($$'id',a.id$$ in pg_get_functiondef(p.oid))>0
                from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-              where n.nspname='public' and p.proname='tablero_produccion_v102' limit 1),false))
+              where n.nspname='public' and p.proname='tablero_produccion_v102' limit 1),false)),
+ (123,'v123_prendas_desde_tablero.sql',          to_regprocedure('public.editar_prendas_tablero_v123(uuid,jsonb,boolean,uuid)') is not null)
 )as v(orden,archivo,existe)
 order by v.orden;

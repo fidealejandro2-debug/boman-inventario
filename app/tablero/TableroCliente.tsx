@@ -39,12 +39,17 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
   { valor: "muestras", etiqueta: "🧪 Faltan muestras" },
 ];
 
-export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar = false, estacionesPermitidas }: {
+type FilaPrenda = { prenda: string; calidad: string; cantidad: number };
+
+export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar = false, puedeEditarContenido = false, estacionesPermitidas }: {
   datos: DatosTablero | { error: string };
   puedeMarcar?: boolean;
   /** v122. Habilita el modo edicion: diseñador, autor de mockup, observacion
    *  y fechas se cambian en la propia fila. */
   puedeEditar?: boolean;
+  /** v123. Corregir cantidades de prendas: reescribe contrato_prendas, asi que
+   *  va con el permiso estrecho, no con el de editar un dato suelto. */
+  puedeEditarContenido?: boolean;
   /** v117. Con valores, la pantalla es la de un operario: solo sus estaciones
    *  y sin la opcion de ver el taller completo. Sin valores, tablero normal. */
   estacionesPermitidas?: string[];
@@ -54,6 +59,11 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
   const [refrescando, refrescar] = useTransition();
   const [marcando, setMarcando] = useState("");
   const [edicion, setEdicion] = useState(false);
+  const [forzarTarjetas, setForzarTarjetas] = useState(false);
+  const [editandoPrendas, setEditandoPrendas] = useState<Fila | null>(null);
+  const [filasPrenda, setFilasPrenda] = useState<FilaPrenda[]>([]);
+  const [detalladas, setDetalladas] = useState(false);
+  const [cargandoPrendas, setCargandoPrendas] = useState(false);
   const [guardando, setGuardando] = useState("");
 
   // Todos los cambios de la fila pasan por la MISMA funcion que el editor del
@@ -109,6 +119,42 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
       if (!d.ok) return void mostrarAvisoDialogo(d.error || "No se pudo marcar", "Sin cambios", true);
       if (d.aviso) await mostrarAvisoDialogo(d.aviso, "Ojo", true);
     }
+    refrescar(() => router.refresh());
+  }
+
+  async function abrirPrendas(f: Fila) {
+    setEditandoPrendas(f); setFilasPrenda([]); setCargandoPrendas(true);
+    const { data, error } = await supabase.rpc("prendas_contrato_v123", { p_contrato_id: f.id });
+    setCargandoPrendas(false);
+    if (error) { setEditandoPrendas(null); return void mostrarAvisoDialogo(error.message.includes("prendas_contrato_v123") ? "Falta instalar v123 en Supabase." : error.message, "No se pudieron leer las prendas", true) }
+    const d = data as { detalladas?: boolean; filas?: FilaPrenda[] };
+    setDetalladas(!!d?.detalladas);
+    setFilasPrenda((d?.filas ?? []).map((x) => ({ prenda: x.prenda, calidad: x.calidad ?? "", cantidad: Number(x.cantidad) || 0 })));
+  }
+
+  async function guardarPrendas(confirmar: boolean) {
+    if (!editandoPrendas) return;
+    const filasLimpias = filasPrenda
+      .map((x) => ({ prenda: x.prenda.trim(), calidad: x.calidad.trim(), cantidad: Number(x.cantidad) || 0 }))
+      .filter((x) => x.prenda && x.cantidad > 0);
+    if (!filasLimpias.length) return void mostrarAvisoDialogo("Agrega al menos una prenda con cantidad.", "Sin datos", true);
+    setGuardando("prendas");
+    const { data, error } = await supabase.rpc("editar_prendas_tablero_v123", {
+      p_contrato_id: editandoPrendas.id, p_filas: filasLimpias,
+      p_confirmar: confirmar, p_idempotency_key: crypto.randomUUID(),
+    });
+    setGuardando("");
+    if (error) return void mostrarAvisoDialogo(error.message, "No se pudieron guardar las prendas", true);
+    const r = data as { ok?: boolean; requiere_confirmar?: boolean; mensaje?: string };
+    // La base avisa ANTES de escribir si el contrato tenia desglose por talla.
+    // Ese aviso se muestra tal cual y solo se reintenta si la persona acepta.
+    if (r?.requiere_confirmar) {
+      if (await confirmarDialogo(`${r.mensaje}
+
+¿Reemplazar de todas formas?`, true)) await guardarPrendas(true);
+      return;
+    }
+    setEditandoPrendas(null);
     refrescar(() => router.refresh());
   }
 
@@ -196,7 +242,7 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
       </div></div>;
   }
 
-  return <>
+  return <div className={forzarTarjetas ? estilos.forzarTarjetas : ""}>
     <div className="card">
       <div className="header-row">
         <div>
@@ -212,6 +258,9 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
               {edicion ? "🔒 Salir de edición" : "✏️ Modo edición"}
             </button>
           )}
+          <button className={forzarTarjetas ? "" : "secondary"} onClick={() => setForzarTarjetas((x) => !x)} title="Ver como tarjetas, para el celular">
+            📱 Tarjetas
+          </button>
           <button className="secondary" onClick={() => refrescar(() => router.refresh())} disabled={refrescando}>
             {refrescando ? "Actualizando..." : "🔄 Actualizar"}
           </button>
@@ -259,7 +308,48 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
         <datalist id="tablero-autores">{(hayError ? [] : datos.autoresMockup ?? []).map((d) => <option key={d} value={d} />)}</datalist>
         <p className="conteo" style={{ marginTop: 0 }}>Modo edición: los cambios se guardan al salir del campo y quedan en el historial del contrato.</p>
       </>}
-      <div className="tabla-scroll">
+      <div className={estilos.tarjetas}>
+        {visibles.map((f) => (
+          <article key={`c-${f.numero}`} className={`${estilos.tarjeta} ${f.urgente ? estilos.urgente : f.atrasado ? estilos.atrasada : ""}`}>
+            <div className={estilos.tFila}>
+              {f.mks[0]?.i && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className={estilos.tFoto} src={`https://drive.google.com/thumbnail?id=${f.mks[0].i}&sz=w160`} alt="" loading="lazy" />
+              )}
+              <div className={estilos.tDatos}>
+                <div className={estilos.tNumero}>{f.urgente ? "🔴 " : ""}{f.numero}</div>
+                <div className={estilos.tCliente}>{f.cliente}</div>
+                <div className={estilos.tMeta}>
+                  <span className={f.atrasado ? "badge bajo" : ""}>🚚 {f.entrega || "sin fecha"}</span>
+                  <span>🎨 {f.disenador || "sin asignar"}</span>
+                  <span>{f.prendas} pr.</span>
+                  {f.vendedor && <span>{f.vendedor}</span>}
+                </div>
+                {f.obs && <div className="badge bajo" style={{ marginTop: 6, whiteSpace: "normal", lineHeight: 1.3 }}>📝 {f.obs}</div>}
+              </div>
+            </div>
+            <div className={estilos.tChips}>
+              {columnas.map(({ et, i }) => {
+                const noAplica = et.exterior && !f.esExterior;
+                const hecha = f.hechas[i];
+                const clase = `${estilos.tChip} ${hecha ? estilos.ok : ""}`;
+                const estilo = hecha ? { background: et.bg, color: et.fg } : undefined;
+                if (noAplica) return null;
+                return puedeMarcar
+                  ? <button key={`c-${f.numero}-${i}`} className={clase} style={estilo} disabled={marcando !== ""}
+                      title={hecha ? `Quitar ${et.etiqueta}` : `Marcar ${et.etiqueta}`}
+                      onClick={() => void alternarEtapa(f.numero, et, hecha)}>
+                      {et.emoji} {et.etiqueta}{hecha ? " ✓" : ""}
+                    </button>
+                  : <span key={`c-${f.numero}-${i}`} className={clase} style={estilo}>{et.emoji} {et.etiqueta}{hecha ? " ✓" : ""}</span>;
+              })}
+            </div>
+          </article>
+        ))}
+        {!visibles.length && <div className="vacio">Sin contratos con ese filtro.</div>}
+      </div>
+
+      <div className={`tabla-scroll ${estilos.tabla}`}>
         <table>
           <thead>
             <tr>
@@ -295,7 +385,12 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
                     <div className={estilos.datos}>
                       <strong className={estilos.numero}>{f.urgente ? "🔴 " : ""}{f.numero}</strong>
                       <div className={estilos.cliente} title={f.cliente}>{f.cliente}</div>
-                      <div className="conteo">{f.vendedor} · {f.prendas} pr.{f.calidad.length ? ` · ${f.calidad.join(" · ")}` : ""}</div>
+                      <div className="conteo">
+                        {f.vendedor} · {f.prendas} pr.{f.calidad.length ? ` · ${f.calidad.join(" · ")}` : ""}
+                        {edicion && puedeEditarContenido && (
+                          <button className={estilos.enlaceMini} onClick={() => void abrirPrendas(f)} title="Corregir cantidades de prendas">✏️ prendas</button>
+                        )}
+                      </div>
                       {edicion ? (
                         <input className={estilos.obsInput} defaultValue={f.obs} placeholder="📝 Observación para producción" disabled={guardando !== ""}
                           onBlur={(e) => { const v = e.target.value.trim(); if (v !== f.obs) void guardarCampo(f, { observacion: v }, "la observación") }}
@@ -372,5 +467,44 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
         </table>
       </div>
     </div>
-  </>;
+    {editandoPrendas && (
+      <div className={estilos.modalFondo} role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditandoPrendas(null) }}>
+        <div className={estilos.modal}>
+          <div className="header-row">
+            <div>
+              <h3 style={{ margin: 0 }}>Prendas de {editandoPrendas.numero}</h3>
+              <p className="conteo">{editandoPrendas.cliente}</p>
+            </div>
+            <button className="secondary" onClick={() => setEditandoPrendas(null)}>Cerrar</button>
+          </div>
+          {detalladas && (
+            <div className="badge bajo" style={{ display: "block", whiteSpace: "normal", lineHeight: 1.4, marginBottom: 10 }}>
+              Este contrato tiene el desglose por talla y género. Guardar aquí lo reemplaza por totales planos y el taller
+              pierde de qué talla es cada prenda. Para conservarlo, edítalo desde el expediente.
+            </div>
+          )}
+          {cargandoPrendas ? <p className="conteo">Leyendo las prendas…</p> : <>
+            {filasPrenda.map((x, i) => (
+              <div className="form-inline" key={i} style={{ marginBottom: 6 }}>
+                <input value={x.prenda} placeholder="Prenda" style={{ flex: 1, minWidth: 150 }}
+                  onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, prenda: e.target.value } : y))} />
+                <input value={x.calidad} placeholder="Calidad" style={{ width: 130 }}
+                  onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, calidad: e.target.value } : y))} />
+                <input type="number" min={0} value={x.cantidad} style={{ width: 80 }}
+                  onChange={(e) => setFilasPrenda((p) => p.map((y, k) => k === i ? { ...y, cantidad: Number(e.target.value) } : y))} />
+                <button className="secondary btn-mini" onClick={() => setFilasPrenda((p) => p.filter((_, k) => k !== i))}>Quitar</button>
+              </div>
+            ))}
+            <button className="secondary btn-mini" onClick={() => setFilasPrenda((p) => [...p, { prenda: "", calidad: "", cantidad: 0 }])}>+ Agregar prenda</button>
+            <div className="header-row" style={{ marginTop: 12 }}>
+              <strong>Total: {filasPrenda.reduce((s, x) => s + (Number(x.cantidad) || 0), 0)} prendas</strong>
+              <button disabled={guardando === "prendas"} onClick={() => void guardarPrendas(false)}>
+                {guardando === "prendas" ? "Guardando…" : "Guardar prendas"}
+              </button>
+            </div>
+          </>}
+        </div>
+      </div>
+    )}
+  </div>;
 }
