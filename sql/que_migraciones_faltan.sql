@@ -65,6 +65,8 @@ from(values
      where rp.rol::text='produccion' and rp.permiso_codigo='produccion.acceder'
        and rp.permitido
    )),
+ (131,'v131_cola_sincronizacion_bomansport.sql', to_regclass('public.bomansport_sincronizaciones') is not null),
+ (132,'v132_inicio_atomico_importador.sql',      to_regprocedure('public.iniciar_importacion_bomansport_v132(text,uuid)') is not null),
  (133,'v133_cheques_sin_factura.sql',           to_regprocedure('public.regularizar_cheque_v133(uuid,uuid,text,uuid)') is not null)
 )as v(orden,archivo,existe)
 order by v.orden;
