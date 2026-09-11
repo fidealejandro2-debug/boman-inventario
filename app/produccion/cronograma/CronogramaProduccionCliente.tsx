@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
+import AgregarColaboradorDiseno, { type ColaboradorDiseno } from "@/components/AgregarColaboradorDiseno";
 import { createClient } from "@/lib/supabase/client";
 import { fecha } from "@/lib/utils";
 
@@ -33,14 +34,7 @@ type ContratoDia = {
   prendas: Record<string, number>;
 };
 type DetalleDia = { fecha: string; contratos: ContratoDia[] };
-type PersonaDiseno = {
-  id: string;
-  nombre: string;
-  cargo: string;
-  departamento: string;
-  disenador: boolean;
-  mockup: boolean;
-};
+type PersonaDiseno = ColaboradorDiseno;
 
 const VACIO: Cronograma = {
   generado_at: "",
@@ -320,6 +314,9 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
           </div>
           <span className="conteo">{datos.sin_disenador.length} contrato(s)</span>
         </div>
+        {puedeEditar && personalDiseno && <div style={{ marginBottom: 12 }}>
+          <AgregarColaboradorDiseno tipoInicial="disenador" onCreado={(persona) => setPersonalDiseno((actual) => [...(actual ?? []), persona])} />
+        </div>}
         {datos.sin_disenador.length ? (
           <div className="tabla-scroll">
             {!personalDiseno && (

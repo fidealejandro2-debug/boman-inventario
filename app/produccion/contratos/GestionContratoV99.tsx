@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
+import AgregarColaboradorDiseno, { type ColaboradorDiseno } from "@/components/AgregarColaboradorDiseno";
 import { createClient } from "@/lib/supabase/client";
 import estilos from "./Contratos.module.css";
 
@@ -9,7 +10,7 @@ const ESTADOS = ["Ingresado", "Por imprimir", "Impreso", "Sublimación", "Cortad
 const TIPOS = ["Normal", "Equipo Profesional", "Mercadería", "Emergente"];
 type Contrato = Record<string, unknown> & { id: string; numero: string };
 type Formulario = {fecha_inicio_produccion:string;fecha_salida_produccion:string;fecha_entrega:string;prioridad:string;tipo_contrato:string;estado:string;disenador:string;autor_mockup:string;maquila:string;orden_dia:string;observacion:string;muestras_tpu_faltan:boolean;muestras_dtf_faltan:boolean;nombre_contrato_v115:string;cliente:string;vendedor:string;canal:string};
-type PersonaDiseno = {id:string;nombre:string;cargo:string;departamento:string;disenador:boolean;mockup:boolean};
+type PersonaDiseno = ColaboradorDiseno;
 function texto(v:unknown){return v==null?"":String(v)}
 function inicial(c:Contrato):Formulario{return {fecha_inicio_produccion:texto(c.fecha_inicio_produccion),fecha_salida_produccion:texto(c.fecha_salida_produccion),fecha_entrega:texto(c.fecha_entrega),prioridad:texto(c.prioridad||"Normal"),tipo_contrato:texto(c.tipo_contrato||"Normal"),estado:texto(c.estado||"Ingresado"),disenador:texto(c.disenador),autor_mockup:texto(c.autor_mockup),maquila:texto(c.maquila),orden_dia:texto(c.orden_dia),observacion:texto(c.observacion),muestras_tpu_faltan:Boolean(c.muestras_tpu_faltan),muestras_dtf_faltan:Boolean(c.muestras_dtf_faltan),nombre_contrato_v115:texto(c.nombre_contrato_v115||c.cliente),cliente:texto(c.cliente),vendedor:texto(c.vendedor),canal:texto(c.canal)}}
 const DINERO=new Intl.NumberFormat("es-EC",{style:"currency",currency:"USD"});
@@ -35,7 +36,9 @@ export default function GestionContratoV99({contrato,onGuardado,onCerrar,puedeFi
  }
  function responsableActual(tipo:"disenador"|"mockup"){
   const campoId=tipo==="disenador"?contrato.disenador_empleado_id:contrato.autor_mockup_empleado_id;
+  const campoExterno=tipo==="disenador"?contrato.disenador_externo_id:contrato.autor_mockup_externo_id;
   if(campoId)return String(campoId);
+  if(campoExterno)return String(campoExterno);
   const nombre=texto(tipo==="disenador"?contrato.disenador:contrato.autor_mockup).trim();
   if(!nombre||!personalDiseno)return"";
   const encontrado=personalDiseno.find(p=>p.nombre.localeCompare(nombre,"es",{sensitivity:"base"})===0);
@@ -77,8 +80,8 @@ export default function GestionContratoV99({contrato,onGuardado,onCerrar,puedeFi
   <label className="field"><span>Inicio de producción</span><input type="date" value={form.fecha_inicio_produccion} onChange={e=>cambiar("fecha_inicio_produccion",e.target.value)}/></label>
   <label className="field"><span>Salida de producción</span><input type="date" value={form.fecha_salida_produccion} onChange={e=>cambiar("fecha_salida_produccion",e.target.value)}/></label>
   <label className="field"><span>Entrega comprometida</span><input type="date" value={form.fecha_entrega} onChange={e=>cambiar("fecha_entrega",e.target.value)}/></label>
-  {personalDiseno?<label className="field"><span>Diseñador · Nómina</span><select value={responsableActual("disenador")} disabled={guardandoResponsable!==null} onChange={e=>void asignarResponsable("disenador",e.target.value)}><option value="">Sin asignar</option>{responsableActual("disenador").startsWith("historico:")&&<option value={responsableActual("disenador")} disabled>{form.disenador} · sin vínculo</option>}{candidatos("disenador").map(p=><option key={p.id} value={p.id}>{p.nombre} · {p.cargo||p.departamento}</option>)}</select></label>:<label className="field"><span>Diseñador</span><input value={form.disenador} onChange={e=>cambiar("disenador",e.target.value)} placeholder="Nombre del diseñador"/></label>}
-  {personalDiseno?<label className="field"><span>Autor del mockup · Nómina</span><select value={responsableActual("mockup")} disabled={guardandoResponsable!==null} onChange={e=>void asignarResponsable("mockup",e.target.value)}><option value="">Sin asignar</option>{responsableActual("mockup").startsWith("historico:")&&<option value={responsableActual("mockup")} disabled>{form.autor_mockup} · sin vínculo</option>}{candidatos("mockup").map(p=><option key={p.id} value={p.id}>{p.nombre} · {p.cargo||p.departamento}</option>)}</select></label>:<label className="field"><span>Autor del mockup</span><input value={form.autor_mockup} onChange={e=>cambiar("autor_mockup",e.target.value)} placeholder="Responsable del arte"/></label>}
+  {personalDiseno?<div className="field"><label><span>Diseñador · Nómina o externo</span><select value={responsableActual("disenador")} disabled={guardandoResponsable!==null} onChange={e=>void asignarResponsable("disenador",e.target.value)}><option value="">Sin asignar</option>{responsableActual("disenador").startsWith("historico:")&&<option value={responsableActual("disenador")} disabled>{form.disenador} · sin vínculo</option>}{candidatos("disenador").map(p=><option key={p.id} value={p.id}>{p.nombre} · {p.origen==="externo"?"Externo":p.cargo||p.departamento}</option>)}</select></label><AgregarColaboradorDiseno tipoInicial="disenador" onCreado={persona=>setPersonalDiseno(actual=>[...(actual??[]),persona])}/></div>:<label className="field"><span>Diseñador</span><input value={form.disenador} onChange={e=>cambiar("disenador",e.target.value)} placeholder="Nombre del diseñador"/></label>}
+  {personalDiseno?<div className="field"><label><span>Autor del mockup · Nómina o externo</span><select value={responsableActual("mockup")} disabled={guardandoResponsable!==null} onChange={e=>void asignarResponsable("mockup",e.target.value)}><option value="">Sin asignar</option>{responsableActual("mockup").startsWith("historico:")&&<option value={responsableActual("mockup")} disabled>{form.autor_mockup} · sin vínculo</option>}{candidatos("mockup").map(p=><option key={p.id} value={p.id}>{p.nombre} · {p.origen==="externo"?"Externo":p.cargo||p.departamento}</option>)}</select></label><AgregarColaboradorDiseno tipoInicial="mockup" onCreado={persona=>setPersonalDiseno(actual=>[...(actual??[]),persona])}/></div>:<label className="field"><span>Autor del mockup</span><input value={form.autor_mockup} onChange={e=>cambiar("autor_mockup",e.target.value)} placeholder="Responsable del arte"/></label>}
   <label className="field"><span>Maquila</span><input value={form.maquila} onChange={e=>cambiar("maquila",e.target.value)} placeholder="Taller o responsable externo"/></label>
   <label className={`field ${estilos.campoCompleto}`}><span>Observación operativa</span><textarea rows={3} value={form.observacion} onChange={e=>cambiar("observacion",e.target.value)} placeholder="Indicaciones para producción"/></label>
  </div><div className={estilos.opcionesMuestras}><label><input type="checkbox" checked={form.muestras_tpu_faltan} onChange={e=>cambiar("muestras_tpu_faltan",e.target.checked)}/> Faltan muestras TPU</label><label><input type="checkbox" checked={form.muestras_dtf_faltan} onChange={e=>cambiar("muestras_dtf_faltan",e.target.checked)}/> Faltan muestras DTF</label></div><div className={estilos.editorAcciones}><span>Al guardar se solicitará un motivo y quedará registrado por campo.</span><button disabled={guardando} onClick={guardar}>{guardando?"Guardando…":"Guardar cambios"}</button></div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
+import AgregarColaboradorDiseno, { type ColaboradorDiseno } from "@/components/AgregarColaboradorDiseno";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
@@ -59,7 +60,7 @@ type FilaPrenda = { prenda: string; calidad: string; cantidad: number };
 type ArchivoDet = { id: string; drive: string; url: string; descripcion: string; prenda?: string; posicion?: string; tecnica?: string; observacion?: string };
 type EtapaDet = { area: string; etapa: string; operario: string; noAplica: boolean; cuando: string };
 type Detalle = { mockups: ArchivoDet[]; logos: ArchivoDet[]; etapas: EtapaDet[] };
-type PersonaDiseno = { id: string; nombre: string; cargo: string; departamento: string; disenador: boolean; mockup: boolean };
+type PersonaDiseno = ColaboradorDiseno;
 
 // Una imagen puede venir de Drive (lo importado de la hoja) o del bucket de
 // Supabase (lo ingresado en Vercel). El id de Drive manda porque de ahi sale la
@@ -528,8 +529,12 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
           <datalist id="tablero-autores">{(hayError ? [] : datos.autoresMockup ?? []).map((d) => <option key={d} value={d} />)}</datalist>
         </>}
         <p className="conteo" style={{ marginTop: 0 }}>{personalDiseno
-          ? "Modo edición: diseño y mockups se asignan al personal activo registrado en Nómina."
+          ? "Modo edición: asigna personal activo de Nómina o colaboradores externos registrados."
           : "Modo edición: instala v127 para seleccionar responsables directamente desde Nómina."}</p>
+        {personalDiseno && <div className="form-inline" style={{ marginBottom: 12 }}>
+          <AgregarColaboradorDiseno tipoInicial="disenador" onCreado={(persona) => setPersonalDiseno((actual) => [...(actual ?? []), persona])} />
+          <AgregarColaboradorDiseno tipoInicial="mockup" onCreado={(persona) => setPersonalDiseno((actual) => [...(actual ?? []), persona])} />
+        </div>}
       </>}
       <div className={estilos.tarjetas}>
         {visibles.map((f) => (

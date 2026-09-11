@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/permisos";
+import {CALIDADES_CONTRATO,PRENDAS_CONTRATO} from "@/lib/catalogosContrato";
 import estilos from "./IngresoContrato.module.css";
 import {TODOS_LOS_COLORES} from "./colores";
 import {FICHAS_PRENDA,fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPrenda} from "./specsPrendas";
@@ -14,7 +15,10 @@ import {FICHAS_PRENDA,fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPren
 // el brief y la migracion v94 dejan de cuadrar (paso con "Semi profesional" vs
 // "Semiprofesional" y con "Sin calidad" vs "Estandar").
 const PASOS=["Vendedor","Contrato","Prendas","Mockups","Especificaciones","Jugadores","Cierre"];
-export const PRENDAS=["Camiseta Jugador","Camiseta Jugador M/L","Pantaloneta Jugador","Camiseta Arquero","Camiseta Arquero M/L","Pantaloneta Arquero","Arquero Completo","Uniformes Completos","Camiseta Polo","Camiseta Polo M/L","Chompa","Pantalón","Exterior Completo","Rompevientos","Chompa de Frío","Chompa Frío 3/4","Chompas Retro","Chompa Deportiva","Hoodie","Buzo de Compresión","Chaleco","Medias","Bandera","Cinta Capitán","Bermudas","Falda Short","Licra","Bolsos","BVDS"];
+// Una sola lista para todo el sistema. Tenerla aqui Y en lib/catalogosContrato
+// era garantizar que un dia difieran, y entonces el tablero y el ingreso
+// guardarian nombres distintos para la misma prenda.
+export const PRENDAS:string[]=[...PRENDAS_CONTRATO];
 // Rompevientos se muestra como "Chompa de Lluvia" pero se guarda con su nombre
 // interno: el resto del sistema (brief, tallas, facturacion) usa el interno.
 const PRENDA_LABEL_ESPECIAL:Record<string,string>={"Rompevientos":"Chompa de Lluvia"};
@@ -23,7 +27,7 @@ const etiquetaPrenda=(p:string)=>PRENDA_LABEL_ESPECIAL[p]||p;
 const PRENDA_EXPANSION:Record<string,string[]>={"Uniformes Completos":["Camiseta Jugador","Pantaloneta Jugador"],"Arquero Completo":["Camiseta Arquero","Pantaloneta Arquero"],"Exterior Completo":["Chompa","Pantalón"]};
 const PRENDAS_SIN_TALLA=["Medias","Bandera","Cinta Capitán"];
 const PRENDAS_CANTIDAD_GENERAL=["Bolsos"];
-export const CALIDADES=["Semiprofesional","Competición","Profesional","Amateur","Estándar"];
+export const CALIDADES:string[]=[...CALIDADES_CONTRATO];
 // Las prendas "conjunto" se expanden en sus componentes y las que no llevan
 // talla (medias, bandera, cinta) no generan seccion de tallas.
 // Logos: posiciones validas segun la prenda, tal cual index.html
