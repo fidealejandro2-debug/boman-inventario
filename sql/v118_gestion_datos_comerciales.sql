@@ -51,7 +51,7 @@ language plpgsql
 volatile
 security definer
 set search_path = ''
-as $fn$
+as $v118$
 declare
   v_uid uuid := auth.uid();
   v_antes public.contratos%rowtype;
@@ -253,7 +253,7 @@ begin
   where id = v_operacion_id;
   return v_resultado;
 end;
-$fn$;
+$v118$;
 
 alter function public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid) owner to postgres;
 revoke all on function public.guardar_gestion_contrato_v99(uuid,jsonb,text,uuid) from public, anon;

@@ -46,15 +46,15 @@ end$$;
 -- y el tablero de Supabase no la desglosa todavia. Asignarsela a alguien le
 -- daria una pantalla vacia.
 create or replace function public.estaciones_produccion_v117()
-returns text[] language sql immutable set search_path='' as $fn$
+returns text[] language sql immutable set search_path='' as $v117$
   select array['Diseño','Corte','Sublimado y costura','Sellos',
                'Terminado y entrega','Estampado']::text[];
-$fn$;
+$v117$;
 
 -- 'Ingresado' devuelve '' a proposito: no lo marca el taller, lo pone ventas
 -- al crear el contrato. Esa columna no pertenece a ninguna estacion.
 create or replace function public.area_etapa_v117(p_etapa text)
-returns text language sql immutable set search_path='' as $fn$
+returns text language sql immutable set search_path='' as $v117$
   select case btrim(coalesce(p_etapa,''))
     when 'Por imprimir'         then 'Diseño'
     when 'Impreso'              then 'Diseño'
@@ -67,7 +67,7 @@ returns text language sql immutable set search_path='' as $fn$
     when 'Entregado'            then 'Terminado y entrega'
     when 'Estampado final'      then 'Estampado'
     else '' end;
-$fn$;
+$v117$;
 
 -- ------------------------------------------------------------
 -- 2. A que estacion pertenece una cuenta
@@ -82,15 +82,15 @@ comment on column public.perfiles.estaciones is
   'Vacio = cuenta normal. Con valores = operario: solo ve y marca su estacion.';
 
 create or replace function public.estaciones_usuario_actual_v117()
-returns text[] language sql stable security definer set search_path='' as $fn$
+returns text[] language sql stable security definer set search_path='' as $v117$
   select coalesce((select p.estaciones from public.perfiles p
                     where p.id = auth.uid() and p.activo), array[]::text[]);
-$fn$;
+$v117$;
 
 create or replace function public.es_operario_estacion_v117()
-returns boolean language sql stable security definer set search_path='' as $fn$
+returns boolean language sql stable security definer set search_path='' as $v117$
   select coalesce(array_length(public.estaciones_usuario_actual_v117(), 1), 0) > 0;
-$fn$;
+$v117$;
 
 -- ------------------------------------------------------------
 -- 3. El encierro
@@ -131,7 +131,7 @@ on conflict (rol, permiso_codigo) do nothing;
 -- delante. El cuerpo original se conserva palabra por palabra; si v107 se
 -- vuelve a ejecutar despues de esto, hay que volver a correr v117.
 create or replace function public.usuario_tiene_permiso_v35(p_permiso_codigo text)
-returns boolean language sql stable security definer set search_path='' as $fn$
+returns boolean language sql stable security definer set search_path='' as $v117$
   select case when public.es_operario_estacion_v117()
     then p_permiso_codigo in ('produccion.estacion','contratos.marcar_etapa','notificaciones.acceder')
     else exists (
@@ -151,10 +151,10 @@ returns boolean language sql stable security definer set search_path='' as $fn$
         )
     )
   end;
-$fn$;
+$v117$;
 
 create or replace function public.permisos_usuario_actual_v35()
-returns text[] language sql stable security definer set search_path='' as $fn$
+returns text[] language sql stable security definer set search_path='' as $v117$
   select case when public.es_operario_estacion_v117()
     then array['produccion.estacion','contratos.marcar_etapa','notificaciones.acceder']::text[]
     else coalesce((
@@ -176,22 +176,22 @@ returns text[] language sql stable security definer set search_path='' as $fn$
       ) x
     ), array[]::text[])
   end;
-$fn$;
+$v117$;
 
 -- Leer las estaciones de OTRA cuenta: la pantalla de administracion lo
 -- necesita y la RLS de perfiles no deja mirar filas ajenas desde el cliente.
 create or replace function public.estaciones_de_perfil_v117(p_perfil_id uuid)
-returns text[] language sql stable security definer set search_path='' as $fn$
+returns text[] language sql stable security definer set search_path='' as $v117$
   select case when public.rol_usuario_actual() = 'admin'
     then coalesce((select p.estaciones from public.perfiles p where p.id = p_perfil_id), array[]::text[])
     else null end;
-$fn$;
+$v117$;
 
 -- Asignar estaciones ES quitar permisos, asi que solo admin. Y nunca sobre un
 -- admin: seria la forma mas facil de dejar el sistema sin nadie que entre.
 create or replace function public.admin_asignar_estaciones_v117(
   p_perfil_id uuid, p_estaciones text[])
-returns jsonb language plpgsql security definer set search_path='' as $fn$
+returns jsonb language plpgsql security definer set search_path='' as $v117$
 declare v_rol text; v_limpias text[]; v_invalida text;
 begin
   if auth.uid() is null or public.rol_usuario_actual() <> 'admin' then
@@ -214,7 +214,7 @@ begin
 
   update public.perfiles set estaciones = v_limpias where id = p_perfil_id;
   return jsonb_build_object('ok', true, 'estaciones', to_jsonb(v_limpias));
-end;$fn$;
+end;$v117$;
 
 -- ------------------------------------------------------------
 -- 4. El tablero reparte por estacion y el operario puede leerlo
@@ -223,7 +223,7 @@ end;$fn$;
 -- Copia literal de v102 con DOS cambios, marcados abajo: la puerta acepta
 -- tambien al operario de estacion, y cada etapa dice de que area es.
 create or replace function public.tablero_produccion_v102()
-returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+returns jsonb language plpgsql stable security definer set search_path='' as $v117$
 declare v_resultado jsonb;
 begin
  -- CAMBIO 1: el operario de estacion tambien lee el tablero (su pantalla sale
@@ -245,7 +245,7 @@ begin
  filas as(select jsonb_build_object('numero',a.numero,'corto',right(a.numero,4),'cliente',a.cliente,'vendedor',a.vendedor,'mks',coalesce((select jsonb_agg(jsonb_build_object('i',ca.drive_id,'d',ca.descripcion)order by ca.orden)from public.contrato_archivos ca where ca.contrato_id=a.id and ca.tipo='mockup' and ca.drive_id is not null),'[]'::jsonb),'prendas',a.total_prendas,'prendasTxt',coalesce(a.prendas_txt,''),'calidad',coalesce((select jsonb_agg(q.calidad order by q.calidad)from(select distinct cp.calidad from public.contrato_prendas cp where cp.contrato_id=a.id and btrim(cp.calidad)<>'')q),'[]'::jsonb),'urgente',lower(a.prioridad)='urgente','atrasado',a.fecha_entrega<(now()at time zone'America/Guayaquil')::date,'esExterior',lower(coalesce(a.prendas_txt,''))~'(chompa|rompeviento)','ingreso',to_char(a.fecha_ingreso at time zone'America/Guayaquil','DD/MM'),'entrega',to_char(a.fecha_entrega,'DD/MM'),'entregaMs',coalesce(extract(epoch from a.fecha_entrega::timestamp)*1000,0),'inicio',to_char(a.fecha_inicio_produccion,'DD/MM'),'disenador',coalesce(a.disenador,''),'autorMockup',coalesce(a.autor_mockup,''),'fabrica',case when lower(coalesce(a.disenador,''))like'%marco%'then 2 else 1 end,'obs',coalesce(a.observacion,''),'maquila',coalesce(a.maquila,''),'marca',coalesce((select ce.operario||' · '||to_char(ce.marcado_en at time zone'America/Guayaquil','DD/MM HH24:MI')from public.contrato_etapas ce where ce.contrato_id=a.id order by ce.marcado_en desc limit 1),''),'muestras',jsonb_build_object('tpu',a.muestras_tpu_faltan,'dtf',a.muestras_dtf_faltan),'hechas',(select jsonb_agg((a.rango>=e.orden or exists(select 1 from public.contrato_etapas ce where ce.contrato_id=a.id and ce.etapa=e.nombre))order by e.orden)from etapas e))fila,a.fecha_entrega,a.numero from activos a)
  select jsonb_build_object('etapas',(select valor from etapas_json),'filas',coalesce((select jsonb_agg(fila order by fecha_entrega nulls last,numero)from filas),'[]'::jsonb),'total',(select count(*)from activos),'hora',to_char(now()at time zone'America/Guayaquil','DD/MM/YYYY HH24:MI'))into v_resultado;
  return v_resultado;
-end;$fn$;
+end;$v117$;
 
 -- ------------------------------------------------------------
 -- 5. Marcar solo lo propio
@@ -254,20 +254,20 @@ end;$fn$;
 -- Acepta el area exacta ("Sellos") y tambien la sub-etapa de la hoja
 -- ("Sellos · TPU"), porque la bitacora del taller guarda las dos formas.
 create or replace function public.puede_marcar_area_v117(p_area text)
-returns boolean language sql stable security definer set search_path='' as $fn$
+returns boolean language sql stable security definer set search_path='' as $v117$
   select case when not public.es_operario_estacion_v117() then true
     else exists(
       select 1 from unnest(public.estaciones_usuario_actual_v117()) e
        where e = btrim(coalesce(p_area,''))
           or e = split_part(btrim(coalesce(p_area,'')), ' · ', 1))
   end;
-$fn$;
+$v117$;
 
 -- v116 con el control de area agregado. El resto es identico.
 create or replace function public.marcar_etapa_contrato_v116(
   p_numero text, p_area text, p_etapa text, p_operario text,
   p_no_aplica boolean, p_nota text, p_idempotency_key uuid)
-returns jsonb language plpgsql security definer set search_path='' as $fn$
+returns jsonb language plpgsql security definer set search_path='' as $v117$
 declare
   v_uid uuid := auth.uid();
   v_id uuid; v_estado text; v_area text := btrim(coalesce(p_area,''));
@@ -319,11 +319,11 @@ begin
 
   return jsonb_build_object('ok', true, 'contrato_id', v_id, 'etapa', v_etapa,
                             'estado_anterior', v_previa, 'avanzo', v_avanzo);
-end;$fn$;
+end;$v117$;
 
 create or replace function public.desmarcar_etapa_contrato_v116(
   p_numero text, p_area text, p_etapa text, p_motivo text, p_idempotency_key uuid)
-returns jsonb language plpgsql security definer set search_path='' as $fn$
+returns jsonb language plpgsql security definer set search_path='' as $v117$
 declare
   v_uid uuid := auth.uid(); v_id uuid; v_estado text; v_borradas integer;
   v_area text := btrim(coalesce(p_area,'')); v_etapa text := btrim(coalesce(p_etapa,''));
@@ -366,7 +366,7 @@ begin
   end if;
 
   return jsonb_build_object('ok', true, 'borradas', v_borradas);
-end;$fn$;
+end;$v117$;
 
 -- ------------------------------------------------------------
 -- 6. Privilegios

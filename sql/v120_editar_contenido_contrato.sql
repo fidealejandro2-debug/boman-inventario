@@ -77,7 +77,7 @@ create or replace function public.actualizar_contrato_v120(
   p_contrato_id uuid, p_datos jsonb, p_motivo text, p_idempotency_key uuid
 ) returns jsonb
 language plpgsql volatile security definer set search_path = ''
-as $fn$
+as $v120$
 declare
   v_uid uuid := auth.uid();
   v_c jsonb := coalesce(p_datos->'contrato','{}'::jsonb);
@@ -223,7 +223,7 @@ begin
   values(p_contrato_id,p_datos,btrim(p_motivo),v_uid,p_idempotency_key,v_resultado);
   return v_resultado;
 end;
-$fn$;
+$v120$;
 
 alter table public.contrato_actualizaciones_v120 owner to postgres;
 alter function public.actualizar_contrato_v120(uuid,jsonb,text,uuid) owner to postgres;

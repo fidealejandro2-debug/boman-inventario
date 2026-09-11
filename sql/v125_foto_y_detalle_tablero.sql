@@ -30,7 +30,7 @@ end$$;
 
 -- Logos y mockups de UN contrato, para la lupa.
 create or replace function public.archivos_contrato_v125(p_contrato_id uuid)
-returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+returns jsonb language plpgsql stable security definer set search_path='' as $v125$
 declare v_r jsonb;
 begin
   if auth.uid() is null or not (public.usuario_tiene_permiso_v35('produccion.acceder')
@@ -60,7 +60,7 @@ begin
         from public.contrato_etapas ce where ce.contrato_id = p_contrato_id), '[]'::jsonb)
   ) into v_r;
   return v_r;
-end;$fn$;
+end;$v125$;
 
 -- Apenda UN archivo ya subido al bucket. El pendiente se valida igual que en
 -- el alta: que exista, que sea de quien lo subio, que no se haya usado antes y
@@ -70,7 +70,7 @@ create or replace function public.agregar_archivo_contrato_v125(
   p_contrato_id uuid, p_pendiente_id uuid, p_url text, p_descripcion text, p_idempotency_key uuid
 ) returns jsonb
 language plpgsql volatile security definer set search_path = ''
-as $fn$
+as $v125$
 declare
   v_uid uuid := auth.uid();
   v_numero text;
@@ -121,7 +121,7 @@ begin
   values(p_contrato_id,jsonb_build_object('archivo_agregado',v_url),
          'Foto agregada desde el tablero de producción',v_uid,p_idempotency_key,v_resultado);
   return v_resultado;
-end;$fn$;
+end;$v125$;
 
 alter function public.archivos_contrato_v125(uuid) owner to postgres;
 alter function public.agregar_archivo_contrato_v125(uuid,uuid,text,text,uuid) owner to postgres;

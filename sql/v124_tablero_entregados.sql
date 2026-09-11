@@ -29,7 +29,7 @@ drop function if exists public.tablero_produccion_v102();
 -- p_solo_entregados = false: lo de siempre (todo lo que NO esta entregado).
 -- true: solo lo entregado, para revisar despachos.
 create or replace function public.tablero_produccion_v102(p_solo_entregados boolean default false)
-returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+returns jsonb language plpgsql stable security definer set search_path='' as $v124$
 declare v_resultado jsonb; v_solo boolean := coalesce(p_solo_entregados,false);
 begin
  if auth.uid() is null or not (public.usuario_tiene_permiso_v35('produccion.acceder')
@@ -70,7 +70,7 @@ begin
    'hora',to_char(now()at time zone'America/Guayaquil','DD/MM/YYYY HH24:MI')
  ) into v_resultado;
  return v_resultado;
-end;$fn$;
+end;$v124$;
 
 alter function public.tablero_produccion_v102(boolean) owner to postgres;
 revoke all on function public.tablero_produccion_v102(boolean) from public, anon;

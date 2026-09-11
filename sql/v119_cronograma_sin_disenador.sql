@@ -29,7 +29,7 @@ language plpgsql
 stable
 security definer
 set search_path = ''
-as $fn$
+as $v119$
 declare
   v_capacidad_defecto constant integer := 100;
   v_resultado jsonb;
@@ -124,7 +124,7 @@ begin
 
   return v_resultado;
 end;
-$fn$;
+$v119$;
 
 alter function public.cronograma_produccion_v96(date,date) owner to postgres;
 revoke all on function public.cronograma_produccion_v96(date,date) from public, anon;

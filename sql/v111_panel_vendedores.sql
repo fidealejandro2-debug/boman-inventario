@@ -36,7 +36,7 @@ language plpgsql
 stable
 security definer
 set search_path = ''
-as $fn$
+as $v111$
 declare
   v_hoy date := (now() at time zone 'America/Guayaquil')::date;
   v_desde date := coalesce(p_desde, (now() at time zone 'America/Guayaquil')::date);
@@ -182,7 +182,7 @@ begin
 
   return v_resultado;
 end;
-$fn$;
+$v111$;
 
 -- El expediente v97 exige produccion.acceder. El panel comercial necesita
 -- abrir el mismo brief con contratos.acceder, sin exponer gestion ni enlaces.
@@ -192,7 +192,7 @@ language plpgsql
 stable
 security definer
 set search_path = ''
-as $fn$
+as $v111$
 declare
   v_resultado jsonb;
 begin
@@ -227,7 +227,7 @@ begin
   end if;
   return v_resultado;
 end;
-$fn$;
+$v111$;
 
 alter function public.panel_vendedores_v111(
   text[],date,date,text[],text[],text,integer,integer

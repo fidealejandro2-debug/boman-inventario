@@ -84,7 +84,7 @@ where c.cliente_id_v113 is not null and length(btrim(coalesce(x.valor,'')))>=3 o
 insert into public.cliente_direcciones_v113(cliente_id,direccion,principal)
 select distinct cliente_id_v113,btrim(direccion),true from public.contratos where cliente_id_v113 is not null and length(btrim(coalesce(direccion,'')))>=5 on conflict do nothing;
 
-create or replace function public.asignar_cliente_contrato_v113()returns trigger language plpgsql security definer set search_path='' as $fn$
+create or replace function public.asignar_cliente_contrato_v113()returns trigger language plpgsql security definer set search_path='' as $v113$
 declare v_id uuid;
 begin
  if tg_op='UPDATE'then
@@ -95,11 +95,11 @@ begin
  select id into v_id from public.clientes_v113 where estado='activo' and nombre_normalizado=public.normalizar_cliente_v113(new.cliente)order by created_at limit 1;
  if v_id is null then insert into public.clientes_v113(nombre,nombre_normalizado,creado_por,actualizado_por)values(btrim(new.cliente),public.normalizar_cliente_v113(new.cliente),new.creado_por,new.actualizado_por)returning id into v_id;end if;
  new.cliente_id_v113:=v_id;return new;
-end;$fn$;
+end;$v113$;
 drop trigger if exists trg_asignar_cliente_contrato_v113 on public.contratos;
 create trigger trg_asignar_cliente_contrato_v113 before insert or update of cliente,cliente_id_v113 on public.contratos for each row execute function public.asignar_cliente_contrato_v113();
 
-create or replace function public.sincronizar_contactos_contrato_v113()returns trigger language plpgsql security definer set search_path='' as $fn$
+create or replace function public.sincronizar_contactos_contrato_v113()returns trigger language plpgsql security definer set search_path='' as $v113$
 begin
  if new.cliente_id_v113 is null then return new;end if;
  insert into public.cliente_contactos_v113(cliente_id,tipo,valor,principal)
@@ -107,12 +107,12 @@ begin
  where length(btrim(coalesce(x.valor,'')))>=3 on conflict do nothing;
  if length(btrim(coalesce(new.direccion,'')))>=5 then insert into public.cliente_direcciones_v113(cliente_id,direccion,principal)values(new.cliente_id_v113,btrim(new.direccion),true)on conflict do nothing;end if;
  return new;
-end;$fn$;
+end;$v113$;
 drop trigger if exists trg_sincronizar_contactos_contrato_v113 on public.contratos;
 create trigger trg_sincronizar_contactos_contrato_v113 after insert or update of cliente_id_v113,telefono,whatsapp,email,direccion on public.contratos for each row execute function public.sincronizar_contactos_contrato_v113();
 
 create or replace function public.listar_clientes_v113(p_busqueda text default null,p_solo_duplicados boolean default false,p_pagina integer default 1,p_por_pagina integer default 30)
-returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+returns jsonb language plpgsql stable security definer set search_path='' as $v113$
 declare v_r jsonb;v_pag integer:=greatest(coalesce(p_pagina,1),1);v_por integer:=least(greatest(coalesce(p_por_pagina,30),1),100);
 begin
  if auth.uid()is null then raise exception'Debes iniciar sesion';end if;if not public.usuario_tiene_permiso_v35('clientes.acceder')then raise exception'No tienes permiso para consultar clientes';end if;
@@ -125,9 +125,9 @@ begin
  from public.clientes_v113 cl where cl.estado='activo'and(nullif(btrim(coalesce(p_busqueda,'')),'')is null or cl.nombre ilike'%'||btrim(p_busqueda)||'%'or cl.identificacion ilike'%'||btrim(p_busqueda)||'%')),
  filtrados as(select * from base where not coalesce(p_solo_duplicados,false) or duplicado),pag as(select * from filtrados order by saldo desc,nombre offset(v_pag-1)*v_por limit v_por)
  select jsonb_build_object('total',(select count(*)from filtrados),'pagina',v_pag,'por_pagina',v_por,'resumen',jsonb_build_object('clientes',(select count(*)from filtrados),'ventas',coalesce((select sum(ventas)from filtrados),0),'saldo',coalesce((select sum(saldo)from filtrados),0),'duplicados',(select count(*)from filtrados where duplicado)),'filas',coalesce((select jsonb_agg(to_jsonb(pag)order by saldo desc,nombre)from pag),'[]'))into v_r;return v_r;
-end;$fn$;
+end;$v113$;
 
-create or replace function public.obtener_cliente_v113(p_cliente_id uuid)returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+create or replace function public.obtener_cliente_v113(p_cliente_id uuid)returns jsonb language plpgsql stable security definer set search_path='' as $v113$
 declare v_r jsonb;
 begin
  if auth.uid()is null then raise exception'Debes iniciar sesion';end if;if not public.usuario_tiene_permiso_v35('clientes.acceder')then raise exception'No tienes permiso para consultar clientes';end if;
@@ -137,9 +137,9 @@ begin
  'devoluciones',coalesce((select jsonb_agg(jsonb_build_object('id',e.id,'contrato_id',c.id,'numero',c.numero,'fecha',e.revertido_en,'motivo',e.motivo_reversion,'prendas',(select sum(l.cantidad)from public.contrato_entrega_lineas_v112 l where l.entrega_id=e.id))order by e.revertido_en desc)from public.contrato_entregas_v112 e join public.contratos c on c.id=e.contrato_id where c.cliente_id_v113=cl.id and e.estado='revertida'),'[]'),
  'duplicados',coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'nombre',d.nombre,'identificacion',d.identificacion))from public.clientes_v113 d where d.estado='activo'and d.id<>cl.id and(d.nombre_normalizado=cl.nombre_normalizado or(nullif(public.normalizar_cliente_v113(d.identificacion),'')is not null and public.normalizar_cliente_v113(d.identificacion)=public.normalizar_cliente_v113(cl.identificacion)))),'[]'))into v_r from public.clientes_v113 cl where cl.id=p_cliente_id;
  if v_r is null then raise exception'El cliente no existe';end if;return v_r;
-end;$fn$;
+end;$v113$;
 
-create or replace function public.guardar_cliente_v113(p_cliente_id uuid,p_datos jsonb,p_motivo text,p_idempotency_key uuid)returns jsonb language plpgsql security definer set search_path='' as $fn$
+create or replace function public.guardar_cliente_v113(p_cliente_id uuid,p_datos jsonb,p_motivo text,p_idempotency_key uuid)returns jsonb language plpgsql security definer set search_path='' as $v113$
 declare v_uid uuid:=auth.uid();v_id uuid;v_res jsonb;v_item jsonb;v_ident text:=nullif(btrim(p_datos->>'identificacion'),'');
 begin
  if v_uid is null then raise exception'Debes iniciar sesion';end if;if not public.usuario_tiene_permiso_v35('clientes.editar')then raise exception'No tienes permiso para editar clientes';end if;if p_idempotency_key is null then raise exception'La idempotencia es obligatoria';end if;if length(btrim(coalesce(p_motivo,'')))<10 then raise exception'El motivo debe tener al menos 10 caracteres';end if;if length(btrim(coalesce(p_datos->>'nombre','')))<2 then raise exception'Escribe el nombre del cliente';end if;
@@ -150,9 +150,9 @@ begin
  if jsonb_typeof(coalesce(p_datos->'direcciones','[]'))='array'then delete from public.cliente_direcciones_v113 where cliente_id=v_id;for v_item in select value from jsonb_array_elements(p_datos->'direcciones')loop if length(btrim(coalesce(v_item->>'direccion','')))>=5 then insert into public.cliente_direcciones_v113(cliente_id,direccion,etiqueta,principal)values(v_id,btrim(v_item->>'direccion'),nullif(btrim(v_item->>'etiqueta'),''),coalesce((v_item->>'principal')::boolean,false))on conflict do nothing;end if;end loop;end if;
  update public.contratos set cliente=btrim(p_datos->>'nombre')where cliente_id_v113=v_id and cliente is distinct from btrim(p_datos->>'nombre');
  v_res:=jsonb_build_object('cliente_id',v_id);insert into public.cliente_eventos_v113(cliente_id,accion,datos,motivo,usuario_id,idempotency_key)values(v_id,case when p_cliente_id is null then'crear'else'editar'end,v_res,btrim(p_motivo),v_uid,p_idempotency_key);return v_res;
-exception when unique_violation then raise exception'Ya existe un cliente activo con esa identificacion';end;$fn$;
+exception when unique_violation then raise exception'Ya existe un cliente activo con esa identificacion';end;$v113$;
 
-create or replace function public.fusionar_clientes_v113(p_conservar_id uuid,p_duplicado_id uuid,p_motivo text,p_idempotency_key uuid)returns jsonb language plpgsql security definer set search_path='' as $fn$
+create or replace function public.fusionar_clientes_v113(p_conservar_id uuid,p_duplicado_id uuid,p_motivo text,p_idempotency_key uuid)returns jsonb language plpgsql security definer set search_path='' as $v113$
 declare v_uid uuid:=auth.uid();v_res jsonb;
 begin
  if v_uid is null then raise exception'Debes iniciar sesion';end if;if not public.usuario_tiene_permiso_v35('clientes.fusionar')then raise exception'No tienes permiso para fusionar clientes';end if;if p_idempotency_key is null then raise exception'La idempotencia es obligatoria';end if;select datos into v_res from public.cliente_eventos_v113 where idempotency_key=p_idempotency_key;if found then return v_res;end if;if p_conservar_id=p_duplicado_id then raise exception'Selecciona dos clientes distintos';end if;if length(btrim(coalesce(p_motivo,'')))<10 then raise exception'El motivo debe tener al menos 10 caracteres';end if;
@@ -162,7 +162,7 @@ begin
  insert into public.cliente_direcciones_v113(cliente_id,direccion,etiqueta,principal)select p_conservar_id,direccion,etiqueta,principal from public.cliente_direcciones_v113 where cliente_id=p_duplicado_id on conflict do nothing;delete from public.cliente_direcciones_v113 where cliente_id=p_duplicado_id;
  update public.clientes_v113 set estado='fusionado',fusionado_en_id=p_conservar_id,updated_at=now(),actualizado_por=v_uid where id=p_duplicado_id;
  v_res:=jsonb_build_object('cliente_id',p_conservar_id,'fusionado_id',p_duplicado_id);insert into public.cliente_eventos_v113(cliente_id,accion,datos,motivo,usuario_id,idempotency_key)values(p_conservar_id,'fusionar',v_res,btrim(p_motivo),v_uid,p_idempotency_key);return v_res;
-end;$fn$;
+end;$v113$;
 
 alter table public.clientes_v113 enable row level security;alter table public.cliente_contactos_v113 enable row level security;alter table public.cliente_direcciones_v113 enable row level security;alter table public.cliente_eventos_v113 enable row level security;
 revoke all on public.clientes_v113,public.cliente_contactos_v113,public.cliente_direcciones_v113,public.cliente_eventos_v113 from public,anon,authenticated;

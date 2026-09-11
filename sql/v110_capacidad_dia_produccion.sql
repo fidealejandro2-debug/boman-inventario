@@ -37,7 +37,7 @@ language plpgsql
 stable
 security definer
 set search_path = ''
-as $fn$
+as $v110$
 declare
   v_resultado jsonb;
 begin
@@ -80,7 +80,7 @@ begin
 
   return v_resultado;
 end;
-$fn$;
+$v110$;
 
 alter function public.capacidad_dia_produccion_v110(date, uuid) owner to postgres;
 revoke all on function public.capacidad_dia_produccion_v110(date, uuid) from public, anon;

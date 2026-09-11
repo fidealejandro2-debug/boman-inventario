@@ -34,16 +34,16 @@ end$$;
 
 -- ¿El contrato tiene desglose real por talla, o solo totales planos?
 create or replace function public.tiene_tallas_detalladas_v123(p_contrato_id uuid)
-returns boolean language sql stable security definer set search_path='' as $fn$
+returns boolean language sql stable security definer set search_path='' as $v123$
   select exists(select 1 from public.contrato_prendas cp
                  where cp.contrato_id = p_contrato_id and btrim(cp.talla) <> 'General');
-$fn$;
+$v123$;
 
 -- Las cantidades actuales, para precargar el editor. Va aparte del tablero a
 -- proposito: solo se pide al abrir el editor de UN contrato, en vez de engordar
 -- el payload de las cientos de filas que nadie va a editar.
 create or replace function public.prendas_contrato_v123(p_contrato_id uuid)
-returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+returns jsonb language plpgsql stable security definer set search_path='' as $v123$
 declare v_r jsonb;
 begin
   if auth.uid() is null or not public.usuario_tiene_permiso_v35('produccion.acceder') then
@@ -60,13 +60,13 @@ begin
     ), '[]'::jsonb)
   ) into v_r;
   return v_r;
-end;$fn$;
+end;$v123$;
 
 create or replace function public.editar_prendas_tablero_v123(
   p_contrato_id uuid, p_filas jsonb, p_confirmar boolean, p_idempotency_key uuid
 ) returns jsonb
 language plpgsql volatile security definer set search_path = ''
-as $fn$
+as $v123$
 declare
   v_uid uuid := auth.uid();
   v_antes public.contratos%rowtype;
@@ -136,7 +136,7 @@ begin
     'Corrección de cantidades desde el tablero de producción',v_uid,p_idempotency_key,v_resultado);
   return v_resultado;
 end;
-$fn$;
+$v123$;
 
 alter function public.tiene_tallas_detalladas_v123(uuid) owner to postgres;
 alter function public.editar_prendas_tablero_v123(uuid,jsonb,boolean,uuid) owner to postgres;

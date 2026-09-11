@@ -58,18 +58,18 @@ end$$;
 -- de tablero_produccion_v102. Vive en una funcion para no repetirlo en cada
 -- comparacion de "esto avanza o retrocede".
 create or replace function public.orden_etapa_v116(p_etapa text)
-returns integer language sql immutable set search_path='' as $fn$
+returns integer language sql immutable set search_path='' as $v116$
   select case btrim(coalesce(p_etapa,''))
     when 'Ingresado' then 1 when 'Por imprimir' then 2 when 'Impreso' then 3
     when 'Sublimación' then 4 when 'Cortado' then 5 when 'En costura o maquila' then 6
     when 'Estampado' then 7 when 'Terminado' then 8 when 'Estampado final' then 9
     when 'Pendiente entrega' then 10 when 'Entregado' then 11 else 0 end;
-$fn$;
+$v116$;
 
 create or replace function public.marcar_etapa_contrato_v116(
   p_numero text, p_area text, p_etapa text, p_operario text,
   p_no_aplica boolean, p_nota text, p_idempotency_key uuid)
-returns jsonb language plpgsql security definer set search_path='' as $fn$
+returns jsonb language plpgsql security definer set search_path='' as $v116$
 declare
   v_uid uuid := auth.uid();
   v_id uuid; v_estado text; v_area text := btrim(coalesce(p_area,''));
@@ -119,7 +119,7 @@ begin
 
   return jsonb_build_object('ok', true, 'contrato_id', v_id, 'etapa', v_etapa,
                             'estado_anterior', v_previa, 'avanzo', v_avanzo);
-end;$fn$;
+end;$v116$;
 
 -- Quitar una marca. Marcar de mas es inevitable y sin esto no habria como
 -- deshacerlo desde Vercel. Si la etapa que se quita ERA el estado actual del
@@ -127,7 +127,7 @@ end;$fn$;
 -- recomputarEstadoDesdeBitacora_ en Codigo.gs- en vez de quedarse mintiendo.
 create or replace function public.desmarcar_etapa_contrato_v116(
   p_numero text, p_area text, p_etapa text, p_motivo text, p_idempotency_key uuid)
-returns jsonb language plpgsql security definer set search_path='' as $fn$
+returns jsonb language plpgsql security definer set search_path='' as $v116$
 declare
   v_uid uuid := auth.uid(); v_id uuid; v_estado text; v_borradas integer;
   v_area text := btrim(coalesce(p_area,'')); v_etapa text := btrim(coalesce(p_etapa,''));
@@ -165,7 +165,7 @@ begin
   end if;
 
   return jsonb_build_object('ok', true, 'borradas', v_borradas);
-end;$fn$;
+end;$v116$;
 
 revoke all on function public.marcar_etapa_contrato_v116(text,text,text,text,boolean,text,uuid) from public, anon;
 revoke all on function public.desmarcar_etapa_contrato_v116(text,text,text,text,uuid) from public, anon;

@@ -25,7 +25,7 @@ do $$begin
 end$$;
 
 create or replace function public.tablero_produccion_v102()
-returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+returns jsonb language plpgsql stable security definer set search_path='' as $v122$
 declare v_resultado jsonb;
 begin
  if auth.uid() is null or not (public.usuario_tiene_permiso_v35('produccion.acceder')
@@ -64,6 +64,6 @@ begin
    'hora',to_char(now()at time zone'America/Guayaquil','DD/MM/YYYY HH24:MI')
  ) into v_resultado;
  return v_resultado;
-end;$fn$;
+end;$v122$;
 
 commit;
