@@ -89,6 +89,9 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
   // Las estaciones vienen en los datos: cada etapa dice que area la marca
   // ("Sellos · TPU" -> Sellos). Elegir una deja la tabla como la pantalla de
   // esa estacion en el taller, sin columnas de trabajo ajeno.
+  // Sin restriccion se ofrecen las estaciones completas; a un operario se le
+  // ofrece exactamente lo que tiene asignado, que puede ser una sub-estacion
+  // ("Sellos · TPU") y no toda el area.
   const estaciones = useMemo(
     () => restringido
       ? estacionesPermitidas!
@@ -96,9 +99,14 @@ export default function TableroCliente({ datos, puedeMarcar = false, estacionesP
     [etapas, restringido, estacionesPermitidas],
   );
   // Se conserva el indice original porque `f.hechas` va emparejado con
-  // datos.etapas, no con las columnas que se pintan.
+  // datos.etapas, no con las columnas que se pintan. Una estacion completa
+  // ("Sellos") cubre sus sub-estaciones; una sub-estacion, solo la suya.
   const columnas = useMemo(
-    () => etapas.map((et, i) => ({ et, i })).filter(({ et }) => !estacion || String(et.area || "").split(" · ")[0] === estacion),
+    () => etapas.map((et, i) => ({ et, i })).filter(({ et }) => {
+      if (!estacion) return true;
+      const area = String(et.area || "");
+      return area === estacion || area.split(" · ")[0] === estacion;
+    }),
     [etapas, estacion],
   );
 
