@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import AgregarColaboradorDiseno, { type ColaboradorDiseno } from "@/components/AgregarColaboradorDiseno";
 import { createClient } from "@/lib/supabase/client";
+import { mensajeError } from "@/lib/errores";
 import estilos from "./Contratos.module.css";
 
 const ESTADOS = ["Ingresado", "Por imprimir", "Impreso", "Sublimación", "Cortado", "En costura o maquila", "Estampado", "Terminado", "Estampado final", "Pendiente entrega", "Entregado"];
@@ -51,7 +52,7 @@ export default function GestionContratoV99({contrato,onGuardado,onCerrar,puedeFi
   setGuardandoResponsable(tipo);
   const{error}=await supabase.rpc("asignar_personal_diseno_v127",{p_contrato_id:contrato.id,p_tipo:tipo,p_empleado_id:empleadoId||null,p_motivo:motivo,p_idempotency_key:crypto.randomUUID()});
   setGuardandoResponsable(null);
-  if(error){await mostrarAvisoDialogo(error.message.includes("asignar_personal_diseno_v127")?"Falta instalar v127 en Supabase.":error.message,"No se pudo cambiar el responsable",true);return}
+  if(error){await mostrarAvisoDialogo(mensajeError(error, "v127_personal_diseno_nomina.sql"),"No se pudo cambiar el responsable",true);return}
   await mostrarAvisoDialogo(`El ${etiqueta} quedó vinculado al personal de Nómina.`,"Responsable actualizado");
   await onGuardado();
  }
@@ -63,11 +64,11 @@ export default function GestionContratoV99({contrato,onGuardado,onCerrar,puedeFi
   setGuardandoFin(true);
   const{error}=await supabase.rpc("ajustar_finanzas_contrato_v100",{p_contrato_id:contrato.id,p_presupuesto:pre,p_abono_inicial:ini,p_motivo:motivo,p_idempotency_key:crypto.randomUUID()});
   setGuardandoFin(false);
-  if(error){await mostrarAvisoDialogo(error.message.includes("ajustar_finanzas_contrato_v100")?"Falta instalar v100 en Supabase.":error.message,"No se pudo ajustar",true);return}
+  if(error){await mostrarAvisoDialogo(mensajeError(error, "v100_abonos_presupuesto_contratos.sql"),"No se pudo ajustar",true);return}
   await mostrarAvisoDialogo("El presupuesto quedó ajustado y auditado.","Cifras actualizadas");
   await onGuardado();
  }
- async function guardar(){const original=inicial(contrato);const cambios:Record<string,string|boolean|null>={};(Object.keys(form) as Array<keyof Formulario>).forEach(clave=>{if(form[clave]!==original[clave]){const valor=form[clave];cambios[clave]=typeof valor==="string"&&valor.trim()===""?null:valor}});if(!Object.keys(cambios).length){await mostrarAvisoDialogo("No modificaste ningún dato del contrato.","Sin cambios");return}const motivo=await pedirMotivoDialogo(`Explica por qué se modificará la gestión del contrato ${contrato.numero}.`,10,"Motivo del cambio");if(!motivo)return;setGuardando(true);const{error}=await supabase.rpc("guardar_gestion_contrato_v99",{p_contrato_id:contrato.id,p_cambios:cambios,p_motivo:motivo,p_idempotency_key:crypto.randomUUID()});setGuardando(false);if(error){await mostrarAvisoDialogo(error.message.includes("guardar_gestion_contrato_v99")?"Falta instalar v99 en Supabase.":error.message,"No se pudo actualizar el contrato",true);return}await mostrarAvisoDialogo("Los cambios quedaron guardados y auditados.","Contrato actualizado");await onGuardado();onCerrar()}
+ async function guardar(){const original=inicial(contrato);const cambios:Record<string,string|boolean|null>={};(Object.keys(form) as Array<keyof Formulario>).forEach(clave=>{if(form[clave]!==original[clave]){const valor=form[clave];cambios[clave]=typeof valor==="string"&&valor.trim()===""?null:valor}});if(!Object.keys(cambios).length){await mostrarAvisoDialogo("No modificaste ningún dato del contrato.","Sin cambios");return}const motivo=await pedirMotivoDialogo(`Explica por qué se modificará la gestión del contrato ${contrato.numero}.`,10,"Motivo del cambio");if(!motivo)return;setGuardando(true);const{error}=await supabase.rpc("guardar_gestion_contrato_v99",{p_contrato_id:contrato.id,p_cambios:cambios,p_motivo:motivo,p_idempotency_key:crypto.randomUUID()});setGuardando(false);if(error){await mostrarAvisoDialogo(mensajeError(error, "v99_gestion_contratos.sql"),"No se pudo actualizar el contrato",true);return}await mostrarAvisoDialogo("Los cambios quedaron guardados y auditados.","Contrato actualizado");await onGuardado();onCerrar()}
  return <section className={`card ${estilos.editorGestion}`}><div className={estilos.editorCabecera}><div><span className="eyebrow">GESTIÓN V99</span><h3>Actualizar planificación y responsables</h3></div><button className="secondary" onClick={onCerrar}>Cerrar edición</button></div><div className={estilos.formGestion}>
   <label className={`field ${estilos.campoCompleto}`}><span>Nombre del contrato</span><input value={form.nombre_contrato_v115} onChange={e=>cambiar("nombre_contrato_v115",e.target.value)} placeholder="Como se llama el pedido (equipo, colegio, evento…)"/></label>
   <label className="field"><span>Cliente real</span><input value={form.cliente} onChange={e=>cambiar("cliente",e.target.value)} placeholder="Persona o institución que paga"/></label>

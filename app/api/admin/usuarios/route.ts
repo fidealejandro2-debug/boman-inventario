@@ -30,7 +30,7 @@ function almacenesDelBody(valor: unknown) {
 }
 
 async function validarAlmacenesActivos(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   ids: string[]
 ) {
   if (ids.some((id) => !UUID_VALIDO.test(id))) {
@@ -75,7 +75,7 @@ function validarOrigen(request: NextRequest) {
 }
 
 async function obtenerAdmin() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: auth, error: authError } = await supabase.auth.getUser();
 
   if (authError || !auth.user) {

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * tablero del taller seguira mostrando la marca hasta que la quiten alli.
  */
 export async function POST(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ ok: false, error: "Sesión requerida" }, { status: 401 });
 

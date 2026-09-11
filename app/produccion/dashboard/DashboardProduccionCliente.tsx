@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
+import { mensajeError } from "@/lib/errores";
 import { exportarCSV } from "@/lib/utils";
 import estilos from "./DashboardProduccion.module.css";
 
@@ -44,7 +45,7 @@ export default function DashboardProduccionCliente(){
       supabase.rpc("listar_dashboard_produccion_v95",{...aplicados,p_pagina:pag,p_por_pagina:POR_PAGINA}),
     ]);
     const fallo=r.error||d.error;
-    if(fallo){setError(fallo.message.includes("resumen_dashboard_produccion_v95")?"Falta instalar v95 en Supabase.":fallo.message)}
+    if(fallo){setError(mensajeError(fallo, "v95_dashboard_produccion.sql"))}
     else{setResumen(r.data as Resumen);setDetalle(d.data as Detalle)}
     setCargando(false);
   },[aplicados,supabase]);

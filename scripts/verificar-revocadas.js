@@ -19,9 +19,13 @@ const sql = archivos.map((f) => ({ f, t: fs.readFileSync(path.join('sql', f), 'u
 const usadas = new Map();
 for (const a of walk('app')) {
   const t = fs.readFileSync(a, 'utf8');
-  for (const m of t.matchAll(/\.rpc\(\s*["'`]([a-z0-9_]+)["'`]/g)) {
-    if (!usadas.has(m[1])) usadas.set(m[1], new Set());
-    usadas.get(m[1]).add(a.split(path.sep).join('/'));
+  for (const m of t.matchAll(/([a-z_$][a-z0-9_$]*)\.rpc\(\s*["'`]([a-z0-9_]+)["'`]/gi)) {
+    // Un cliente service-role puede llamar funciones deliberadamente
+    // revocadas a authenticated. Este verificador busca contradicciones de la
+    // interfaz, no debe degradar la seguridad para silenciar ese caso válido.
+    if (m[1] === 'admin' && /createAdminClient/.test(t)) continue;
+    if (!usadas.has(m[2])) usadas.set(m[2], new Set());
+    usadas.get(m[2]).add(a.split(path.sep).join('/'));
   }
 }
 

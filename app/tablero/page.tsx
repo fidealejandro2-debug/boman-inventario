@@ -11,7 +11,7 @@ import TableroCliente, { type DatosTablero } from "./TableroCliente";
  * fuente de importacion, pero una caida de Apps Script ya no tumba la pantalla.
  */
 async function traerTablero(): Promise<DatosTablero | { error: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("tablero_produccion_v102");
   if (error) {
     const faltaV102 = /tablero_produccion_v102|schema cache|could not find/i.test(error.message);

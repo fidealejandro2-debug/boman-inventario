@@ -1,5 +1,6 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from "react";
+import { mensajeError } from "@/lib/errores";
 import {confirmarDialogo,mostrarAvisoDialogo,pedirMotivoDialogo} from "@/components/Dialogo";
 import {createClient} from "@/lib/supabase/client";
 import estilos from "./CierreBomansport.module.css";
@@ -13,7 +14,7 @@ function fecha(v:string|null|undefined){return v?new Intl.DateTimeFormat("es-EC"
 
 export default function CierreBomansportCliente(){
  const supabase=useRef(createClient()).current;const [datos,setDatos]=useState<Diagnostico|null>(null);const [checklist,setChecklist]=useState<Checklist|null>(null);const [cargando,setCargando]=useState(true);const [guardando,setGuardando]=useState(false);
- const cargar=useCallback(async()=>{setCargando(true);const{data,error}=await supabase.rpc("diagnostico_cierre_bomansport_v103");if(error)await mostrarAvisoDialogo(error.message.includes("diagnostico_cierre_bomansport_v103")?"Falta instalar v103 en Supabase.":error.message,"No se pudo evaluar la migración",true);else{const d=data as Diagnostico;setDatos(d);setChecklist(d.configuracion.checklist)}setCargando(false)},[supabase]);
+ const cargar=useCallback(async()=>{setCargando(true);const{data,error}=await supabase.rpc("diagnostico_cierre_bomansport_v103");if(error)await mostrarAvisoDialogo(mensajeError(error, "v103_cierre_migracion_bomansport.sql"),"No se pudo evaluar la migración",true);else{const d=data as Diagnostico;setDatos(d);setChecklist(d.configuracion.checklist)}setCargando(false)},[supabase]);
  useEffect(()=>{void cargar()},[cargar]);
  async function guardar(modo:Modo){if(!datos||!checklist)return;if(modo!==datos.configuracion.modo&&!await confirmarDialogo(`Cambiarás la fuente operativa de “${datos.configuracion.modo}” a “${modo}”. ¿Deseas continuar?`,modo==="cerrado"))return;const motivo=await pedirMotivoDialogo(`Documenta por qué se guardará el checklist y el modo ${modo}.`,10,"Justificación del cambio");if(!motivo)return;setGuardando(true);const{error}=await supabase.rpc("admin_cambiar_cierre_bomansport_v103",{p_modo:modo,p_checklist:checklist,p_motivo:motivo,p_idempotency_key:crypto.randomUUID()});setGuardando(false);if(error)return mostrarAvisoDialogo(error.message,"No se pudo actualizar el cierre",true);await mostrarAvisoDialogo("El estado de migración quedó guardado y auditado.","Cambio aplicado");await cargar()}
  if(cargando&&!datos)return <div className="card"><div className={estilos.vacio}>Evaluando la migración…</div></div>;

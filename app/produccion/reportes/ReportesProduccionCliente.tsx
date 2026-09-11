@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mensajeError } from "@/lib/errores";
 import { exportarCSV, fecha } from "@/lib/utils";
 
 type Agrupacion = "dia" | "prenda" | "disenador" | "contrato";
@@ -66,7 +67,7 @@ export default function ReportesProduccionCliente() {
       p_agrupar_por: aplicado.agrupacion,
     });
     if (err) {
-      setError(err.message.includes("reporte_produccion_v98") ? "Falta instalar v98 en Supabase." : err.message);
+      setError(mensajeError(err, "v98_reportes_produccion.sql"));
     } else {
       setDatos(data as Reporte);
     }

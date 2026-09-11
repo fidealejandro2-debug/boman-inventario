@@ -40,7 +40,7 @@ function tieneSecretoValido(request: NextRequest) {
 
 /** Sesión de admin activo, para el botón manual sin el bearer a mano. */
 async function adminDeSesion() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return null;
   const { data: perfil } = await supabase
@@ -366,33 +366,26 @@ async function sincronizar(origen: Origen, ejecutadoPor: string | null) {
       : { status: 409 as const, body: { ok: false, omitida: true, modo: cierre.modo, error: mensaje } };
   }
 
-  const { data: enCurso } = await admin
-    .from("bomansport_importaciones")
-    .select("id")
-    .eq("estado", "en_curso")
-    .gt("iniciado_en", new Date(Date.now() - 10 * 60 * 1000).toISOString())
-    .limit(1)
-    .maybeSingle();
-  if (enCurso) {
-    return { status: 409 as const, body: { ok: false, error: "Ya hay una sincronización en curso. Intenta de nuevo en unos minutos." } };
-  }
-
   const base = process.env.BOMANSPORT_WEBAPP_URL;
   const token = process.env.BOMANSPORT_API_TOKEN;
   if (!base || !token) {
     return { status: 500 as const, body: { ok: false, error: "Faltan BOMANSPORT_WEBAPP_URL o BOMANSPORT_API_TOKEN en las variables de entorno." } };
   }
 
-  const inicio = Date.now();
-  const { data: log, error: errorLog } = await admin
-    .from("bomansport_importaciones")
-    .insert({ origen, ejecutado_por: ejecutadoPor })
-    .select("id")
-    .single();
-  if (errorLog || !log) {
-    return { status: 500 as const, body: { ok: false, error: `No se pudo iniciar el registro de importación: ${errorLog?.message ?? "error desconocido"}` } };
+  const { data: inicioAtomico, error: errorInicio } = await admin.rpc(
+    "iniciar_importacion_bomansport_v132",
+    { p_origen: origen, p_ejecutado_por: ejecutadoPor }
+  );
+  if (errorInicio) {
+    return { status: 500 as const, body: { ok: false, error: `No se pudo iniciar la importación: ${errorInicio.message}` } };
   }
-  const importacionId = log.id as string;
+  const inicioDatos = inicioAtomico as { iniciada?: boolean; id?: string } | null;
+  if (!inicioDatos?.iniciada) {
+    return { status: 409 as const, body: { ok: false, error: "Ya hay una sincronización en curso. Intenta de nuevo en unos minutos." } };
+  }
+
+  const inicio = Date.now();
+  const importacionId = inicioDatos.id as string;
 
   async function cerrarConError(mensaje: string) {
     await admin

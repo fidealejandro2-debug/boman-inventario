@@ -6,6 +6,12 @@ import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/com
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/permisos";
 import {CALIDADES_CONTRATO,PRENDAS_CONTRATO} from "@/lib/catalogosContrato";
+// Las reglas del brief viven en lib/ y estan cubiertas por briefContrato.test.ts.
+// Tenerlas aqui dentro es lo que permitio que se rompieran tres veces sin que
+// nadie se enterara hasta mirar un papel impreso.
+import {aplanarSpec,leerSpec,valorDeCampo,grupoPrendaJugador,etiquetaGrupo,cuentaGrupo,
+ tallaQueOrdena,compararJugadores,TIPO_SOLO_SUPERIOR,TIPO_SOLO_INFERIOR,TIPOS_SIN_MANGA,
+ ABREV_TIPO} from "@/lib/briefContrato";
 import estilos from "./IngresoContrato.module.css";
 import {TODOS_LOS_COLORES} from "./colores";
 import {FICHAS_PRENDA,fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPrenda} from "./specsPrendas";
@@ -206,38 +212,15 @@ function tallasDesdeJugadores(jugadores:Jugador[]):Linea[]{
 }
 // Alcance de prenda de cada tipo de uniforme, para las bandas de color del
 // brief: el de corte busca "donde estan las camisetas sueltas" de un vistazo.
-const TIPO_SOLO_SUPERIOR=new Set(["Solo camiseta","Solo Polo","Solo BVD","Chompa","Chompa de Frío","Chaleco"]);
-const TIPO_SOLO_INFERIOR=new Set(["Solo pantaloneta","Solo Falda Short","Solo pantalón","Solo bermuda"]);
-const grupoPrendaJugador=(tu:string)=>TIPO_SOLO_SUPERIOR.has(tu)?1:TIPO_SOLO_INFERIOR.has(tu)?2:0;
 // A quien solo lleva prenda inferior lo ordena su talla de abajo. Usar siempre
 // la superior lo mandaba al final del listado, porque viene vacia.
 // Tipos que NO llevan camiseta de manga (inferiores, chompas, chalecos, BVD):
 // en la columna MANGA va "—", no "corta". Decir "corta" de una pantaloneta o
 // de una chompa es informacion falsa en el papel que usa el taller.
-const TIPOS_SIN_MANGA=new Set(["Solo pantaloneta","Solo Falda Short","Solo pantalón","Solo bermuda",
- "Solo BVD","BVD + Pantaloneta","BVD con Falda Short","BVD + Bermuda",
- "Chompa","Chompa de Frío","Chompa Retro","Chaleco","Exterior completo"]);
 // El tipo se abrevia para que la fila no se parta en dos lineas. El nombre
 // completo no se pierde: lo lleva la banda del grupo, justo encima.
-const ABREV_TIPO:Record<string,string>={"Uniforme completo":"Completo","Uniforme completo (Falda Short)":"Completo (Falda)",
- "BVD + Pantaloneta":"BVD+Pant","BVD con Falda Short":"BVD+Falda","Polo + Pantaloneta":"Polo+Pant",
- "Camiseta + Exterior":"Cam+Ext","Polo + Exterior":"Polo+Ext","Solo Polo":"Polo","Solo camiseta":"Camiseta",
- "Solo pantaloneta":"Pantaloneta","Solo Falda Short":"Falda Short","Solo pantalón":"Pantalón",
- "Solo BVD":"BVD","Exterior completo":"Exterior","Arquero completo":"Arquero"};
-const tallaQueOrdena=(j:Jugador)=>TIPO_SOLO_INFERIOR.has(j.tipo_uniforme)?texto(j.talla_inferior)||texto(j.talla_superior):texto(j.talla_superior)||texto(j.talla_inferior);
 // Si en el tramo hay un solo tipo, se usa su nombre literal; si hay varios, el
 // nombre del alcance. Mismo criterio que _etqGrupo del legado.
-function etiquetaGrupo(arr:Jugador[],desde:number){
- const g=grupoPrendaJugador(arr[desde].tipo_uniforme),cal=arr[desde].calidad;const tipos=new Set<string>();
- for(let k=desde;k<arr.length;k++){if(grupoPrendaJugador(arr[k].tipo_uniforme)!==g||arr[k].calidad!==cal)break;if(texto(arr[k].tipo_uniforme))tipos.add(texto(arr[k].tipo_uniforme))}
- if(tipos.size===1)return Array.from(tipos)[0];
- return g===1?"Solo parte superior":g===2?"Solo parte inferior":"Uniforme completo";
-}
-function cuentaGrupo(arr:Jugador[],desde:number){
- const g=grupoPrendaJugador(arr[desde].tipo_uniforme),cal=arr[desde].calidad;let n=0;
- for(let k=desde;k<arr.length;k++){if(grupoPrendaJugador(arr[k].tipo_uniforme)!==g||arr[k].calidad!==cal)break;n++}
- return n;
-}
 // Importacion desde Excel: el legado tolera encabezados escritos de varias
 // formas y normaliza tallas mal escritas antes de validar, avisando fila por
 // fila. Sin esto, un Excel con "XXL" o "Talla Sup" entra vacio y en silencio.
@@ -359,31 +342,10 @@ const texto=(v:unknown)=>String(v??"").trim();
 // (cuello_tipo, cuello_forma, punos_tecnica, talla_origen...), que son
 // exactamente los ids que usa FICHAS_PRENDA: un contrato migrado se imprime
 // con las mismas etiquetas y el mismo orden que uno cargado en el sistema.
-const aSnake=(k:string)=>k.replace(/([a-z0-9])([A-Z])/g,"$1_$2").toLowerCase();
-function aplanarSpec(o:Record<string,unknown>,prefijo=""):Record<string,string>{
- const out:Record<string,string>={};
- for(const [k,v] of Object.entries(o)){
-  if(!prefijo&&(k==="observacion"||k==="indicaciones"))continue;
-  if(v===null||v===undefined)continue;
-  const id=prefijo?`${prefijo}_${aSnake(k)}`:aSnake(k);
-  if(Array.isArray(v)){const t=v.map(texto).filter(Boolean).join(" · ");if(t)out[id]=t}
-  else if(typeof v==="object")Object.assign(out,aplanarSpec(v as Record<string,unknown>,id));
-  else{const t=texto(v);if(t)out[id]=t}
- }
- return out;
-}
 // Compatibilidad al cargar una reposición o un contrato guardado: el jsonb
 // `spec` puede venir con la forma nueva {campos,observacion}, con la vieja
 // {indicaciones:"…"}, anidada, o con cualquier otra. Nunca se vuelca JSON
 // crudo en pantalla — eso era justo lo que el vendedor veía antes.
-function leerSpec(spec:unknown):{campos:Record<string,string>;observacion:string}{
- if(!spec||typeof spec!=="object")return{campos:{},observacion:texto(spec)};
- const o=spec as Record<string,unknown>;
- const crudo=o.campos&&typeof o.campos==="object"?o.campos as Record<string,unknown>:null;
- const observacion=texto(o.observacion)||texto(o.indicaciones);
- if(crudo)return{campos:aplanarSpec(crudo),observacion};
- return{campos:aplanarSpec(o),observacion};
-}
 function Campo({titulo,children,ancho=false}:{titulo:string;children:ReactNode;ancho?:boolean}){return <label className={ancho?estilos.ancho:""}><span>{titulo}</span>{children}</label>}
 
 export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;editarId?:string}){

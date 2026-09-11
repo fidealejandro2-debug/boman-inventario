@@ -71,7 +71,7 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
 };
 
 export async function getPerfilActual(): Promise<Perfil> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

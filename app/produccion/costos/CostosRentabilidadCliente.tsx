@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
+import { mensajeError } from "@/lib/errores";
 import estilos from "./CostosRentabilidad.module.css";
 
 type Fila={id:string;numero:string;cliente:string;vendedor:string;estado:string;fecha_entrega:string|null;total_prendas:number;presupuesto:number;costo_estimado:number;costo_real:number;margen_estimado:number;margen_real:number;margen_real_pct:number|null;ordenes_pendientes:number};
@@ -24,7 +25,7 @@ export default function CostosRentabilidadCliente({puedeEditar}:{puedeEditar:boo
  const supabase=useRef(createClient()).current;
  const [desde,setDesde]=useState(isoLocal(inicio));const [hasta,setHasta]=useState(isoLocal(fin));const [estado,setEstado]=useState("");const [busqueda,setBusqueda]=useState("");
  const [filtros,setFiltros]=useState({desde:isoLocal(inicio),hasta:isoLocal(fin),estado:"",busqueda:""});const [pagina,setPagina]=useState(1);const [panel,setPanel]=useState(VACIO);const [cargando,setCargando]=useState(true);const [hoja,setHoja]=useState<Hoja|null>(null);const [cargandoHoja,setCargandoHoja]=useState(false);const [form,setForm]=useState(FORM_VACIO);const [ordenId,setOrdenId]=useState("");const [procesando,setProcesando]=useState(false);
- const cargar=useCallback(async()=>{setCargando(true);const{data,error}=await supabase.rpc("dashboard_rentabilidad_v101",{p_desde:filtros.desde,p_hasta:filtros.hasta,p_estado:filtros.estado||null,p_busqueda:filtros.busqueda||null,p_pagina:pagina,p_por_pagina:40});if(error)await mostrarAvisoDialogo(error.message.includes("dashboard_rentabilidad_v101")?"Falta instalar v101 en Supabase.":error.message,"No se pudo cargar rentabilidad",true);else setPanel(data as Panel);setCargando(false)},[filtros,pagina,supabase]);
+ const cargar=useCallback(async()=>{setCargando(true);const{data,error}=await supabase.rpc("dashboard_rentabilidad_v101",{p_desde:filtros.desde,p_hasta:filtros.hasta,p_estado:filtros.estado||null,p_busqueda:filtros.busqueda||null,p_pagina:pagina,p_por_pagina:40});if(error)await mostrarAvisoDialogo(mensajeError(error, "v101_costos_rentabilidad_contratos.sql"),"No se pudo cargar rentabilidad",true);else setPanel(data as Panel);setCargando(false)},[filtros,pagina,supabase]);
  useEffect(()=>{void cargar()},[cargar]);
  async function abrir(id:string){setCargandoHoja(true);const{data,error}=await supabase.rpc("obtener_hoja_costo_v101",{p_contrato_id:id});if(error)await mostrarAvisoDialogo(error.message,"No se pudo abrir la hoja",true);else{setHoja(data as Hoja);setForm(FORM_VACIO);setOrdenId("");setTimeout(()=>document.getElementById("hoja-costo-v101")?.scrollIntoView({behavior:"smooth",block:"start"}),40)}setCargandoHoja(false)}
  async function recargarHoja(){if(hoja)await abrir(hoja.contrato.id);await cargar()}

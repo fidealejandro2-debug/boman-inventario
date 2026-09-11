@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ ok:false, error:"Sesión requerida" },{status:401});
   const body = await request.json().catch(()=>null) as { contrato_id?:string }|null;

@@ -5,6 +5,7 @@ import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/com
 import AgregarColaboradorDiseno, { type ColaboradorDiseno } from "@/components/AgregarColaboradorDiseno";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { mensajeError } from "@/lib/errores";
 import { exportarCSV } from "@/lib/utils";
 // El MISMO catálogo que usa el ingreso de contratos. Escribir el nombre a mano
 // dejaba "Camiseta", "camisetas" y "Camiseta Jugador" como tres prendas
@@ -135,7 +136,7 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
     setGuardando("");
     if (error) {
       await mostrarAvisoDialogo(
-        error.message.includes("asignar_personal_diseno_v127") ? "Falta instalar v127 en Supabase." : error.message,
+        mensajeError(error, "v127_personal_diseno_nomina.sql"),
         `No se pudo cambiar ${etiqueta}`, true);
       return;
     }
@@ -161,7 +162,7 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
     setGuardando("");
     if (error) {
       await mostrarAvisoDialogo(
-        error.message.includes("guardar_gestion_contrato_v99") ? "Falta instalar v99 en Supabase." : error.message,
+        mensajeError(error, "v99_gestion_contratos.sql"),
         `No se pudo cambiar ${etiqueta}`, true);
       return;
     }
@@ -202,7 +203,7 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
     setLupa(f); setDetalle(null); setCargandoDetalle(true);
     const { data, error } = await supabase.rpc("archivos_contrato_v125", { p_contrato_id: f.id });
     setCargandoDetalle(false);
-    if (error) { setLupa(null); return void mostrarAvisoDialogo(error.message.includes("archivos_contrato_v125") ? "Falta instalar v125 en Supabase." : error.message, "No se pudo abrir el contrato", true) }
+    if (error) { setLupa(null); return void mostrarAvisoDialogo(mensajeError(error, "v125_foto_y_detalle_tablero.sql"), "No se pudo abrir el contrato", true) }
     setDetalle(data as Detalle);
   }
 
@@ -239,7 +240,7 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
     setEditandoPrendas(f); setFilasPrenda([]); setCargandoPrendas(true);
     const { data, error } = await supabase.rpc("prendas_contrato_v123", { p_contrato_id: f.id });
     setCargandoPrendas(false);
-    if (error) { setEditandoPrendas(null); return void mostrarAvisoDialogo(error.message.includes("prendas_contrato_v123") ? "Falta instalar v123 en Supabase." : error.message, "No se pudieron leer las prendas", true) }
+    if (error) { setEditandoPrendas(null); return void mostrarAvisoDialogo(mensajeError(error, "v123_prendas_desde_tablero.sql"), "No se pudieron leer las prendas", true) }
     const d = data as { detalladas?: boolean; filas?: FilaPrenda[] };
     setDetalladas(!!d?.detalladas);
     setFilasPrenda((d?.filas ?? []).map((x) => ({ prenda: x.prenda, calidad: x.calidad ?? "", cantidad: Number(x.cantidad) || 0 })));

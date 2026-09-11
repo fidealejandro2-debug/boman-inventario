@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { enviarMarcaEtapaSheets, type MarcaEtapaSheets } from "@/lib/bomansportSync";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,7 @@ export const dynamic = "force-dynamic";
  * contrato_etapas y el importador salta lo que ya existe.
  */
 export async function POST(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ ok: false, error: "Sesión requerida" }, { status: 401 });
 
@@ -35,6 +37,7 @@ export async function POST(request: NextRequest) {
 
   // El permiso lo controla la RPC (contratos.marcar_etapa); aqui no se repite
   // para no tener dos reglas que puedan discrepar.
+  const idempotencyKey = crypto.randomUUID();
   const { data, error } = await supabase.rpc("marcar_etapa_contrato_v116", {
     p_numero: body.numero,
     p_area: body.area,
@@ -42,38 +45,61 @@ export async function POST(request: NextRequest) {
     p_operario: body.operario ?? "",
     p_no_aplica: Boolean(body.no_aplica),
     p_nota: body.nota ?? "",
-    p_idempotency_key: crypto.randomUUID(),
+    p_idempotency_key: idempotencyKey,
   });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
   if ((data as { repetida?: boolean })?.repetida) return NextResponse.json({ ok: true, hoja: false, repetida: true });
 
-  const base = process.env.BOMANSPORT_WEBAPP_URL, token = process.env.BOMANSPORT_API_TOKEN;
-  if (!base || !token) {
-    return NextResponse.json({ ok: true, hoja: false, marca: data, aviso: "Marcado en el sistema, pero faltan BOMANSPORT_WEBAPP_URL o BOMANSPORT_API_TOKEN: el taller no lo verá en su tablero." });
-  }
+  const payload: MarcaEtapaSheets = {
+    numero: body.numero,
+    area: body.area,
+    etapa: body.etapa,
+    operario: body.operario ?? "",
+    noAplica: Boolean(body.no_aplica),
+    nota: body.nota ?? "",
+  };
+  const admin = createAdminClient();
+  const { data: cola, error: errorCola } = await admin
+    .from("bomansport_sincronizaciones")
+    .insert({
+      operacion: "marcar_etapa",
+      payload,
+      idempotency_key: idempotencyKey,
+      usuario_id: auth.user.id,
+    })
+    .select("id")
+    .single();
 
   try {
-    const respuesta = await fetch(`${base}?api=marcar-etapa&token=${encodeURIComponent(token)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        numero: body.numero, area: body.area, etapa: body.etapa,
-        operario: body.operario ?? "", noAplica: Boolean(body.no_aplica), nota: body.nota ?? "",
-      }),
-      cache: "no-store",
-    });
-    const texto = await respuesta.text();
-    let remoto: { ok?: boolean; error?: string };
-    try { remoto = JSON.parse(texto) as { ok?: boolean; error?: string } }
-    catch { throw new Error(`Apps Script devolvió una respuesta inválida (${respuesta.status})`) }
-    // "ya estaba marcada" no es un fallo: significa que el taller llego primero
-    // y los dos lados coinciden, que es justo lo que se busca.
-    if (!respuesta.ok || (!remoto?.ok && !/ya estaba marcad/i.test(remoto?.error || ""))) {
-      throw new Error(remoto?.error || `Apps Script respondió ${respuesta.status}`);
+    await enviarMarcaEtapaSheets(payload);
+    if (cola?.id) {
+      await admin
+        .from("bomansport_sincronizaciones")
+        .update({ estado: "sincronizado", sincronizado_at: new Date().toISOString(), ultimo_error: null })
+        .eq("id", cola.id);
     }
-    return NextResponse.json({ ok: true, hoja: true, marca: data });
+    return NextResponse.json({ ok: true, hoja: true, marca: data, cola: cola?.id ?? null });
   } catch (e) {
     const mensaje = e instanceof Error ? e.message : "No se pudo avisar a la hoja";
-    return NextResponse.json({ ok: true, hoja: false, marca: data, aviso: `Marcado en el sistema, pero el tablero del taller no se enteró: ${mensaje}` });
+    if (cola?.id) {
+      await admin
+        .from("bomansport_sincronizaciones")
+        .update({
+          estado: "pendiente",
+          ultimo_error: mensaje,
+          proximo_intento_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+        })
+        .eq("id", cola.id);
+    }
+    const seguimiento = errorCola
+      ? ` Además, no se pudo registrar el reintento automático: ${errorCola.message}`
+      : " El sistema volverá a intentarlo automáticamente.";
+    return NextResponse.json({
+      ok: true,
+      hoja: false,
+      marca: data,
+      sincronizacion_pendiente: Boolean(cola?.id),
+      aviso: `Marcado en el sistema, pero el tablero del taller no se enteró: ${mensaje}.${seguimiento}`,
+    });
   }
 }

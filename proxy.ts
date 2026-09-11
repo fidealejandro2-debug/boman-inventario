@@ -3,13 +3,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   // La invoca Vercel Cron (sin cookie de sesion) o el boton manual con el
   // mismo bearer para probar: el propio route valida CRON_SECRET o sesion
   // admin. Sin este bypass, el cron recibiria un 307 a /login en vez de JSON.
-  if (request.nextUrl.pathname === "/api/bomansport/importar-contratos") {
+  if (
+    request.nextUrl.pathname === "/api/bomansport/importar-contratos"
+    || request.nextUrl.pathname === "/api/bomansport/sincronizar-pendientes"
+  ) {
     return response;
   }
 

@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
 import AgregarColaboradorDiseno, { type ColaboradorDiseno } from "@/components/AgregarColaboradorDiseno";
 import { createClient } from "@/lib/supabase/client";
+import { mensajeError } from "@/lib/errores";
 import { fecha } from "@/lib/utils";
 
 type PrendaDia = { prenda: string; cantidad: number; capacidad: number; excede: boolean };
@@ -84,7 +85,7 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
       p_hasta: aplicado.hasta,
     });
     if (err) {
-      setError(err.message.includes("cronograma_produccion_v96") ? "Falta instalar v96 en Supabase." : err.message);
+      setError(mensajeError(err, "v96_cronograma_produccion.sql"));
     } else {
       setDatos(data as Cronograma);
     }
@@ -148,9 +149,7 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
     setAsignando(null);
     if (err) {
       await mostrarAvisoDialogo(
-        err.message.includes("asignar_personal_diseno_v127")
-          ? "Falta instalar v127 en Supabase."
-          : err.message,
+        mensajeError(err, "v127_personal_diseno_nomina.sql"),
         "No se pudo asignar el diseñador",
         true,
       );

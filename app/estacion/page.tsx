@@ -18,7 +18,7 @@ import TableroCliente, { type DatosTablero } from "@/app/tablero/TableroCliente"
  * columnas ve.
  */
 async function traerTablero(): Promise<DatosTablero | { error: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("tablero_produccion_v102");
   if (error) {
     return {
