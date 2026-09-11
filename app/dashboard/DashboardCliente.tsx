@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
 import IconoPanel from "./IconoPanel";
+import EscenaMarca from "./EscenaMarca";
 import styles from "./Dashboard.module.css";
 
 type ResumenPanel = {
@@ -474,7 +475,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
             · {ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}
           </span>
           <h1>Hola, {nombreParaSaludo(perfil.nombre_completo)}</h1>
-          <p>Todo conectado. Tu próximo paso, más claro.</p>
+          <p>Del diseño a la cancha.<br />Cada detalle empieza con tu equipo.</p>
           <div className={styles.heroActions}>
             {accesos[0] && <Link className={styles.primaryAction} href={accesos[0].href}>
               {accesos[0].enlaces[0]?.etiqueta ?? `Abrir ${accesos[0].titulo}`} <IconoPanel nombre="flecha" />
@@ -486,13 +487,14 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
             {cargando ? "Actualizando tu resumen…" : error ? "Resumen no disponible" : `Actualizado ${horaEcuador(resumen.generado_at)}`}
           </div>
         </div>
-        <div className={styles.focusCard}>
+        <EscenaMarca />
+      </section>
+      <section className={styles.focusCard} aria-label="Prioridad de tu operación">
           <div className={styles.focusTop}><span>EN TU RADAR</span><IconoPanel nombre="reloj" /></div>
           <strong>{cargando ? "Preparando tu día" : error ? "Tus accesos están listos" : prioridad ? prioridad.titulo : "Un buen momento para avanzar"}</strong>
           <p>{cargando ? "Consultando los indicadores de tu operación." : error ? "Puedes seguir entrando a tus módulos mientras recuperamos el resumen." : prioridad ? prioridad.detalle : "No hay pendientes reportados en tu resumen. Continúa con tu siguiente tarea."}</p>
           {prioridad && <Link href={prioridad.href}><span>{ENTERO.format(prioridad.cantidad)} por atender</span><IconoPanel nombre="flecha" /></Link>}
           {!prioridad && <span className={styles.focusFoot}>Tu operación, a tu alcance.</span>}
-        </div>
       </section>
 
       <section className="panel-ambito" aria-label="Ámbito de información">

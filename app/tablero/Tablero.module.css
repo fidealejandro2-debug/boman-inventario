@@ -224,3 +224,8 @@ button.marca:disabled { opacity: .45; cursor: progress; }
 .tChip.ok { border-style: solid; border-color: transparent; }
 button.tChip { cursor: pointer; }
 button.tChip:disabled { opacity: .45; cursor: progress; }
+
+/* Cabecera ordenable: tiene que verse pulsable, porque en una tabla densa
+   nadie prueba a hacer clic en un titulo "por si acaso". */
+.ordenable { cursor: pointer; user-select: none; }
+.ordenable:hover { color: var(--azul); text-decoration: underline; }

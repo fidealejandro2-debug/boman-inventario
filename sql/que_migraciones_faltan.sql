@@ -42,6 +42,11 @@ from(values
    coalesce((select position($$'id',a.id$$ in pg_get_functiondef(p.oid))>0
                from pg_proc p join pg_namespace n on n.oid=p.pronamespace
               where n.nspname='public' and p.proname='tablero_produccion_v102' limit 1),false)),
- (123,'v123_prendas_desde_tablero.sql',          to_regprocedure('public.editar_prendas_tablero_v123(uuid,jsonb,boolean,uuid)') is not null)
+ (123,'v123_prendas_desde_tablero.sql',          to_regprocedure('public.editar_prendas_tablero_v123(uuid,jsonb,boolean,uuid)') is not null),
+ -- v124 cambia la FIRMA del tablero: la version sin parametros se borra. Si
+ -- sigue existiendo, la migracion no se corrio (o se corrio a medias).
+ (124,'v124_tablero_entregados.sql',
+   to_regprocedure('public.tablero_produccion_v102(boolean)') is not null
+   and to_regprocedure('public.tablero_produccion_v102()') is null)
 )as v(orden,archivo,existe)
 order by v.orden;

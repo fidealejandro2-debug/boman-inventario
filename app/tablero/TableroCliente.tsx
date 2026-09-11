@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { exportarCSV } from "@/lib/utils";
 import estilos from "./Tablero.module.css";
 
 export type Etapa = {
@@ -28,7 +29,17 @@ export type Fila = {
 export type DatosTablero = { etapas: Etapa[]; filas: Fila[]; total: number; hora: string;
   disenadores?: string[]; autoresMockup?: string[] };
 
-type Filtro = "pend" | "todos" | "urg" | "tarde" | "fab2" | "muestras";
+type Filtro = "pend" | "todos" | "urg" | "tarde" | "fab2" | "muestras" | "ent";
+type Columna = "numero" | "cliente" | "entrega" | "inicio" | "prendas" | "disenador";
+
+const ORDENABLES: { clave: Columna; etiqueta: string }[] = [
+  { clave: "numero", etiqueta: "Contrato" },
+  { clave: "entrega", etiqueta: "Entrega" },
+  { clave: "disenador", etiqueta: "Diseño" },
+];
+
+function hoyISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` }
+function masDias(dias: number) { const d = new Date(); d.setDate(d.getDate() + dias); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` }
 
 const FILTROS: { valor: Filtro; etiqueta: string }[] = [
   { valor: "pend", etiqueta: "Pendientes" },
@@ -37,6 +48,7 @@ const FILTROS: { valor: Filtro; etiqueta: string }[] = [
   { valor: "tarde", etiqueta: "⚠️ Atrasados" },
   { valor: "fab2", etiqueta: "🏭 Fábrica 2" },
   { valor: "muestras", etiqueta: "🧪 Faltan muestras" },
+  { valor: "ent", etiqueta: "🚚 Entregados" },
 ];
 
 type FilaPrenda = { prenda: string; calidad: string; cantidad: number };
@@ -160,13 +172,55 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
 
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("pend");
-  const [orden, setOrden] = useState<"entrega" | "numero">("entrega");
+  const [orden, setOrden] = useState<Columna>("entrega");
+  const [asc, setAsc] = useState(true);
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+  // Los entregados no vienen en el tablero normal: son otra consulta. Se piden
+  // solo si se elige ese filtro y se quedan cacheados aqui mientras dure la
+  // pagina, para no repetir la llamada cada vez que se alterna el filtro.
+  const [entregados, setEntregados] = useState<DatosTablero | null>(null);
+  const [cargandoEnt, setCargandoEnt] = useState(false);
   const restringido = !!estacionesPermitidas?.length;
   const [estacion, setEstacion] = useState(restringido ? estacionesPermitidas![0] : "");
 
   const hayError = "error" in datos;
-  const etapas = hayError ? [] : datos.etapas;
-  const filas = hayError ? [] : datos.filas;
+  // Con el filtro "Entregados" la fuente es otra consulta, no un subconjunto:
+  // el tablero normal ni siquiera trae esos contratos.
+  const fuente: DatosTablero | null = hayError ? null : (filtro === "ent" ? entregados : datos);
+  const etapas = fuente?.etapas ?? (hayError ? [] : datos.etapas);
+  const filas = fuente?.filas ?? [];
+
+  async function pedirEntregados() {
+    if (entregados || cargandoEnt) return;
+    setCargandoEnt(true);
+    const { data, error } = await supabase.rpc("tablero_produccion_v102", { p_solo_entregados: true });
+    setCargandoEnt(false);
+    if (error) return void mostrarAvisoDialogo(
+      /p_solo_entregados|not unique|does not exist/i.test(error.message)
+        ? "Falta correr sql/v124_tablero_entregados.sql para poder ver los entregados."
+        : error.message, "No se pudieron cargar los entregados", true);
+    setEntregados(data as DatosTablero);
+  }
+
+  function elegirFiltro(f: Filtro) {
+    setFiltro(f);
+    if (f === "ent") void pedirEntregados();
+  }
+
+  function exportar() {
+    exportarCSV(`tablero_${filtro}_${hoyISO()}`, visibles.map((f) => ({
+      Contrato: f.numero, Cliente: f.cliente, Vendedor: f.vendedor,
+      Disenador: f.disenador, "Autor mockup": f.autorMockup,
+      Ingreso: f.ingreso, Inicio: f.inicio, Entrega: f.entrega,
+      Prendas: f.prendas, Desglose: f.prendasTxt, Calidad: f.calidad.join(" · "),
+      Urgente: f.urgente ? "Sí" : "No", Atrasado: f.atrasado ? "Sí" : "No",
+      Maquila: f.maquila, Observacion: f.obs,
+      // Una columna por etapa visible: el CSV sale con lo mismo que se ve en
+      // pantalla, no con las 16 siempre.
+      ...Object.fromEntries(columnas.map(({ et, i }) => [et.etiqueta, f.hechas[i] ? "Sí" : ""])),
+    })));
+  }
 
   // Las estaciones vienen en los datos: cada etapa dice que area la marca
   // ("Sellos · TPU" -> Sellos). Elegir una deja la tabla como la pantalla de
@@ -217,6 +271,14 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
       if (filtro === "tarde" && !f.atrasado) return false;
       if (filtro === "fab2" && f.fabrica !== 2) return false;
       if (filtro === "muestras" && !f.muestras?.tpu && !f.muestras?.dtf) return false;
+      // Rango por fecha de entrega. Un contrato sin fecha queda fuera cuando
+      // hay rango: no se puede afirmar que caiga dentro.
+      if (desde || hasta) {
+        const d = f.entregaISO || "";
+        if (!d) return false;
+        if (desde && d < desde) return false;
+        if (hasta && d > hasta) return false;
+      }
       // "Pendientes" esconde lo que ya esta hecho. Con una estacion elegida es
       // lo que le falta a ESA estacion: su cola de trabajo, no la del taller.
       if (filtro === "pend" && !pendiente(f)) return false;
@@ -224,14 +286,29 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
       return [f.numero, f.cliente, f.disenador, f.vendedor, f.prendasTxt]
         .some((campo) => String(campo || "").toLowerCase().includes(q));
     });
+    const signo = asc ? 1 : -1;
     return lista.sort((a, b) => {
-      if (orden === "numero") return a.numero.localeCompare(b.numero);
-      if (!a.entregaMs && !b.entregaMs) return 0;
-      if (!a.entregaMs) return 1;
-      if (!b.entregaMs) return -1;
-      return a.entregaMs - b.entregaMs;
+      switch (orden) {
+        case "numero": return signo * a.numero.localeCompare(b.numero);
+        case "cliente": return signo * a.cliente.localeCompare(b.cliente, "es");
+        case "prendas": return signo * (a.prendas - b.prendas);
+        // Sin diseñador va SIEMPRE al final, se ordene como se ordene: es lo
+        // que hay que resolver, no un valor mas del alfabeto.
+        case "disenador": {
+          if (!a.disenador !== !b.disenador) return a.disenador ? -1 : 1;
+          return signo * a.disenador.localeCompare(b.disenador, "es");
+        }
+        case "inicio": return signo * String(a.inicioISO || "9999").localeCompare(String(b.inicioISO || "9999"));
+        default: {
+          // Lo que no tiene fecha de entrega tampoco se mezcla: al final.
+          if (!a.entregaMs && !b.entregaMs) return 0;
+          if (!a.entregaMs) return 1;
+          if (!b.entregaMs) return -1;
+          return signo * (a.entregaMs - b.entregaMs);
+        }
+      }
     });
-  }, [filas, busqueda, filtro, orden, columnas]);
+  }, [filas, busqueda, filtro, orden, asc, columnas, desde, hasta]);
 
   if (hayError) {
     return <div className="card"><div className="header-row"><h3 style={{ margin: 0 }}>Tablero de producción</h3></div>
@@ -273,11 +350,17 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
           <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Contrato, cliente, diseñador o vendedor" />
         </div>
         <div className="field">
-          <label>Ordenar</label>
-          <select value={orden} onChange={(e) => setOrden(e.target.value as "entrega" | "numero")}>
-            <option value="entrega">Fecha de entrega</option>
-            <option value="numero">N.° de contrato</option>
-          </select>
+          <label>Entrega entre</label>
+          <div className="form-inline">
+            <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} aria-label="Entrega desde" />
+            <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} aria-label="Entrega hasta" />
+          </div>
+          <div className="form-inline" style={{ marginTop: 6 }}>
+            <button className="secondary btn-mini" onClick={() => { setDesde(hoyISO()); setHasta(hoyISO()) }}>Hoy</button>
+            <button className="secondary btn-mini" onClick={() => { setDesde(hoyISO()); setHasta(masDias(6)) }}>7 días</button>
+            <button className="secondary btn-mini" onClick={() => { setDesde(hoyISO()); setHasta(masDias(29)) }}>30 días</button>
+            {(desde || hasta) && <button className="secondary btn-mini" onClick={() => { setDesde(""); setHasta("") }}>✕ Quitar</button>}
+          </div>
         </div>
         <div className="field">
           <label>Estación</label>
@@ -291,9 +374,13 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
 
       <div className="filtros">
         {FILTROS.map((f) => (
-          <button key={f.valor} className={filtro === f.valor ? "" : "secondary"} onClick={() => setFiltro(f.valor)}>{f.etiqueta}</button>
+          <button key={f.valor} className={filtro === f.valor ? "" : "secondary"} onClick={() => elegirFiltro(f.valor)}>{f.etiqueta}</button>
         ))}
+        <button className="secondary" onClick={exportar} disabled={!visibles.length} title="Descarga lo que está a la vista">
+          ⬇️ Exportar
+        </button>
       </div>
+      {filtro === "ent" && cargandoEnt && <p className="conteo">Cargando los entregados…</p>}
     </div>
 
     {restringido && !columnas.length && (
@@ -353,9 +440,15 @@ export default function TableroCliente({ datos, puedeMarcar = false, puedeEditar
         <table>
           <thead>
             <tr>
-              <th className={estilos.colContrato} rowSpan={2}>Contrato</th>
-              <th style={{ minWidth: 110 }} rowSpan={2}>Entrega</th>
-              <th style={{ minWidth: 105 }} rowSpan={2}>Diseño</th>
+              {ORDENABLES.map((c, k) => (
+                <th key={c.clave} rowSpan={2}
+                  className={`${k === 0 ? estilos.colContrato : ""} ${estilos.ordenable}`}
+                  style={k === 0 ? undefined : { minWidth: k === 1 ? 110 : 105 }}
+                  onClick={() => { if (orden === c.clave) setAsc((x) => !x); else { setOrden(c.clave); setAsc(true) } }}
+                  title={`Ordenar por ${c.etiqueta.toLowerCase()}`}>
+                  {c.etiqueta}{orden === c.clave ? (asc ? " ▲" : " ▼") : ""}
+                </th>
+              ))}
               {grupos.map((g, k) => (
                 <th key={`${g.area}-${k}`} colSpan={g.ancho} className={`${estilos.grupo} ${g.area ? "" : estilos.grupoSinDueno}`}>
                   {g.area || "Sin estación"}
