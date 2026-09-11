@@ -64,6 +64,7 @@ from(values
      select 1 from public.rol_permisos rp
      where rp.rol::text='produccion' and rp.permiso_codigo='produccion.acceder'
        and rp.permitido
-   ))
+   )),
+ (133,'v133_cheques_sin_factura.sql',           to_regprocedure('public.regularizar_cheque_v133(uuid,uuid,text,uuid)') is not null)
 )as v(orden,archivo,existe)
 order by v.orden;
