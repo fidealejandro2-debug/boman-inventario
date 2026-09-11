@@ -205,6 +205,22 @@ function tallasDesdeJugadores(jugadores:Jugador[]):Linea[]{
 const TIPO_SOLO_SUPERIOR=new Set(["Solo camiseta","Solo Polo","Solo BVD","Chompa","Chompa de Frío","Chaleco"]);
 const TIPO_SOLO_INFERIOR=new Set(["Solo pantaloneta","Solo Falda Short","Solo pantalón","Solo bermuda"]);
 const grupoPrendaJugador=(tu:string)=>TIPO_SOLO_SUPERIOR.has(tu)?1:TIPO_SOLO_INFERIOR.has(tu)?2:0;
+// A quien solo lleva prenda inferior lo ordena su talla de abajo. Usar siempre
+// la superior lo mandaba al final del listado, porque viene vacia.
+// Tipos que NO llevan camiseta de manga (inferiores, chompas, chalecos, BVD):
+// en la columna MANGA va "—", no "corta". Decir "corta" de una pantaloneta o
+// de una chompa es informacion falsa en el papel que usa el taller.
+const TIPOS_SIN_MANGA=new Set(["Solo pantaloneta","Solo Falda Short","Solo pantalón","Solo bermuda",
+ "Solo BVD","BVD + Pantaloneta","BVD con Falda Short","BVD + Bermuda",
+ "Chompa","Chompa de Frío","Chompa Retro","Chaleco","Exterior completo"]);
+// El tipo se abrevia para que la fila no se parta en dos lineas. El nombre
+// completo no se pierde: lo lleva la banda del grupo, justo encima.
+const ABREV_TIPO:Record<string,string>={"Uniforme completo":"Completo","Uniforme completo (Falda Short)":"Completo (Falda)",
+ "BVD + Pantaloneta":"BVD+Pant","BVD con Falda Short":"BVD+Falda","Polo + Pantaloneta":"Polo+Pant",
+ "Camiseta + Exterior":"Cam+Ext","Polo + Exterior":"Polo+Ext","Solo Polo":"Polo","Solo camiseta":"Camiseta",
+ "Solo pantaloneta":"Pantaloneta","Solo Falda Short":"Falda Short","Solo pantalón":"Pantalón",
+ "Solo BVD":"BVD","Exterior completo":"Exterior","Arquero completo":"Arquero"};
+const tallaQueOrdena=(j:Jugador)=>TIPO_SOLO_INFERIOR.has(j.tipo_uniforme)?texto(j.talla_inferior)||texto(j.talla_superior):texto(j.talla_superior)||texto(j.talla_inferior);
 // Si en el tramo hay un solo tipo, se usa su nombre literal; si hay varios, el
 // nombre del alcance. Mismo criterio que _etqGrupo del legado.
 function etiquetaGrupo(arr:Jugador[],desde:number){
@@ -945,7 +961,21 @@ export function BriefHoja({form}:{form:Form}){
 // Tabla de jugadores del brief: cabecera azul, zebra, bandas de calidad y columnas
 // que se ocultan si nadie las llenó (roban ancho para mostrar solo guiones).
 function TablaJugadores({jugadores}:{jugadores:Jugador[]}){
- const arr=jugadores.slice().sort((a,b)=>posCalidad(a.calidad)-posCalidad(b.calidad)||a.tipo_uniforme.localeCompare(b.tipo_uniforme)||a.nombre.localeCompare(b.nombre));
+ // Mismo orden que compararJugadores_ del legado: calidad -> ALCANCE DE PRENDA
+ // -> genero -> talla -> manga -> tipo. El alcance va antes que el genero a
+ // proposito: agrupa completos, solo-superior y solo-inferior en tramos
+ // limpios, que es lo que hace que la sub-banda tenga sentido. Ordenar por
+ // tipo alfabeticamente los intercalaba ("Arquero completo" y "Uniforme
+ // completo" son el mismo grupo y quedaban separados por Chaleco), y entonces
+ // el mismo grupo abria dos bandas.
+ const arr=jugadores.slice().sort((a,b)=>
+  posCalidad(a.calidad)-posCalidad(b.calidad)
+  ||grupoPrendaJugador(a.tipo_uniforme)-grupoPrendaJugador(b.tipo_uniforme)
+  ||(ORDEN_GENERO[a.categoria]??9)-(ORDEN_GENERO[b.categoria]??9)
+  ||ordenTalla(tallaQueOrdena(a))-ordenTalla(tallaQueOrdena(b))
+  ||(ORDEN_MANGA[a.manga]??0)-(ORDEN_MANGA[b.manga]??0)
+  ||ORDEN_TIPO_UNIFORME.indexOf(a.tipo_uniforme)-ORDEN_TIPO_UNIFORME.indexOf(b.tipo_uniforme)
+  ||a.nombre.localeCompare(b.nombre,"es"));
  const hay={numero:arr.some(j=>texto(j.numero)),manga:arr.some(j=>j.manga==="Larga"),inferior:arr.some(j=>texto(j.talla_inferior)),arquero:arr.some(j=>texto(j.modelo_arquero)),calidad:arr.some(j=>texto(j.calidad)),tipo:arr.some(j=>texto(j.tipo_uniforme)),detalle:arr.some(j=>texto(j.detalle))};
  const columnas=1+Number(hay.numero)+1+1+Number(hay.manga)+Number(hay.inferior)+Number(hay.arquero)+Number(hay.tipo)+Number(hay.detalle);
  let calPrevia="";let grupoPrevio:number|null=null;
@@ -966,11 +996,13 @@ function TablaJugadores({jugadores}:{jugadores:Jugador[]}){
      <td className={texto(j.nombre)?estilos.bNombre:estilos.bSinNombre}>{texto(j.nombre)||"SIN NOMBRE"}</td>
      {hay.numero&&<td className={estilos.bCentroFuerte}>{j.numero}</td>}
      <td className={estilos.bCentro}>{j.categoria||"—"}</td>
-     <td className={estilos.bTallaSup}>{texto(j.talla_superior)||"—"}</td>
-     {hay.manga&&<td className={j.manga==="Larga"?estilos.bMangaLarga:estilos.bMangaCorta}>{j.manga==="Larga"?"LARGA":"corta"}</td>}
-     {hay.inferior&&<td className={estilos.bTallaInf}>{texto(j.talla_inferior)||"—"}</td>}
+     <td className={estilos.bTallaSup}>{TIPO_SOLO_INFERIOR.has(j.tipo_uniforme)?"—":texto(j.talla_superior)||"—"}</td>
+     {hay.manga&&(TIPOS_SIN_MANGA.has(j.tipo_uniforme)
+      ?<td className={estilos.bCentroSuave}>—</td>
+      :<td className={j.manga==="Larga"?estilos.bMangaLarga:estilos.bMangaCorta}>{j.manga==="Larga"?"LARGA":"corta"}</td>)}
+     {hay.inferior&&<td className={estilos.bTallaInf}>{TIPO_SOLO_SUPERIOR.has(j.tipo_uniforme)?"—":texto(j.talla_inferior)||"—"}</td>}
      {hay.arquero&&<td className={texto(j.modelo_arquero)?estilos.bArquero:estilos.bCentroSuave}>{texto(j.modelo_arquero)||"—"}</td>}
-     {hay.tipo&&<td className={estilos.bCentro}>{texto(j.tipo_uniforme)||"—"}</td>}
+     {hay.tipo&&<td className={estilos.bCentro}>{ABREV_TIPO[j.tipo_uniforme]||texto(j.tipo_uniforme)||"—"}</td>}
      {hay.detalle&&<td className={estilos.bDetalle}>{texto(j.detalle)||"—"}</td>}
     </tr>
    </Fragment>;

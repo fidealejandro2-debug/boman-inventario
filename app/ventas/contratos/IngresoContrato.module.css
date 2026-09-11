@@ -191,10 +191,14 @@
 .colorSel{border-color:var(--azul)!important;background:color-mix(in srgb,var(--azul) 12%,var(--superficie))!important;font-weight:700}
 /* Bandas de alcance de prenda en la tabla de jugadores del brief. Tres tonos
    con luminosidad distinta: el brief termina fotocopiado en el taller. */
-.bGrupoComp,.bGrupoSup,.bGrupoInf{color:#fff;font-weight:900;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;text-align:left}
-.bGrupoComp{background:#0F766E;border:1px solid #134E4A;border-left:5px solid #134E4A}
-.bGrupoSup{background:#C2410C;border:1px solid #7C2D12;border-left:5px solid #7C2D12}
-.bGrupoInf{background:#6D28D9;border:1px solid #4C1D95;border-left:5px solid #4C1D95}
+/* Las tres van scopeadas bajo .bJug td: `.bJug td{background:#FDFEFE}` tiene
+   mas especificidad que una clase suelta, asi que el fondo de color perdia y
+   la banda salia BLANCA sobre blanco -texto invisible, una franja vacia en el
+   papel. La banda de calidad no sufria esto solo porque lleva !important. */
+.bJug td.bGrupoComp,.bJug td.bGrupoSup,.bJug td.bGrupoInf{color:#fff;font-weight:900;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;text-align:left;white-space:normal}
+.bJug td.bGrupoComp{background:#0F766E;border:1px solid #134E4A;border-left:5px solid #134E4A}
+.bJug td.bGrupoSup{background:#C2410C;border:1px solid #7C2D12;border-left:5px solid #7C2D12}
+.bJug td.bGrupoInf{background:#6D28D9;border:1px solid #4C1D95;border-left:5px solid #4C1D95}
 .bGrupoCuenta{float:right;background:rgba(255,255,255,.25);border-radius:8px;padding:0 7px;font-size:9.5px}
 /* Mockups sin jugadores ni specs: bloque compacto arriba, no seccion entera. */
 .bFotosSolo{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin:6px 0}
