@@ -59,7 +59,8 @@ export type PermisoCodigo =
   | "mantenimiento.editar"
   | "importaciones.acceder"
   | "productos.crear"
-  | "produccion.estacion";
+  | "produccion.estacion"
+  | "contratos.editar_contenido";
 
 export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "inventario.acceder",
@@ -112,6 +113,7 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "importaciones.acceder",
   "productos.crear",
   "produccion.estacion",
+  "contratos.editar_contenido",
 ];
 
 export type Perfil = {

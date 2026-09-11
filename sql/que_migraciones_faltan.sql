@@ -33,6 +33,7 @@ from(values
  (119,'v119_cronograma_sin_disenador.sql',
    coalesce((select position('sin_disenador' in pg_get_functiondef(p.oid))>0
                from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-              where n.nspname='public' and p.proname='cronograma_produccion_v96' limit 1),false))
+              where n.nspname='public' and p.proname='cronograma_produccion_v96' limit 1),false)),
+ (120,'v120_editar_contenido_contrato.sql',      to_regprocedure('public.actualizar_contrato_v120(uuid,jsonb,text,uuid)') is not null)
 )as v(orden,archivo,existe)
 order by v.orden;
