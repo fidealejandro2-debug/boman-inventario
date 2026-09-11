@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { animate, stagger } from "animejs";
 import { createClient } from "@/lib/supabase/client";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
 import IconoPanel from "./IconoPanel";
-import EscenaMarca from "./EscenaMarca";
 import styles from "./Dashboard.module.css";
 
 type ResumenPanel = {
@@ -134,6 +135,7 @@ function nombreParaSaludo(completo: string) {
 export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const supabase = useMemo(() => createClient(), []);
   const buscadorRef = useRef<HTMLInputElement>(null);
+  const dashboardRef = useRef<HTMLElement>(null);
   const [resumen, setResumen] = useState<ResumenPanel>(RESUMEN_VACIO);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,6 +195,25 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     }
     document.addEventListener("keydown", enfocarBuscador);
     return () => document.removeEventListener("keydown", enfocarBuscador);
+  }, []);
+
+  useEffect(() => {
+    const raiz = dashboardRef.current;
+    if (!raiz || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const entrada = animate(raiz.querySelectorAll("[data-entrada]"), {
+      opacity: { from: 0 },
+      y: { from: 18 },
+      duration: 720,
+      delay: stagger(65),
+      ease: "out(3)",
+    });
+    const objetivoImagen = raiz.querySelector(`.${styles.heroImage}`);
+    const imagen = objetivoImagen ? animate(objetivoImagen, {
+      scale: { from: 1.08, to: 1.02 },
+      duration: 1600,
+      ease: "out(3)",
+    }) : null;
+    return () => { entrada.cancel(); imagen?.cancel(); };
   }, []);
 
   const puede = useCallback((permiso: Parameters<typeof tienePermiso>[1]) =>
@@ -460,44 +481,57 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const prioridad = !cargando && !error ? pendientes[0] : undefined;
   const listo = !cargando && !error;
 
+  function moverPortada(evento: React.PointerEvent<HTMLElement>) {
+    const rect = evento.currentTarget.getBoundingClientRect();
+    evento.currentTarget.style.setProperty("--puntero-x", `${((evento.clientX - rect.left) / rect.width) * 100}%`);
+    evento.currentTarget.style.setProperty("--puntero-y", `${((evento.clientY - rect.top) / rect.height) * 100}%`);
+  }
+
   return (
-    <main className={`panel-principal ${styles.dashboard}`}>
+    <main ref={dashboardRef} className={`panel-principal ${styles.dashboard}`}>
       <div className={styles.topline}>
-        <span><span className={styles.brandDot} /> BOMAN <span className={styles.topDivider}>/</span> Tu espacio de trabajo</span>
+        <span><span className={styles.brandDot} /> BOMAN COMMAND <span className={styles.topDivider}>/</span> Centro de mando</span>
         <time>{fechaLarga()}</time>
       </div>
-      <section className="panel-portada">
-        <div className={styles.welcome}>
-          <span className="panel-saludo">
-            {resumen.ambito.almacenes.length === 1
-              ? resumen.ambito.almacenes[0]
-              : "CENTRO DE TRABAJO"}{" "}
-            · {ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}
-          </span>
-          <h1>Hola, {nombreParaSaludo(perfil.nombre_completo)}</h1>
-          <p>Del diseño a la cancha.<br />Cada detalle empieza con tu equipo.</p>
+      <section className={styles.commandHero} data-entrada onPointerMove={moverPortada}>
+        <Image className={styles.heroImage} src="/brand/dashboard/boman-camiseta-entrenamiento.jpg"
+          alt="Camiseta técnica Boman" fill priority sizes="(max-width: 760px) 100vw, 48vw" />
+        <div className={styles.heroTexture} aria-hidden="true" />
+        <div className={styles.heroMain}>
+          <div className={styles.heroContext}>
+            <span className={styles.livePill}><i /> OPERACIÓN EN VIVO</span>
+            <span>{ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}</span>
+          </div>
+          <h1>Buenos días,<br /><strong>{nombreParaSaludo(perfil.nombre_completo)}</strong>.</h1>
+          <p>Lo importante de tu operación, ordenado para actuar sin perder tiempo.</p>
           <div className={styles.heroActions}>
             {accesos[0] && <Link className={styles.primaryAction} href={accesos[0].href}>
               {accesos[0].enlaces[0]?.etiqueta ?? `Abrir ${accesos[0].titulo}`} <IconoPanel nombre="flecha" />
             </Link>}
-            <a className={styles.secondaryAction} href="#mis-modulos">Explorar módulos <span aria-hidden="true">↗</span></a>
-          </div>
-          <div className={styles.heroStatus} role="status">
-            <span className={styles.statusDot} data-state={cargando ? "loading" : error ? "error" : "ready"} />
-            {cargando ? "Actualizando tu resumen…" : error ? "Resumen no disponible" : `Actualizado ${horaEcuador(resumen.generado_at)}`}
+            <a className={styles.secondaryAction} href="#mis-modulos">Ver todos los módulos <IconoPanel nombre="flecha" /></a>
           </div>
         </div>
-        <EscenaMarca />
-      </section>
-      <section className={styles.focusCard} aria-label="Prioridad de tu operación">
-          <div className={styles.focusTop}><span>EN TU RADAR</span><IconoPanel nombre="reloj" /></div>
-          <strong>{cargando ? "Preparando tu día" : error ? "Tus accesos están listos" : prioridad ? prioridad.titulo : "Un buen momento para avanzar"}</strong>
-          <p>{cargando ? "Consultando los indicadores de tu operación." : error ? "Puedes seguir entrando a tus módulos mientras recuperamos el resumen." : prioridad ? prioridad.detalle : "No hay pendientes reportados en tu resumen. Continúa con tu siguiente tarea."}</p>
-          {prioridad && <Link href={prioridad.href}><span>{ENTERO.format(prioridad.cantidad)} por atender</span><IconoPanel nombre="flecha" /></Link>}
-          {!prioridad && <span className={styles.focusFoot}>Tu operación, a tu alcance.</span>}
+
+        <article className={styles.priorityCard} aria-label="Prioridad de tu operación">
+          <div className={styles.priorityHead}><span>PRÓXIMA ACCIÓN</span><IconoPanel nombre="reloj" /></div>
+          {prioridad && <b>{ENTERO.format(prioridad.cantidad)}</b>}
+          <strong>{cargando ? "Preparando tu jornada" : error ? "Tus accesos siguen disponibles" : prioridad ? prioridad.titulo : "Operación bajo control"}</strong>
+          <p>{cargando ? "Estamos reuniendo tus indicadores." : error ? "Actualiza el resumen cuando recuperes la conexión." : prioridad ? prioridad.detalle : "No existen pendientes críticos en este momento."}</p>
+          {prioridad
+            ? <Link href={prioridad.href}>Resolver ahora <IconoPanel nombre="flecha" /></Link>
+            : <span className={styles.priorityReady}>✓ Sin bloqueos críticos</span>}
+        </article>
+
+        <div className={styles.heroKpis} aria-label="Resumen de hoy">
+          {kpis.map((kpi) => <article key={kpi.etiqueta}>
+            <span>{kpi.etiqueta}</span>
+            <strong className={cargando ? styles.skeletonDark : undefined}>{listo ? kpi.valor : "—"}</strong>
+            <small>{listo ? kpi.nota : cargando ? "Consultando…" : "No disponible"}</small>
+          </article>)}
+        </div>
       </section>
 
-      <section className="panel-ambito" aria-label="Ámbito de información">
+      <section className={`panel-ambito ${styles.workspaceBar}`} data-entrada aria-label="Ámbito de información">
         <div title={alcanceAlmacenes}>
           <span>ALMACENES</span><strong>{listo ? resumen.ambito.almacenes_total : "—"}</strong><small>{listo ? alcanceAlmacenes : "Consultando ámbito"}</small>
         </div>
@@ -514,25 +548,15 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
               : <kbd>/</kbd>}
           </div>
         </label>
+        <button type="button" className={styles.refresh} onClick={() => cargar(true)} disabled={cargando}>
+          <IconoPanel nombre="actualizar" className={cargando ? styles.spinning : undefined} />
+          <span>{cargando ? "Actualizando" : "Actualizar"}</span>
+        </button>
       </section>
 
       {error && <div className="error-box panel-error">{error}</div>}
 
-      <div className={styles.sectionHeading}>
-        <div><span className={styles.eyebrow}>PANORAMA</span><h2>Tu operación de un vistazo</h2></div>
-        <button type="button" className={styles.refresh} onClick={() => cargar(true)} disabled={cargando}>
-          <IconoPanel nombre="actualizar" className={cargando ? styles.spinning : undefined} />{cargando ? "Actualizando" : "Actualizar"}
-        </button>
-      </div>
-      <section className="panel-kpis" aria-label="Resumen de hoy" aria-busy={cargando}>
-        {kpis.map((kpi) => (
-          <article className={`panel-kpi ${kpi.tono}`} key={kpi.etiqueta}>
-            <span>{kpi.etiqueta}</span><strong key={cargando ? "loading" : kpi.valor} className={cargando ? styles.skeleton : styles.value}>{listo ? kpi.valor : "—"}</strong><small>{listo ? kpi.nota : cargando ? "Consultando…" : "Sin datos actualizados"}</small>
-          </article>
-        ))}
-      </section>
-
-      {accesos.length > 0 && <nav className={styles.quickAccess} aria-label="Accesos rápidos por rol">
+      {accesos.length > 0 && <nav className={styles.quickAccess} data-entrada aria-label="Accesos rápidos por rol">
         {accesos.map((modulo, indice) => <Link href={modulo.href} key={modulo.id}>
           <span className={styles.quickIcon}><IconoPanel nombre={modulo.id} /></span>
           <span><small>0{indice + 1} / ACCESO RÁPIDO</small><strong>{modulo.titulo}</strong></span>
