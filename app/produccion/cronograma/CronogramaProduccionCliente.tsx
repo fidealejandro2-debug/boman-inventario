@@ -87,7 +87,20 @@ export default function CronogramaProduccionCliente({ esAdmin, puedeEditar = fal
     if (err) {
       setError(mensajeError(err, "v96_cronograma_produccion.sql"));
     } else {
-      setDatos(data as Cronograma);
+      // La RPC puede ser la de ANTES de v119, que no devuelve sin_disenador ni
+      // disenadores. Tomar el objeto tal cual dejaba esas claves en undefined y
+      // la pantalla reventaba entera con un "client-side exception" al hacer
+      // .length sobre ellas. Se completa con la forma vacia: si falta la
+      // migracion se ve el bloque vacio, no una pantalla en blanco.
+      const r = (data ?? {}) as Partial<Cronograma>;
+      setDatos({
+        ...VACIO,
+        ...r,
+        dias: r.dias ?? [],
+        capacidades: r.capacidades ?? [],
+        sin_disenador: r.sin_disenador ?? [],
+        disenadores: r.disenadores ?? [],
+      });
     }
     setCargando(false);
   }, [aplicado, supabase]);
