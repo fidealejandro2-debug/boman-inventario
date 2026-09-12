@@ -9,6 +9,7 @@ import {CALIDADES_CONTRATO,PRENDAS_CONTRATO} from "@/lib/catalogosContrato";
 // Las reglas del brief viven en lib/ y estan cubiertas por briefContrato.test.ts.
 // Tenerlas aqui dentro es lo que permitio que se rompieran tres veces sin que
 // nadie se enterara hasta mirar un papel impreso.
+import {compararNominaTallas,textoDiferencias} from "@/lib/nominaTallas";
 import {aplanarSpec,leerSpec,valorDeCampo,grupoPrendaJugador,etiquetaGrupo,cuentaGrupo,
  tallaQueOrdena,compararJugadores,TIPO_SOLO_SUPERIOR,TIPO_SOLO_INFERIOR,TIPOS_SIN_MANGA,
  ABREV_TIPO} from "@/lib/briefContrato";
@@ -359,6 +360,7 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
  const [paso,setPaso]=useState(0); const [guardando,setGuardando]=useState(false); const [resultado,setResultado]=useState<{numero:string;id:string;respaldo:"en_curso"|"ok"|"pendiente"}|null>(null);
  const [busqueda,setBusqueda]=useState(""); const [coincidencias,setCoincidencias]=useState<any[]>([]); const [buscando,setBuscando]=useState(false); const [preview,setPreview]=useState(false);
  const [almacenesVenta,setAlmacenesVenta]=useState<AlmacenVenta[]>([]);
+ const diferenciasTallasAceptadas=useRef("");
  const total=useMemo(()=>form.prendas.reduce((s,x)=>s+Math.max(0,Number(x.cantidad)||0),0),[form.prendas]);
  const saldo=Math.max(0,Number(form.cab.presupuesto||0)-Number(form.cab.abono||0));
  const setCab=<K extends keyof Cab>(k:K,v:Cab[K])=>setForm(f=>({...f,cab:{...f.cab,[k]:v}}));
@@ -391,8 +393,34 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
  },[form.lineas]);
 
  function errorPaso(n=paso){const c=form.cab;if(n===0&&(!texto(c.vendedor)||!texto(c.nombre_contrato_v115)||!texto(c.cliente)||!texto(c.canal)||!texto(c.telefono)))return"Completa vendedor, canal, nombre del contrato, cliente real y teléfono.";if(n===0&&almacenesVenta.length>1&&!c.almacen_venta_id_v115)return"Selecciona la tienda o local donde se realizó la venta.";if(n===1&&(!c.fecha_entrega||!c.tipo_contrato||!c.prioridad))return"Completa tipo, prioridad y fecha de entrega.";if(n===2&&!form.prendasSel.length)return"Selecciona al menos una prenda del pedido.";if(n===5&&(!form.prendas.length||total<1))return"Agrega al menos una línea de talla con cantidad.";if(n===4&&(!c.nombre_tecnica||!c.numero_tecnica||!c.sellos_tpu))return"Completa las técnicas de nombre, número y TPU.";if(n===6&&(!texto(c.vendedor_responsable)||!c.autorizado))return"Confirma el vendedor responsable y la autorización de producción.";if(n===6&&Number(c.abono)>Number(c.presupuesto))return"El abono no puede superar el presupuesto.";if(n===6){const r=comprobarFacturacion(form.prendas,form.facturacion);if(r.hayPrendas&&!r.ok)return`La facturación no cuadra con las prendas. ${r.faltan.length?"Faltan: "+r.faltan.join(", ")+". ":""}${r.sobran.length?"Sobran: "+r.sobran.join(", ")+".":""}`;}return""}
- async function irSiguiente(){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true);setPaso(x=>Math.min(6,x+1))}
- async function abrirPaso(i:number){if(i>paso){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true)}setPaso(i)}
+ // La nomina y la matriz de tallas describen lo mismo desde dos lados, y se
+ // separan sin que nadie lo note: se importa la nomina por Excel y luego
+ // alguien corrige una talla, o se edita un jugador despues de cuadrar. Los
+ // totales pueden seguir dando iguales -10 y 10- siendo 10 tallas M contra 10
+ // tallas L, y el taller corta lo que dice la matriz.
+ //
+ // Avisa y deja decidir, no bloquea: hay contratos donde la diferencia es
+ // correcta (una prenda de repuesto, algo capturado a mano a proposito).
+ async function nominaCuadra(){
+  if(!form.jugadores.length)return true;               // sin nomina no hay nada que comparar
+  const r=compararNominaTallas(tallasDesdeJugadores(form.jugadores),form.lineas);
+  if(r.coincide){diferenciasTallasAceptadas.current="";return true}
+  // Si ya aceptó exactamente estas diferencias al salir de Jugadores, no se
+  // vuelve a interrumpir al guardar. Cualquier cambio de talla altera la firma
+  // y hace que la confirmación aparezca otra vez.
+  const firma=JSON.stringify(r.diferencias);
+  if(diferenciasTallasAceptadas.current===firma)return true;
+  const continuar=await confirmarDialogo(textoDiferencias(r));
+  if(continuar)diferenciasTallasAceptadas.current=firma;
+  return continuar;
+ }
+ async function irSiguiente(){
+  const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true);
+  // Al salir del paso de jugadores, que es donde se acaba de tocar la nomina.
+  if(paso===5&&!await nominaCuadra())return;
+  setPaso(x=>Math.min(6,x+1));
+ }
+ async function abrirPaso(i:number){if(i>paso){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true);if(paso===5&&!await nominaCuadra())return}setPaso(i)}
 
  async function buscarAnterior(){if(texto(busqueda).length<2)return mostrarAvisoDialogo("Escribe al menos 2 caracteres.","Buscar reposición");setBuscando(true);const{data,error}=await supabase.rpc("buscar_contratos_reposicion_v108",{p_busqueda:busqueda});setBuscando(false);if(error)return mostrarAvisoDialogo(error.message,"No se pudo buscar",true);setCoincidencias((data as any[])||[])}
  async function cargarReposicion(id:string){const{data,error}=await supabase.rpc("obtener_plantilla_contrato_v108",{p_contrato_id:id});if(error)return mostrarAvisoDialogo(error.message,"No se pudo cargar",true);const d:any=data,c=d.contrato||{};setForm(f=>({...f,cab:{...f.cab,tipo_contrato:c.tipo_contrato||"Normal",prioridad:c.prioridad||"Normal",reposicion:true,contrato_origen_reposicion_id:id,nombre_tecnica:c.nombre_tecnica||"",numero_tecnica:c.numero_tecnica||"",sellos_tpu:c.sellos_tpu||"No",ubicacion_tpu:c.ubicacion_tpu||"",bordado:c.bordado||"",colores:Array.isArray(c.colores_generales)?c.colores_generales.map((x:any)=>x.nombre||x).join(", "):"",adicionales:c.adicionales?.detalle||""},prendasSel:Array.from(new Set(((d.prendas||[]) as {prenda?:unknown}[]).map(x=>texto(x.prenda)).filter(Boolean))),lineas:lineasDesdePrendas((d.prendas||[]) as never[]),prendas:[],jugadores:(d.jugadores||[]).map((x:any)=>({...x,id:uuid()})),archivos:(d.archivos||[]).map((x:any)=>({...x,id:uuid()})),specs:(d.especificaciones||[]).map((x:any)=>({id:uuid(),prenda_clave:x.prenda_clave,variante_calidad:x.variante_calidad||"",mockup:texto(x.variante_mockup),...leerSpec(x.spec)})),facturacion:(d.facturacion||[]).map((x:any)=>({...x,id:uuid()}))}));setBusqueda("");setCoincidencias([]);await mostrarAvisoDialogo("Se copiaron prendas, jugadores, diseños y especificaciones. Cliente, fechas y valores siguen siendo los del nuevo contrato.","Reposición preparada")}
@@ -471,6 +499,7 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
 
  async function guardar(){const falla=[0,1,2,4,6].map(errorPaso).find(Boolean);if(falla)return mostrarAvisoDialogo(falla,"Contrato incompleto",true);
   let motivoEdicion="";
+  if(!await nominaCuadra())return;
   if(editando){
    // Reeditar reemplaza prendas, jugadores, especificaciones y archivos por lo
    // que haya en pantalla: lo que se quito aqui se pierde alla. Por eso el

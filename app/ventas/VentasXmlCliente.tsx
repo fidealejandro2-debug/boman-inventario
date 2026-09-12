@@ -755,7 +755,17 @@ export default function VentasXmlCliente({ perfil }: { perfil: Perfil }) {
                   <div><strong>{linea.numeroLinea}. {linea.descripcion}</strong><span>Código: {linea.codigoPrincipal ?? linea.codigoAuxiliar ?? "Sin código"} · XML: {linea.cantidad} unidad(es)</span></div>
                   <span className={`estado-distribucion ${completa ? "completa" : "pendiente"}`}>{estado.afectaInventario ? `${totalAsignado}/${linea.cantidad}` : "No inventariable"}</span>
                 </div>
-                <label className="opcion-destacada compacta"><input type="checkbox" checked={!estado.afectaInventario} onChange={(e) => cambiarAfectacion(linea.numeroLinea, !e.target.checked)} /> Es servicio u otro concepto que no descuenta inventario</label>
+                <label className="opcion-destacada compacta">
+                  Tipo de línea
+                  <select
+                    value={estado.afectaInventario ? "producto" : "servicio"}
+                    onChange={(e) => cambiarAfectacion(linea.numeroLinea, e.target.value === "producto")}
+                    aria-label={`Tipo de línea ${linea.numeroLinea}`}
+                  >
+                    <option value="producto">Producto · descuenta inventario</option>
+                    <option value="servicio">Servicio o cargo · no afecta stock</option>
+                  </select>
+                </label>
                 {estado.afectaInventario && <>
                   {productosRecordados(linea).length > 0 && <div className="recordados-xml"><span>Coincidencias por código:</span>{productosRecordados(linea).map((producto) => <button className="secondary" type="button" key={producto.id} onClick={() => agregarProducto(linea.numeroLinea, producto.id)}>{producto.sku} · {producto.talla ?? producto.color ?? producto.nombre}</button>)}</div>}
                   <div className="acciones-masivas-xml"><button type="button" onClick={() => abrirSelectorCatalogo(linea)}>Seleccionar varios del catálogo</button>{estado.asignaciones.length > 1 && <button className="secondary" type="button" onClick={() => repartirLineaPorIgual(linea.numeroLinea)}>Repartir {linea.cantidad} por igual</button>}<span>{estado.asignaciones.length} producto(s) seleccionado(s)</span></div>

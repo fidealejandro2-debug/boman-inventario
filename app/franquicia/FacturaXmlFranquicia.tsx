@@ -421,24 +421,33 @@ export default function FacturaXmlFranquicia({
                     </div>
                   </div>
                   <label className="check-inline">
-                    <input
-                      type="checkbox"
-                      checked={estado?.afectaInventario ?? true}
-                      onChange={(e) =>
+                    Tipo de línea
+                    <select
+                      value={(estado?.afectaInventario ?? true) ? "producto" : "servicio"}
+                      aria-label={`Tipo de línea ${l.numeroLinea}`}
+                      onChange={(e) => {
+                        const afectaInventario = e.target.value === "producto";
                         setLineas({
                           ...lineas,
                           [l.numeroLinea]: {
                             ...estado,
-                            afectaInventario: e.target.checked,
-                            asignaciones: e.target.checked ? estado.asignaciones : [],
+                            afectaInventario,
+                            asignaciones: afectaInventario ? estado.asignaciones : [],
                           },
-                        })
-                      }
-                    />{" "}
-                    Descuenta stock
+                        });
+                      }}
+                    >
+                      <option value="producto">Producto · descuenta inventario</option>
+                      <option value="servicio">Servicio o cargo · no afecta stock</option>
+                    </select>
                   </label>
                 </div>
 
+                {estado?.afectaInventario === false && (
+                  <div className="success" style={{ marginTop: 8 }}>
+                    Servicio o cargo: se conservará en la factura y en sus valores, sin descontar existencias.
+                  </div>
+                )}
                 {estado?.afectaInventario !== false && (
                   <>
                     <div className="fx-estado">
