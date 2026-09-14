@@ -88,6 +88,13 @@ from(values
  (136,'v136_reconciliar_registro_migraciones.sql',
    exists (select 1 from public.schema_migrations_boman where id='v136')
    and exists (select 1 from public.schema_migrations_boman where id='v134_registro')
-   and exists (select 1 from public.schema_migrations_boman where id='v134_cronograma'))
+   and exists (select 1 from public.schema_migrations_boman where id='v134_cronograma')),
+ (137,'v137_perfil_navegacion_rapida.sql',
+   to_regprocedure('public.perfil_navegacion_v137()') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v137')),
+ (138,'v138_comprobantes_depositos_caja.sql',
+   to_regclass('public.caja_comprobantes_pendientes_v138') is not null
+   and to_regprocedure('public.registrar_deposito_caja_v138(uuid,date,numeric,text,text,uuid,text,uuid)') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v138'))
 )as v(orden,archivo,existe)
 order by v.orden;

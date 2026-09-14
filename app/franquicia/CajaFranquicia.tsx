@@ -19,6 +19,8 @@ import {
   mostrarAvisoDialogo,
   pedirMotivoDialogo,
 } from "@/components/Dialogo";
+import { useProteccionSalida } from "@/components/useProteccionSalida";
+import ComprobanteDeposito, { type ArchivoComprobante } from "./ComprobanteDeposito";
 
 type Movimiento = {
   id: string;
@@ -72,12 +74,17 @@ type Deposito = {
   banco: string;
   referencia: string;
   comprobante_url: string | null;
+  comprobante_storage_path: string | null;
+  comprobante_nombre: string | null;
+  comprobante_mime_type: string | null;
   nota: string | null;
   estado: "registrado" | "confirmado" | "anulado";
   registrado_por_nombre: string;
   confirmado_por_nombre: string | null;
   created_at: string;
 };
+
+const BUCKET_COMPROBANTES_CAJA = "caja-comprobantes";
 
 function diaSiguienteISO(fecha: string) {
   const [anio, mes, dia] = fecha.split("-").map(Number);
@@ -148,9 +155,11 @@ export default function CajaFranquicia({
     monto: "",
     banco: "",
     referencia: "",
-    comprobanteUrl: "",
     nota: "",
   });
+  const [comprobanteDeposito, setComprobanteDeposito] = useState<ArchivoComprobante | null>(null);
+  const [abriendoComprobante, setAbriendoComprobante] = useState<string | null>(null);
+  const [claveDeposito, setClaveDeposito] = useState(() => nuevaClaveIdempotencia());
 
   const [form, setForm] = useState({
     fecha: hoyLocalISO(),
@@ -305,6 +314,15 @@ export default function CajaFranquicia({
     efectivoContado: Number(efectivoContado || 0),
   });
 
+  useProteccionSalida(Boolean(
+    deposito.cierreId
+    || deposito.monto
+    || deposito.banco.trim()
+    || deposito.referencia.trim()
+    || deposito.nota.trim()
+    || comprobanteDeposito
+  ));
+
   async function cerrarCaja() {
     if (cierreSeleccionado?.estado === "cerrado") {
       return setError("La caja de esa fecha ya esta cerrada.");
@@ -369,6 +387,12 @@ export default function CajaFranquicia({
     });
     return totales;
   }, [depositos]);
+  const resumenDepositos = useMemo(() => ({
+    porConfirmar: depositos.filter((item) => item.estado === "registrado").length,
+    sinEvidencia: depositos.filter((item) =>
+      item.estado === "registrado" && !item.comprobante_storage_path && !item.comprobante_url
+    ).length,
+  }), [depositos]);
 
   const cierresPendientes = useMemo(() => cierres.filter((cierre) =>
     cierre.estado === "cerrado"
@@ -390,35 +414,120 @@ export default function CajaFranquicia({
     if (!deposito.banco.trim() || !deposito.referencia.trim()) {
       return setError("Banco y referencia del depósito son obligatorios.");
     }
-    if (Number(deposito.monto) <= 0) return setError("El monto del depósito debe ser mayor que cero.");
+    if (!deposito.fecha || deposito.fecha <= cierre.fecha || deposito.fecha > hoyLocalISO()) {
+      return setError("La fecha del depósito debe ser posterior al cierre y no puede ser futura.");
+    }
+    if (!Number.isFinite(Number(deposito.monto)) || Number(deposito.monto) <= 0) {
+      return setError("El monto del depósito debe ser mayor que cero.");
+    }
     const disponible = Number(cierre.efectivo_contado) - (depositadoPorCierre.get(cierre.id) ?? 0);
-    if (Number(deposito.monto) > disponible) {
+    if (Number(deposito.monto) > disponible + 0.001) {
       return setError(`Solo quedan ${dinero(disponible)} pendientes de depositar para ese cierre.`);
     }
+    const detalleComprobante = comprobanteDeposito
+      ? `\n\nSe adjuntará ${comprobanteDeposito.file.name} como respaldo privado.`
+      : "\n\nNo has adjuntado un comprobante. Administración verá el depósito como pendiente de evidencia.";
     if (!await confirmarDialogo(
-      `Se registrará un depósito de ${dinero(Number(deposito.monto))} en ${deposito.banco.trim()}.\n\nEl efectivo saldrá de la caja del local y quedará pendiente de confirmación administrativa.`
+      `Se registrará un depósito de ${dinero(Number(deposito.monto))} en ${deposito.banco.trim()}.\n\nEl efectivo saldrá de la caja del local y quedará pendiente de confirmación administrativa.${detalleComprobante}`,
+      !comprobanteDeposito
     )) return;
 
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("registrar_deposito_caja_v87", {
-      p_cierre_id: cierre.id,
-      p_fecha: deposito.fecha,
-      p_monto: Number(deposito.monto),
-      p_banco: deposito.banco.trim(),
-      p_referencia: deposito.referencia.trim(),
-      p_comprobante_url: deposito.comprobanteUrl.trim() || null,
-      p_nota: deposito.nota.trim() || null,
-      p_idempotency_key: nuevaClaveIdempotencia(),
-    });
-    setGuardando(false);
-    if (error) return setError(mensajeError(error));
-    confirmar("Depósito registrado", "El efectivo salió de caja y Administración recibió la solicitud de confirmación.");
-    setDeposito({ cierreId: "", fecha: hoyLocalISO(), monto: "", banco: "", referencia: "", comprobanteUrl: "", nota: "" });
-    cargar();
+    try {
+      let comprobanteId: string | null = null;
+      if (comprobanteDeposito) {
+        const { data: preparado, error: errorPreparacion } = await supabase.rpc(
+          "preparar_comprobante_deposito_v138",
+          {
+            p_cierre_id: cierre.id,
+            p_nombre_archivo: comprobanteDeposito.file.name,
+            p_mime_type: comprobanteDeposito.file.type,
+            p_tamano_bytes: comprobanteDeposito.file.size,
+            p_idempotency_key: comprobanteDeposito.id,
+          }
+        );
+        if (errorPreparacion) throw errorPreparacion;
+        const path = (preparado as { path: string }).path;
+        const { error: errorSubida } = await supabase.storage
+          .from(BUCKET_COMPROBANTES_CAJA)
+          .upload(path, comprobanteDeposito.file, {
+            contentType: comprobanteDeposito.file.type,
+            upsert: false,
+          });
+        if (errorSubida && !/already exists|duplicate/i.test(errorSubida.message)) throw errorSubida;
+        comprobanteId = comprobanteDeposito.id;
+      }
+
+      const { error } = await supabase.rpc("registrar_deposito_caja_v138", {
+        p_cierre_id: cierre.id,
+        p_fecha: deposito.fecha,
+        p_monto: Number(deposito.monto),
+        p_banco: deposito.banco.trim(),
+        p_referencia: deposito.referencia.trim(),
+        p_comprobante_id: comprobanteId,
+        p_nota: deposito.nota.trim() || null,
+        p_idempotency_key: claveDeposito,
+      });
+      if (error) throw error;
+      confirmar(
+        "Depósito registrado",
+        comprobanteId
+          ? "El efectivo salió de caja y el comprobante quedó disponible para la revisión de Administración."
+          : "El efectivo salió de caja. Administración recibió la solicitud y verá que falta adjuntar evidencia."
+      );
+      setDeposito({ cierreId: "", fecha: hoyLocalISO(), monto: "", banco: "", referencia: "", nota: "" });
+      setComprobanteDeposito(null);
+      setClaveDeposito(nuevaClaveIdempotencia());
+      await cargar();
+    } catch (error) {
+      setError(mensajeError(error instanceof Error ? error : { message: String(error) }));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function abrirComprobante(item: Deposito) {
+    if (!item.comprobante_storage_path && item.comprobante_url) {
+      try {
+        const destino = new URL(item.comprobante_url);
+        if (!['http:', 'https:'].includes(destino.protocol)) throw new Error();
+        window.open(destino.href, "_blank", "noopener,noreferrer");
+      } catch {
+        setError("El enlace antiguo del comprobante no es válido.");
+      }
+      return;
+    }
+    if (!item.comprobante_storage_path) return;
+    setAbriendoComprobante(item.id);
+    const ventana = window.open("", "_blank");
+    const { data, error } = await supabase.storage
+      .from(BUCKET_COMPROBANTES_CAJA)
+      .createSignedUrl(item.comprobante_storage_path, 300);
+    setAbriendoComprobante(null);
+    if (error || !data?.signedUrl) {
+      ventana?.close();
+      return setError(error?.message ?? "No se pudo abrir el comprobante.");
+    }
+    if (ventana) {
+      ventana.opener = null;
+      ventana.location.href = data.signedUrl;
+    } else {
+      await mostrarAvisoDialogo(
+        "El navegador bloqueó la nueva pestaña. Habilita ventanas emergentes para abrir el comprobante.",
+        "No se pudo abrir el comprobante"
+      );
+    }
   }
 
   async function confirmarDeposito(item: Deposito) {
+    if (!item.comprobante_storage_path && !item.comprobante_url) {
+      const continuar = await confirmarDialogo(
+        `El depósito ${item.referencia} no tiene comprobante adjunto. ¿Quieres continuar con la conciliación usando únicamente la referencia bancaria?`,
+        true
+      );
+      if (!continuar) return;
+    }
     const motivo = await pedirMotivoDialogo(
       `Verificación del depósito ${item.referencia} por ${dinero(item.monto)}:`,
       5,
@@ -754,7 +863,12 @@ export default function CajaFranquicia({
       <div className="card-interna">
         <div className="fq-caja-cabecera">
           <h4>Depósitos del efectivo contado</h4>
-          <span className="badge">Conciliación bancaria</span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <span className="badge">{resumenDepositos.porConfirmar} por confirmar</span>
+            {resumenDepositos.sinEvidencia > 0 && (
+              <span className="badge bajo">{resumenDepositos.sinEvidencia} sin evidencia</span>
+            )}
+          </div>
         </div>
         <p className="ayuda">
           Vincula cada depósito con el cierre del que salió el dinero. El sistema
@@ -846,15 +960,11 @@ export default function CajaFranquicia({
                   placeholder="Número de comprobante"
                 />
               </label>
-              <label>
-                Enlace del comprobante
-                <input
-                  type="url"
-                  value={deposito.comprobanteUrl}
-                  onChange={(e) => setDeposito({ ...deposito, comprobanteUrl: e.target.value })}
-                  placeholder="https://... (opcional)"
-                />
-              </label>
+              <ComprobanteDeposito
+                archivo={comprobanteDeposito}
+                onChange={setComprobanteDeposito}
+                disabled={guardando}
+              />
               <label className="ancho-total">
                 Nota
                 <input
@@ -877,7 +987,7 @@ export default function CajaFranquicia({
           <table>
             <thead>
               <tr>
-                <th>Cierre</th><th>Depósito</th><th>Banco / referencia</th>
+                <th>Cierre</th><th>Depósito</th><th>Banco / referencia</th><th>Comprobante</th>
                 <th className="num">Monto</th><th>Registrado por</th><th>Estado</th><th></th>
               </tr>
             </thead>
@@ -888,11 +998,30 @@ export default function CajaFranquicia({
                   <td>{item.fecha_deposito.split("-").reverse().join("/")}</td>
                   <td>
                     <strong>{item.banco}</strong><br />{item.referencia}
-                    {item.comprobante_url && <><br /><a href={item.comprobante_url} target="_blank" rel="noreferrer">Ver comprobante</a></>}
+                  </td>
+                  <td>
+                    {item.comprobante_storage_path || item.comprobante_url ? (
+                      <button
+                        type="button"
+                        className="btn-mini secondary"
+                        disabled={abriendoComprobante === item.id}
+                        onClick={() => void abrirComprobante(item)}
+                      >
+                        {abriendoComprobante === item.id ? "Abriendo…" : "Ver comprobante"}
+                      </button>
+                    ) : <span className="badge bajo">Sin evidencia</span>}
+                    {item.comprobante_nombre && <small className="ayuda" style={{ display: "block", marginTop: 4 }}>{item.comprobante_nombre}</small>}
                   </td>
                   <td className="num">{dinero(item.monto)}</td>
                   <td>{item.registrado_por_nombre}</td>
-                  <td><span className={`badge estado-${item.estado}`}>{item.estado}</span></td>
+                  <td>
+                    <span className={`badge estado-${item.estado}`}>{item.estado}</span>
+                    {item.confirmado_por_nombre && (
+                      <small className="ayuda" style={{ display: "block", marginTop: 4 }}>
+                        Por {item.confirmado_por_nombre}
+                      </small>
+                    )}
+                  </td>
                   <td>
                     {puedeConciliar && item.estado === "registrado" && (
                       <button className="btn-mini secondary" disabled={guardando} onClick={() => confirmarDeposito(item)}>
@@ -906,7 +1035,7 @@ export default function CajaFranquicia({
                 </tr>
               ))}
               {!depositos.length && (
-                <tr><td colSpan={7} className="vacio">Todavía no hay depósitos vinculados a cierres.</td></tr>
+                <tr><td colSpan={8} className="vacio">Todavía no hay depósitos vinculados a cierres.</td></tr>
               )}
             </tbody>
           </table>

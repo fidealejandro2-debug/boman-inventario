@@ -1,0 +1,104 @@
+.contenedor {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cabecera strong,
+.cabecera small {
+  display: block;
+}
+
+.cabecera small {
+  margin-top: 3px;
+  color: var(--texto-secundario);
+}
+
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.archivo {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--azul) 28%, var(--borde));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--azul-suave) 42%, var(--superficie));
+}
+
+.vista {
+  width: 84px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--superficie);
+  color: var(--texto-secundario);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.vista img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.datos {
+  min-width: 0;
+}
+
+.datos strong,
+.datos small {
+  display: block;
+}
+
+.datos strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datos small {
+  margin-top: 4px;
+  color: var(--texto-secundario);
+}
+
+@media (max-width: 650px) {
+  .cabecera {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .acciones,
+  .acciones button {
+    width: 100%;
+  }
+
+  .archivo {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .vista {
+    width: 68px;
+    height: 60px;
+  }
+
+  .archivo > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
