@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import {
   aplanarSpec, leerSpec, valorDeCampo, grupoPrendaJugador, compararJugadores,
   etiquetaGrupo, cuentaGrupo, tallaQueOrdena, TIPOS_SIN_MANGA, ABREV_TIPO,
-  normalizarAdicionalesContrato,
+  normalizarAdicionalesContrato, adicionalesDesdeDatosContrato,
   type JugadorBrief,
 } from "./briefContrato.ts";
 
@@ -60,6 +60,24 @@ test("los adicionales nuevos mantienen su estructura", () => {
   assert.equal(ad.detalle, "Empaque especial");
   assert.deepEqual(ad.items, [{ tipo: "Medias", valor: "Incluye personalizadas", cantidad: 5 }]);
   assert.equal(ad.medidas_bandera, "2 × 1 m");
+});
+
+test("el importador encuentra Adicionales dentro de extra como lo entrega AppScript", () => {
+  const ad = adicionalesDesdeDatosContrato({
+    adicionales: {},
+    extra: {
+      Adicionales: JSON.stringify({
+        medias: "Incluye medias", cantidadMedias: "20",
+        bandaCapitan: "Con banda de capitán", cantidadBandas: "1",
+        bandera: "Con bandera", cantidadBanderas: "1",
+      }),
+    },
+  });
+  assert.deepEqual(ad.items, [
+    { tipo: "Medias", valor: "Incluye medias", cantidad: 20 },
+    { tipo: "Banda de Capitán", valor: "Con banda de capitán", cantidad: 1 },
+    { tipo: "Bandera", valor: "Con bandera", cantidad: 1 },
+  ]);
 });
 
 // ── Especificaciones migradas de BomanSport ──────────────────────────────

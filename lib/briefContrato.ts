@@ -84,6 +84,26 @@ export function normalizarAdicionalesContrato(valor: unknown): AdicionalesContra
   };
 }
 
+/**
+ * La API histórica de AppScript ha enviado este campo en dos lugares:
+ * `adicionales` en la raíz y `extra.Adicionales` con el nombre original de
+ * la columna de Sheets. Centralizar la búsqueda evita que una sincronización
+ * correcta vuelva a vaciar los adicionales del contrato normalizado.
+ */
+export function adicionalesDesdeDatosContrato(datos: unknown): AdicionalesContrato {
+  if (!datos || typeof datos !== "object" || Array.isArray(datos)) {
+    return normalizarAdicionalesContrato(undefined);
+  }
+  const raiz = datos as Record<string, unknown>;
+  const extra = raiz.extra && typeof raiz.extra === "object" && !Array.isArray(raiz.extra)
+    ? raiz.extra as Record<string, unknown>
+    : {};
+  const candidatos = [raiz.adicionales, raiz.Adicionales, extra.adicionales, extra.Adicionales]
+    .map(normalizarAdicionalesContrato);
+  return candidatos.find((ad) => ad.items.length > 0 || Boolean(ad.detalle) || Boolean(ad.medidas_bandera))
+    ?? normalizarAdicionalesContrato(undefined);
+}
+
 // ── Especificaciones técnicas ────────────────────────────────────────────
 
 /** camelCase → snake_case, que es como se llaman los campos de FICHAS_PRENDA. */
