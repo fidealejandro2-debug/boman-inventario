@@ -95,6 +95,8 @@ from(values
  (138,'v138_comprobantes_depositos_caja.sql',
    to_regclass('public.caja_comprobantes_pendientes_v138') is not null
    and to_regprocedure('public.registrar_deposito_caja_v138(uuid,date,numeric,text,text,uuid,text,uuid)') is not null
-   and exists (select 1 from public.schema_migrations_boman where id='v138'))
+   and exists (select 1 from public.schema_migrations_boman where id='v138')),
+ (139,'v139_recuperar_adicionales_contratos.sql',
+   exists (select 1 from public.schema_migrations_boman where id='v139'))
 )as v(orden,archivo,existe)
 order by v.orden;

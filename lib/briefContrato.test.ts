@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import {
   aplanarSpec, leerSpec, valorDeCampo, grupoPrendaJugador, compararJugadores,
   etiquetaGrupo, cuentaGrupo, tallaQueOrdena, TIPOS_SIN_MANGA, ABREV_TIPO,
+  normalizarAdicionalesContrato,
   type JugadorBrief,
 } from "./briefContrato.ts";
 
@@ -24,6 +25,41 @@ const ORDEN = {
 const jug = (p: Partial<JugadorBrief>): JugadorBrief => ({
   nombre: "", numero: "", categoria: "Hombre", talla_superior: "M",
   talla_inferior: "", manga: "Corta", calidad: "Amateur", tipo_uniforme: "Uniforme completo", ...p,
+});
+
+test("los adicionales del AppScript conservan medias, cantidades y medidas", () => {
+  const ad = normalizarAdicionalesContrato(JSON.stringify({
+    medias: "Incluye medias", cantidadMedias: "3",
+    bandera: "Con bandera", cantidadBanderas: "1",
+    medidas: "1,50 × 0,90", otros: "Incluye funda",
+  }));
+  assert.deepEqual(ad.items, [
+    { tipo: "Medias", valor: "Incluye medias", cantidad: 3 },
+    { tipo: "Bandera", valor: "Con bandera", cantidad: 1 },
+  ]);
+  assert.equal(ad.medidas_bandera, "1,50 × 0,90");
+  assert.equal(ad.detalle, "Incluye funda");
+});
+
+test("el selector histórico de medias no duplica polainas", () => {
+  const ad = normalizarAdicionalesContrato({
+    medias: "Incluye polainas", cantidadMedias: 14,
+    polainas: "Incluye polainas", cantidadPolainas: 9,
+  });
+  assert.deepEqual(ad.items, [
+    { tipo: "Polainas", valor: "Incluye polainas", cantidad: 14 },
+  ]);
+});
+
+test("los adicionales nuevos mantienen su estructura", () => {
+  const ad = normalizarAdicionalesContrato({
+    detalle: "Empaque especial",
+    items: [{ tipo: "Medias", valor: "Incluye personalizadas", cantidad: 5 }],
+    medidas_bandera: "2 × 1 m",
+  });
+  assert.equal(ad.detalle, "Empaque especial");
+  assert.deepEqual(ad.items, [{ tipo: "Medias", valor: "Incluye personalizadas", cantidad: 5 }]);
+  assert.equal(ad.medidas_bandera, "2 × 1 m");
 });
 
 // ── Especificaciones migradas de BomanSport ──────────────────────────────

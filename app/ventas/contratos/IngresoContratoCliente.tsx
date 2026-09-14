@@ -13,7 +13,7 @@ import {CALIDADES_CONTRATO,PRENDAS_CONTRATO} from "@/lib/catalogosContrato";
 import {compararNominaTallas,textoDiferencias} from "@/lib/nominaTallas";
 import {aplanarSpec,leerSpec,valorDeCampo,grupoPrendaJugador,etiquetaGrupo,cuentaGrupo,
  tallaQueOrdena,compararJugadores,TIPO_SOLO_SUPERIOR,TIPO_SOLO_INFERIOR,TIPOS_SIN_MANGA,
- ABREV_TIPO} from "@/lib/briefContrato";
+ ABREV_TIPO,normalizarAdicionalesContrato} from "@/lib/briefContrato";
 import estilos from "./IngresoContrato.module.css";
 import {TODOS_LOS_COLORES} from "./colores";
 import {FICHAS_PRENDA,fichasDePrendas,opcionesCampo,esCalidadAlta,type FichaPrenda} from "./specsPrendas";
@@ -329,6 +329,18 @@ function lineasDesdePrendas(filas:{prenda?:unknown;calidad?:unknown;detalle?:unk
 type Form={cab:Cab;prendasSel:string[];lineas:Linea[];adic:Adic;adicCant:AdicCant;medidasBandera:string;prendas:Prenda[];jugadores:Jugador[];archivos:Archivo[];specs:Spec[];facturacion:Fact[]};
 const adicInicial=():Adic=>ADICIONALES.reduce((a,x)=>({...a,[x.clave]:x.opciones[0]}),{} as Adic);
 const adicCantInicial=():AdicCant=>ADICIONALES.reduce((a,x)=>({...a,[x.clave]:0}),{} as AdicCant);
+const claveComparable=(v:unknown)=>String(v??"").trim().toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[_-]+/g," ");
+function adicionalesFormDesdeValor(valor:unknown){
+ const normal=normalizarAdicionalesContrato(valor),adic=adicInicial(),adicCant=adicCantInicial();
+ for(const item of normal.items){
+  const tipo=claveComparable(item.tipo);
+  const def=ADICIONALES.find(x=>claveComparable(x.titulo)===tipo||claveComparable(x.clave)===tipo);
+  if(!def)continue;
+  if(texto(item.valor))adic[def.clave]=texto(item.valor);
+  adicCant[def.clave]=Math.max(0,Number(item.cantidad)||0);
+ }
+ return {adic,adicCant,medidasBandera:normal.medidas_bandera,detalle:normal.detalle};
+}
 
 const cabInicial=(nombre:string):Cab=>({vendedor:nombre,canal:"",nombre_contrato_v115:"",cliente:"",almacen_venta_id_v115:"",telefono:"",whatsapp:"",email:"",tipo_contrato:"Normal",fecha_entrega:"",fecha_inicio_produccion:"",prioridad:"Normal",arqueros:0,total_manual:0,reposicion:false,contrato_origen_reposicion_id:"",nombre_tecnica:"",numero_tecnica:"",sellos_tpu:"No",ubicacion_tpu:"",bordado:"",colores:"",instrucciones:"",presupuesto:0,abono:0,forma_entrega:"Retiro en tienda",direccion:"",vendedor_responsable:nombre,autorizado:false,adicionales:""});
 const inicial=(nombre:string):Form=>({cab:cabInicial(nombre),prendasSel:[],lineas:[],adic:adicInicial(),adicCant:adicCantInicial(),medidasBandera:"",prendas:[],jugadores:[],archivos:[],specs:[],facturacion:[]});
@@ -456,7 +468,7 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
  async function abrirPaso(i:number){if(i>paso){const e=errorPaso();if(e)return mostrarAvisoDialogo(e,"Revisa este paso",true);if(paso===5&&!await nominaCuadra())return}setPaso(i)}
 
  async function buscarAnterior(){if(texto(busqueda).length<2)return mostrarAvisoDialogo("Escribe al menos 2 caracteres.","Buscar reposición");setBuscando(true);const{data,error}=await supabase.rpc("buscar_contratos_reposicion_v108",{p_busqueda:busqueda});setBuscando(false);if(error)return mostrarAvisoDialogo(error.message,"No se pudo buscar",true);setCoincidencias((data as any[])||[])}
- async function cargarReposicion(id:string){const{data,error}=await supabase.rpc("obtener_plantilla_contrato_v108",{p_contrato_id:id});if(error)return mostrarAvisoDialogo(error.message,"No se pudo cargar",true);const d:any=data,c=d.contrato||{};setForm(f=>({...f,cab:{...f.cab,tipo_contrato:c.tipo_contrato||"Normal",prioridad:c.prioridad||"Normal",reposicion:true,contrato_origen_reposicion_id:id,nombre_tecnica:c.nombre_tecnica||"",numero_tecnica:c.numero_tecnica||"",sellos_tpu:c.sellos_tpu||"No",ubicacion_tpu:c.ubicacion_tpu||"",bordado:c.bordado||"",colores:Array.isArray(c.colores_generales)?c.colores_generales.map((x:any)=>x.nombre||x).join(", "):"",adicionales:c.adicionales?.detalle||""},prendasSel:Array.from(new Set(((d.prendas||[]) as {prenda?:unknown}[]).map(x=>texto(x.prenda)).filter(Boolean))),lineas:lineasDesdePrendas((d.prendas||[]) as never[]),prendas:[],jugadores:(d.jugadores||[]).map((x:any)=>({...x,id:uuid()})),archivos:(d.archivos||[]).map((x:any)=>({...x,id:uuid()})),specs:(d.especificaciones||[]).map((x:any)=>({id:uuid(),prenda_clave:x.prenda_clave,variante_calidad:x.variante_calidad||"",mockup:texto(x.variante_mockup),...leerSpec(x.spec)})),facturacion:(d.facturacion||[]).map((x:any)=>({...x,id:uuid()}))}));setBusqueda("");setCoincidencias([]);await mostrarAvisoDialogo("Se copiaron prendas, jugadores, diseños y especificaciones. Cliente, fechas y valores siguen siendo los del nuevo contrato.","Reposición preparada")}
+ async function cargarReposicion(id:string){const{data,error}=await supabase.rpc("obtener_plantilla_contrato_v108",{p_contrato_id:id});if(error)return mostrarAvisoDialogo(error.message,"No se pudo cargar",true);const d:any=data,c=d.contrato||{},adicionales=adicionalesFormDesdeValor(c.adicionales);setForm(f=>({...f,cab:{...f.cab,tipo_contrato:c.tipo_contrato||"Normal",prioridad:c.prioridad||"Normal",reposicion:true,contrato_origen_reposicion_id:id,nombre_tecnica:c.nombre_tecnica||"",numero_tecnica:c.numero_tecnica||"",sellos_tpu:c.sellos_tpu||"No",ubicacion_tpu:c.ubicacion_tpu||"",bordado:c.bordado||"",colores:Array.isArray(c.colores_generales)?c.colores_generales.map((x:any)=>x.nombre||x).join(", "):"",adicionales:adicionales.detalle},prendasSel:Array.from(new Set(((d.prendas||[]) as {prenda?:unknown}[]).map(x=>texto(x.prenda)).filter(Boolean))),lineas:lineasDesdePrendas((d.prendas||[]) as never[]),adic:adicionales.adic,adicCant:adicionales.adicCant,medidasBandera:adicionales.medidasBandera,prendas:[],jugadores:(d.jugadores||[]).map((x:any)=>({...x,id:uuid()})),archivos:(d.archivos||[]).map((x:any)=>({...x,id:uuid()})),specs:(d.especificaciones||[]).map((x:any)=>({id:uuid(),prenda_clave:x.prenda_clave,variante_calidad:x.variante_calidad||"",mockup:texto(x.variante_mockup),...leerSpec(x.spec)})),facturacion:(d.facturacion||[]).map((x:any)=>({...x,id:uuid()}))}));setBusqueda("");setCoincidencias([]);await mostrarAvisoDialogo("Se copiaron prendas, jugadores, diseños, especificaciones y adicionales. Cliente, fechas y valores siguen siendo los del nuevo contrato.","Reposición preparada")}
 
  function agregarPrenda(){setForm(f=>({...f,prendas:[...f.prendas,{id:uuid(),prenda:"Camiseta Jugador",calidad:"Amateur",detalle:"",genero:"H",talla:"M",cantidad:1}]}))}
  function agregarJugador(){setForm(f=>({...f,jugadores:[...f.jugadores,{id:uuid(),nombre:"",numero:"",categoria:"Hombre",talla_superior:"M",talla_inferior:"M",manga:"Corta",calidad:"Amateur",modelo_arquero:"",tipo_uniforme:"Uniforme completo",detalle:"",mockup:""}]}))}
@@ -833,22 +845,14 @@ export function formDesdeContrato(datos:{contrato:FilaGuardada;prendas?:FilaGuar
  // pero la tabla los guarda en colores_generales (jsonb [{nombre}]). Sin esta
  // conversion el brief de un contrato guardado salia sin la franja de colores.
  if(Array.isArray(co.colores_generales))cab.colores=(co.colores_generales as Record<string,unknown>[]).map(x=>t(x&&x.nombre)).filter(Boolean).join(", ");
- const ad=(co.adicionales&&typeof co.adicionales==="object"?co.adicionales:{}) as Record<string,unknown>;
- cab.adicionales=t(ad.detalle);
- const adic=adicInicial(),adicCant={} as AdicCant;
- for(const a of ADICIONALES)adicCant[a.clave]=0;
- for(const it of (Array.isArray(ad.items)?ad.items:[]) as Record<string,unknown>[]){
-  const def=ADICIONALES.find(x=>x.titulo===t(it.tipo));
-  if(!def)continue;
-  if(t(it.valor))adic[def.clave]=t(it.valor);
-  adicCant[def.clave]=Number(it.cantidad)||0;
- }
+ const adicionales=adicionalesFormDesdeValor(co.adicionales);
+ cab.adicionales=adicionales.detalle;
  const prendas=(datos.prendas||[]).map(x=>({id:uuid(),prenda:t(x.prenda),calidad:t(x.calidad),detalle:t(x.detalle),genero:(t(x.genero)||"H") as Prenda["genero"],talla:t(x.talla),cantidad:Number(x.cantidad)||0}));
  return {
   cab,
   prendasSel:prendas.map(x=>x.prenda).filter((v,i,a)=>v&&a.indexOf(v)===i),
   lineas:lineasDesdePrendas(datos.prendas||[]),
-  adic,adicCant,medidasBandera:t(ad.medidas_bandera),
+  adic:adicionales.adic,adicCant:adicionales.adicCant,medidasBandera:adicionales.medidasBandera,
   prendas,
   jugadores:(datos.jugadores||[]).map(x=>({id:uuid(),nombre:t(x.nombre),numero:t(x.numero),categoria:t(x.categoria),talla_superior:t(x.talla_superior),talla_inferior:t(x.talla_inferior),manga:t(x.manga),calidad:t(x.calidad),modelo_arquero:t(x.modelo_arquero),tipo_uniforme:t(x.tipo_uniforme),detalle:t(x.detalle),mockup:t(x.mockup)})),
   archivos:(datos.archivos||[]).map(x=>({id:uuid(),tipo:(t(x.tipo)==="logo"?"logo":"mockup") as Archivo["tipo"],url:t(x.url)||undefined,drive_id:t(x.drive_id)||undefined,descripcion:t(x.descripcion),color:t(x.color),prenda:t(x.prenda),posicion:t(x.posicion),tecnica:t(x.tecnica),calidad_aplicable:t(x.calidad_aplicable)||"Todas",observacion:t(x.observacion)})),
@@ -956,7 +960,7 @@ export function BriefHoja({form}:{form:Form}){
        {!!texto(c.bordado)&&<tr><td>Bordado especial</td><td style={{color:"#7c3aed",fontWeight:700}}>{c.bordado}</td></tr>}
       </tbody></table>
      </div>
-     {!!adicionales.length&&<div className={estilos.bAdic}><div className={estilos.bAdicTit}>⚠️ ADICIONALES DEL PEDIDO</div>{adicionales.map((l,i)=><div key={i} className={/^bandera/i.test(l)?estilos.bAdicBandera:estilos.bAdicLinea}>• {l}</div>)}</div>}
+     <div className={estilos.bAdic}><div className={estilos.bAdicTit}>⚠️ ADICIONALES DEL PEDIDO</div>{adicionales.length?adicionales.map((l,i)=><div key={i} className={/^bandera/i.test(l)?estilos.bAdicBandera:estilos.bAdicLinea}>• {l}</div>):<div className={estilos.bAdicVacio}>• Sin adicionales registrados</div>}</div>
     </div>
 
     {mockupsPortada.length>0&&<div className={estilos.bPanelMockup}>{mockupsPortada.map((m,i)=>

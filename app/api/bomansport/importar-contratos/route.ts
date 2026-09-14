@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mapearContrato, type ContratoCrudo, type ContratoTipado } from "@/lib/bomansportContratos";
+import { normalizarAdicionalesContrato } from "@/lib/briefContrato";
 import {
   prendasDesdeTallas,
   jugadoresDesde,
@@ -97,6 +98,7 @@ function filaContratoV79(c: ContratoTipado, avisos: string[]) {
     prioridad: c.prioridad === "Urgente" ? "Urgente" : "Normal",
     tipo_contrato: TIPOS_CONTRATO_V79.includes(c.tipo_contrato) ? c.tipo_contrato : "Normal",
     reposicion: c.reposicion,
+    adicionales: normalizarAdicionalesContrato(c.datos.adicionales),
     total_prendas: Math.max(0, c.total_prendas),
     estado: c.estado || "Ingresado",
     presupuesto,

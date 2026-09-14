@@ -32,6 +32,7 @@
 .bDatos{font-size:10.5px}.bDatos td{padding:1px 5px;border:1px solid #d9e2ec;font-weight:600;vertical-align:top}.bDatos td:first-child{color:#64748b;font-weight:700;width:45%}
 .bAdic{background:#FFFBEB;border:3px solid #F59E0B;border-radius:10px;padding:7px 10px;overflow-wrap:break-word}.bAdicTit{font-size:13.5px;font-weight:900;color:#92400E;margin-bottom:4px;line-height:1.15}
 .bAdicLinea{font-size:12.5px;color:#1e3a5f;font-weight:800;line-height:1.25;margin-bottom:1px}.bAdicBandera{display:block;font-size:14px;padding:4px 8px;margin-bottom:2px;border:2px solid #F59E0B;border-radius:7px;background:#FEF3C7;color:#7c2d12;font-weight:900;line-height:1.2}
+.bAdicVacio{font-size:11px;color:#92400e;font-weight:700;line-height:1.25}
 .bH3{font-size:11px;font-weight:800;color:#1F4E78;text-transform:uppercase;letter-spacing:.4px;margin:0 0 5px;padding-bottom:3px;border-bottom:2px solid #1F4E78;break-after:avoid}
 .bColores{margin-bottom:8px}.bChips{display:flex;flex-wrap:wrap;gap:5px}.bChip{background:#E3F2FD;color:#1F4E78;border:1px solid #9DB9D4;border-radius:4px;padding:2px 9px;font-size:11px;font-weight:700}
 .bAviso{background:#DC2626;color:#fff;border:1.5px solid #991B1B;border-radius:5px;padding:4px 7px;margin-top:5px;font-size:9.5px;font-weight:800;text-align:center}
@@ -87,7 +88,11 @@
  .vistaPrevia{position:static!important;padding:0!important;background:#fff!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
  .noPrint{display:none!important}
  .hoja{max-width:none;margin:0;padding:0;border-radius:0;box-shadow:none}
- .bCols{break-inside:avoid}
+ /* Detalle, resumen y adicionales deben conservar la fila de tres columnas
+    del brief de AppScript. El minmax(240px) de pantalla no cabe tres veces en
+    el ancho util de A4 y mandaba Adicionales a una fila aparte. */
+ .bCols{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr) minmax(0,1.05fr);gap:6px;break-inside:avoid}
+ .bCols>*{min-width:0}
  .bSeccion{break-inside:auto}
  /* A4 tiene menos de 900 px CSS. Las reglas responsive deben limitarse a
     pantalla o convertirían este bloque en una sola columna al imprimir. */

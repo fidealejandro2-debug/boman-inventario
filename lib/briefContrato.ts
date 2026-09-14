@@ -8,6 +8,82 @@
 
 export const texto = (v: unknown) => String(v ?? "").trim();
 
+export type AdicionalContrato = { tipo: string; valor: string; cantidad: number };
+export type AdicionalesContrato = {
+  detalle: string;
+  items: AdicionalContrato[];
+  medidas_bandera: string;
+};
+
+function objetoAdicionales(valor: unknown): Record<string, unknown> {
+  if (valor && typeof valor === "object" && !Array.isArray(valor)) return valor as Record<string, unknown>;
+  if (typeof valor !== "string" || !valor.trim()) return {};
+  try {
+    const parsed = JSON.parse(valor);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return { detalle: valor };
+  }
+}
+
+/**
+ * Convierte el JSON de adicionales del AppScript y la forma nueva de Supabase
+ * a una sola estructura. El importador histórico dejó el JSON viejo sin
+ * transformar; por eso un contrato podía tener "Incluye medias" en la hoja y
+ * perder el recuadro al imprimirlo desde el sistema nuevo.
+ */
+export function normalizarAdicionalesContrato(valor: unknown): AdicionalesContrato {
+  const ad = objetoAdicionales(valor);
+  if (Array.isArray(ad.items)) {
+    const items = ad.items.flatMap((item): AdicionalContrato[] => {
+      if (!item || typeof item !== "object") return [];
+      const fila = item as Record<string, unknown>;
+      const tipo = texto(fila.tipo), valorItem = texto(fila.valor);
+      if (!tipo || !valorItem) return [];
+      return [{ tipo, valor: valorItem, cantidad: Math.max(0, Number(fila.cantidad) || 0) }];
+    });
+    return {
+      detalle: texto(ad.detalle),
+      items,
+      medidas_bandera: texto(ad.medidas_bandera) || texto(ad.medidas),
+    };
+  }
+
+  const items: AdicionalContrato[] = [];
+  const agregar = (tipo: string, valorItem: unknown, cantidad: unknown, valorVacio: string) => {
+    const valorTexto = texto(valorItem);
+    if (!valorTexto || valorTexto.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      === valorVacio.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "")) return;
+    items.push({ tipo, valor: valorTexto, cantidad: Math.max(0, Number(cantidad) || 0) });
+  };
+
+  const medias = texto(ad.medias);
+  const cantidadMedias = ad.cantidadMedias;
+  if (["Incluye medias", "Incluye personalizadas"].includes(medias)) {
+    agregar("Medias", medias, cantidadMedias, "No incluye medias");
+  }
+  const polainasDesdeMedias = medias === "Incluye polainas";
+  if (polainasDesdeMedias || texto(ad.polainas) === "Incluye polainas") {
+    agregar("Polainas", "Incluye polainas", polainasDesdeMedias ? cantidadMedias : ad.cantidadPolainas, "No incluye polainas");
+  }
+  const antidesDesdeMedias = medias === "Incluye antideslizantes";
+  if (antidesDesdeMedias || texto(ad.antideslizantes) === "Incluye antideslizantes") {
+    agregar("Medias antideslizantes", "Incluye antideslizantes", antidesDesdeMedias ? cantidadMedias : ad.cantidadAntideslizantes, "No incluye antideslizantes");
+  }
+  agregar("Banda de Capitán", ad.bandaCapitan ?? ad.banda_capitan, ad.cantidadBandas, "Sin banda de capitán");
+  agregar("Banderín", ad.banderin, ad.cantidadBanderines, "Sin banderín");
+  agregar("Bandera", ad.bandera, ad.cantidadBanderas, "Sin bandera");
+  agregar("Bolsos", ad.bolsos, ad.cantidadBolsos, "Sin bolsos");
+
+  return {
+    detalle: texto(ad.detalle) || texto(ad.otros),
+    items,
+    medidas_bandera: texto(ad.medidas_bandera) || texto(ad.medidas),
+  };
+}
+
 // ── Especificaciones técnicas ────────────────────────────────────────────
 
 /** camelCase → snake_case, que es como se llaman los campos de FICHAS_PRENDA. */
