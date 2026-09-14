@@ -64,17 +64,24 @@ function sanitizarHtmlImpresion(contenido: string) {
   return plantilla.innerHTML;
 }
 
-export function imprimirDocumento(titulo: string, contenido: string) {
+export function imprimirDocumento(
+  titulo: string,
+  contenido: string,
+  firmas: string[] = ["Entrega", "Transporta", "Recibe"],
+) {
   const ventana = window.open("", "_blank", "width=980,height=760");
   if (!ventana) return;
   ventana.opener = null;
   const tituloSeguro = escaparHtml(titulo);
   const contenidoSeguro = sanitizarHtmlImpresion(contenido);
+  const firmasSeguras = firmas
+    .map((firma) => `<div>${escaparHtml(firma)}</div>`)
+    .join("");
   ventana.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${tituloSeguro}</title>
     <style>body{font-family:Arial,sans-serif;color:#172033;padding:24px}h1{color:#1f3864;font-size:22px}
     table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}
     th{background:#1f3864;color:#fff}.num{text-align:right}.firma{display:flex;gap:60px;margin-top:70px}.firma div{flex:1;border-top:1px solid #111;padding-top:6px;text-align:center}
-    @media print{button{display:none}}</style></head><body>${contenidoSeguro}<div class="firma"><div>Entrega</div><div>Transporta</div><div>Recibe</div></div>
+    @media print{button{display:none}}</style></head><body>${contenidoSeguro}<div class="firma">${firmasSeguras}</div>
     <script>window.onload=()=>window.print()</script></body></html>`);
   ventana.document.close();
 }

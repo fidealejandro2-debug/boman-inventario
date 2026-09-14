@@ -1,8 +1,8 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirTextoDialogo } from "@/components/Dialogo";
+import ImagenMockup from "@/components/ImagenMockup";
 import { createClient } from "@/lib/supabase/client";
 import ExpedienteContrato, { type Expediente } from "@/app/produccion/contratos/ExpedienteContrato";
 import estilos from "./Seguimiento.module.css";
@@ -42,10 +42,6 @@ function isoLocal(desplazamiento = 0) {
 function fecha(valor: string | null) {
   if (!valor) return "Sin fecha";
   return new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${valor.slice(0, 10)}T12:00:00Z`));
-}
-function imagen(fila: Fila) {
-  if (fila.mockup_drive_id) return `https://drive.google.com/thumbnail?id=${fila.mockup_drive_id}&sz=w700`;
-  return fila.mockup_url || "";
 }
 function etiquetaEntrega(fila: Fila) {
   if (fila.dias_para_entrega === null) return "Sin fecha";
@@ -191,10 +187,11 @@ export default function PanelVendedoresCliente() {
       <div className={estilos.resultadoCabecera}><div><h2>Entregas del período</h2><p>{datos.total} contrato(s) · {fecha(aplicados.desde)} a {fecha(aplicados.hasta)}</p></div></div>
       {cargando ? <div className={estilos.cargando}>Cargando contratos…</div> : <section className={estilos.tarjetas}>
         {datos.filas.map((fila) => {
-          const src = imagen(fila); const avance = fila.presupuesto > 0 ? Math.min(100, Math.round((fila.abono / fila.presupuesto) * 100)) : 0;
+          const avance = fila.presupuesto > 0 ? Math.min(100, Math.round((fila.abono / fila.presupuesto) * 100)) : 0;
           return <article className={`${estilos.tarjeta} ${fila.atrasado ? estilos.tarjetaAtrasada : ""}`} key={fila.id}>
             <button className={estilos.mockup} onClick={() => void abrirBrief(fila.id)} aria-label={`Abrir brief ${fila.numero}`}>
-              {src ? <img src={src} alt={`Mockup de ${fila.numero}`} loading="lazy" /> : <span>Sin mockup</span>}
+              <ImagenMockup driveId={fila.mockup_drive_id} url={fila.mockup_url} ancho={700}
+                alt={`Mockup de ${fila.numero}`} loading="lazy" vacio={<span>Mockup no disponible</span>} />
               {fila.atrasado && <b>ATRASADO</b>}
             </button>
             <div className={estilos.cuerpo}>

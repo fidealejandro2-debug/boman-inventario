@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { nuevaClaveIdempotencia } from "@/lib/erp";
+import { imprimirDocumento, nuevaClaveIdempotencia } from "@/lib/erp";
 import { tienePermiso, type Perfil } from "@/lib/permisos";
 import { pedirTextoDialogo } from "@/components/Dialogo";
 import GaleriaImagenes from "@/components/GaleriaImagenes";
@@ -21,11 +21,13 @@ type Activo = {
 };
 type Orden = {
   id: string; numero: string; activo_id: string; activo_codigo: string; activo_nombre: string;
-  activo_criticidad: string; empresa: string; almacen: string | null; tipo: string; prioridad: string;
+  activo_categoria: string; activo_criticidad: string; empresa_codigo: string; empresa: string;
+  almacen: string | null; tipo: string; prioridad: string;
   estado: string; fecha_solicitud: string; fecha_programada: string | null; inicio_at: string | null;
   fin_at: string | null; descripcion: string; diagnostico: string | null; trabajo_realizado: string | null;
   proveedor: string | null; responsable: string | null; costo_estimado: number; costo_real: number | null;
-  minutos_fuera_servicio: number | null; lectura_cierre: number | null; atrasada: boolean;
+  minutos_fuera_servicio: number | null; lectura_cierre: number | null; cancelacion_motivo: string | null;
+  created_at: string; updated_at: string; atrasada: boolean;
 };
 type Empresa = { id: string; codigo: string; razon_social: string };
 type Almacen = { id: string; nombre: string };
@@ -64,6 +66,17 @@ function fecha(valor: string | null) {
   if (!valor) return "—";
   const [a, m, d] = valor.slice(0, 10).split("-");
   return `${d}/${m}/${a}`;
+}
+function fechaHora(valor: string | null) {
+  if (!valor) return "—";
+  return new Intl.DateTimeFormat("es-EC", {
+    timeZone: "America/Guayaquil", dateStyle: "medium", timeStyle: "short",
+  }).format(new Date(valor));
+}
+function htmlSeguro(valor: unknown) {
+  return String(valor ?? "—").replace(/[&<>"']/g, (caracter) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[caracter] ?? caracter);
 }
 // Sin async: se usa dentro del JSX y una promesa como hijo de React revienta
 // la pantalla ("Objects are not valid as a React child").
@@ -229,6 +242,45 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
     setMensaje(`Orden ${orden.numero}: ${etiqueta(destino)}.`); await cargar();
   }
 
+  function imprimirOrden(orden: Orden) {
+    const costoAplicable = orden.estado === "completada" && orden.costo_real != null
+      ? DINERO.format(Number(orden.costo_real))
+      : `${DINERO.format(Number(orden.costo_estimado ?? 0))} (estimado)`;
+    const resultado = orden.estado === "cancelada"
+      ? `<h2>Cancelación</h2><p>${htmlSeguro(orden.cancelacion_motivo || "Sin detalle registrado")}</p>`
+      : `<h2>Ejecución y cierre</h2>
+        <table><tbody>
+          <tr><th>Diagnóstico / causa</th><td>${htmlSeguro(orden.diagnostico || "Pendiente de registrar")}</td></tr>
+          <tr><th>Trabajo realizado</th><td>${htmlSeguro(orden.trabajo_realizado || "Pendiente de ejecutar")}</td></tr>
+          <tr><th>Inicio real</th><td>${htmlSeguro(fechaHora(orden.inicio_at))}</td><th>Finalización</th><td>${htmlSeguro(fechaHora(orden.fin_at))}</td></tr>
+          <tr><th>Fuera de servicio</th><td>${orden.minutos_fuera_servicio == null ? "—" : `${htmlSeguro(orden.minutos_fuera_servicio)} minutos`}</td><th>Lectura al cierre</th><td>${htmlSeguro(orden.lectura_cierre)}</td></tr>
+        </tbody></table>`;
+
+    imprimirDocumento(orden.numero, `
+      <div><strong>BOMAN · GESTIÓN DE ACTIVOS</strong></div>
+      <h1>ORDEN DE MANTENIMIENTO ${htmlSeguro(orden.numero)}</h1>
+      <p>Comprobante generado el ${htmlSeguro(fechaHora(new Date().toISOString()))} por ${htmlSeguro(perfil.nombre_completo)}.</p>
+      <table><tbody>
+        <tr><th>Estado</th><td>${htmlSeguro(etiqueta(orden.estado))}</td><th>Prioridad</th><td>${htmlSeguro(etiqueta(orden.prioridad))}</td></tr>
+        <tr><th>Tipo</th><td>${htmlSeguro(etiqueta(orden.tipo))}</td><th>Solicitud</th><td>${htmlSeguro(fecha(orden.fecha_solicitud))}</td></tr>
+        <tr><th>Fecha programada</th><td>${htmlSeguro(fecha(orden.fecha_programada))}</td><th>Costo</th><td>${htmlSeguro(costoAplicable)}</td></tr>
+      </tbody></table>
+      <h2>Activo y ubicación</h2>
+      <table><tbody>
+        <tr><th>Código</th><td>${htmlSeguro(orden.activo_codigo)}</td><th>Activo</th><td>${htmlSeguro(orden.activo_nombre)}</td></tr>
+        <tr><th>Categoría</th><td>${htmlSeguro(etiqueta(orden.activo_categoria))}</td><th>Criticidad</th><td>${htmlSeguro(etiqueta(orden.activo_criticidad))}</td></tr>
+        <tr><th>Empresa</th><td>${htmlSeguro(`${orden.empresa_codigo} · ${orden.empresa}`)}</td><th>Ubicación</th><td>${htmlSeguro(orden.almacen || "Sin almacén")}</td></tr>
+      </tbody></table>
+      <h2>Trabajo solicitado</h2>
+      <p>${htmlSeguro(orden.descripcion)}</p>
+      <table><tbody>
+        <tr><th>Responsable</th><td>${htmlSeguro(orden.responsable || "Sin asignar")}</td><th>Proveedor</th><td>${htmlSeguro(orden.proveedor || "No registrado")}</td></tr>
+      </tbody></table>
+      ${resultado}
+      <p><strong>Control documental:</strong> este comprobante refleja el estado registrado en el sistema al momento de imprimir.</p>
+    `, ["Solicita", "Responsable / técnico", "Aprueba / recibe"]);
+  }
+
   return <section className="mantenimiento-centro">
     <header className="page-heading workspace-heading mantenimiento-cabecera">
       <div><span className="eyebrow">GESTIÓN DE ACTIVOS</span><h1>Mantenimiento</h1><p>Maquinaria, equipos, prevención, órdenes de trabajo, costos y paradas.</p></div>
@@ -265,9 +317,9 @@ export default function MantenimientoCliente({ perfil }: { perfil: Perfil }) {
       {activosFiltrados.map((a) => <tr key={a.id} className={a.estado_plan === "vencido" ? "fila-alerta" : ""}><td><strong>{a.codigo}</strong><div>{a.nombre}</div><small>{etiqueta(a.categoria)}{a.marca ? ` · ${a.marca} ${a.modelo ?? ""}` : ""}</small></td><td><strong>{a.empresa_codigo}</strong><div>{a.almacen ?? "Sin almacén"}</div><small>{a.ubicacion ?? "Sin ubicación"}</small></td><td><span className={`badge mant-${a.estado}`}>{etiqueta(a.estado)}</span><div><small>{etiqueta(a.estado_plan)}</small></div></td><td><span className={`badge criticidad-${a.criticidad}`}>{a.criticidad}</span></td><td className="num">{a.tipo_medidor === "ninguno" ? "—" : `${a.lectura_actual} ${a.tipo_medidor}`}</td><td><strong>{fecha(a.proximo_mantenimiento_fecha)}</strong>{a.proxima_lectura_mantenimiento != null && <small style={{ display: "block" }}>Lectura: {a.proxima_lectura_mantenimiento}</small>}</td><td className="num">{a.ordenes_abiertas}</td><td><button className="secondary" onClick={() => setFotosActivo(a)}>Ver fotos</button></td>{puedeEditar && <td><div className="acciones-en-fila"><button className="secondary" onClick={() => editarActivo(a)}>Editar</button><button onClick={() => nuevaOrden(a)} disabled={a.ordenes_abiertas > 0}>Orden</button></div></td>}</tr>)}
       {!cargando && !activosFiltrados.length && <tr><td colSpan={puedeEditar ? 9 : 8} className="vacio">No hay activos con estos filtros.</td></tr>}</tbody></table></div></div>}
 
-    {tab === "ordenes" && <div className="card"><div className="tabla-scroll"><table><thead><tr><th>Orden / activo</th><th>Trabajo</th><th>Estado</th><th>Prioridad</th><th>Programada</th><th>Responsable / proveedor</th><th className="num">Costo</th>{puedeEditar && <th>Flujo</th>}</tr></thead><tbody>
-      {ordenesFiltradas.map((o) => <tr key={o.id} className={o.atrasada ? "fila-alerta" : ""}><td><strong>{o.numero}</strong><div>{o.activo_codigo} · {o.activo_nombre}</div><small>{o.empresa}{o.almacen ? ` / ${o.almacen}` : ""}</small></td><td><strong>{etiqueta(o.tipo)}</strong><div>{o.descripcion}</div>{o.trabajo_realizado && <small>Realizado: {o.trabajo_realizado}</small>}</td><td><span className={`badge mant-${o.estado}`}>{etiqueta(o.estado)}</span></td><td><span className={`badge prioridad-${o.prioridad}`}>{o.prioridad}</span></td><td>{fecha(o.fecha_programada)}{o.atrasada && <small className="texto-rojo" style={{ display: "block" }}>Atrasada</small>}</td><td>{o.responsable ?? "Sin asignar"}<small style={{ display: "block" }}>{o.proveedor ?? ""}</small></td><td className="num">{o.estado === "completada" ? DINERO.format(Number(o.costo_real ?? 0)) : DINERO.format(Number(o.costo_estimado ?? 0))}</td>{puedeEditar && <td><div className="acciones-en-fila">{o.estado === "solicitada" && <button className="secondary" onClick={() => cambiarOrden(o, "programada")}>Programar</button>}{["solicitada", "programada", "en_espera"].includes(o.estado) && <button onClick={() => cambiarOrden(o, "en_proceso")}>Iniciar</button>}{o.estado === "en_proceso" && <><button className="secondary" onClick={() => cambiarOrden(o, "en_espera")}>Espera</button><button onClick={() => cambiarOrden(o, "completada")}>Completar</button></>}{!["completada", "cancelada"].includes(o.estado) && <button className="peligro-inline" onClick={() => cambiarOrden(o, "cancelada")}>Cancelar</button>}</div></td>}</tr>)}
-      {!cargando && !ordenesFiltradas.length && <tr><td colSpan={8} className="vacio">No hay órdenes con estos filtros.</td></tr>}</tbody></table></div></div>}
+    {tab === "ordenes" && <div className="card"><div className="tabla-scroll"><table><thead><tr><th>Orden / activo</th><th>Trabajo</th><th>Estado</th><th>Prioridad</th><th>Programada</th><th>Responsable / proveedor</th><th className="num">Costo</th><th>Comprobante</th>{puedeEditar && <th>Flujo</th>}</tr></thead><tbody>
+      {ordenesFiltradas.map((o) => <tr key={o.id} className={o.atrasada ? "fila-alerta" : ""}><td><strong>{o.numero}</strong><div>{o.activo_codigo} · {o.activo_nombre}</div><small>{o.empresa}{o.almacen ? ` / ${o.almacen}` : ""}</small></td><td><strong>{etiqueta(o.tipo)}</strong><div>{o.descripcion}</div>{o.trabajo_realizado && <small>Realizado: {o.trabajo_realizado}</small>}</td><td><span className={`badge mant-${o.estado}`}>{etiqueta(o.estado)}</span></td><td><span className={`badge prioridad-${o.prioridad}`}>{o.prioridad}</span></td><td>{fecha(o.fecha_programada)}{o.atrasada && <small className="texto-rojo" style={{ display: "block" }}>Atrasada</small>}</td><td>{o.responsable ?? "Sin asignar"}<small style={{ display: "block" }}>{o.proveedor ?? ""}</small></td><td className="num">{o.estado === "completada" ? DINERO.format(Number(o.costo_real ?? 0)) : DINERO.format(Number(o.costo_estimado ?? 0))}</td><td><button className="secondary" onClick={() => imprimirOrden(o)}>Imprimir</button></td>{puedeEditar && <td><div className="acciones-en-fila">{o.estado === "solicitada" && <button className="secondary" onClick={() => cambiarOrden(o, "programada")}>Programar</button>}{["solicitada", "programada", "en_espera"].includes(o.estado) && <button onClick={() => cambiarOrden(o, "en_proceso")}>Iniciar</button>}{o.estado === "en_proceso" && <><button className="secondary" onClick={() => cambiarOrden(o, "en_espera")}>Espera</button><button onClick={() => cambiarOrden(o, "completada")}>Completar</button></>}{!["completada", "cancelada"].includes(o.estado) && <button className="peligro-inline" onClick={() => cambiarOrden(o, "cancelada")}>Cancelar</button>}</div></td>}</tr>)}
+      {!cargando && !ordenesFiltradas.length && <tr><td colSpan={puedeEditar ? 9 : 8} className="vacio">No hay órdenes con estos filtros.</td></tr>}</tbody></table></div></div>}
 
     {editando !== undefined && <div className="modal-operativo" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditando(undefined); }}><div className="modal-contenido ancho"><div className="header-row"><div><h2>{editando ? `Editar ${editando.codigo}` : "Nuevo activo"}</h2><p className="conteo">Identificación, ubicación y plan preventivo.</p></div><button className="secondary" onClick={() => setEditando(undefined)}>Cerrar</button></div><div className="grid-form">
       <div className="field"><label>Código *</label><input value={formActivo.codigo} onChange={(e) => cambiarActivo({ codigo: e.target.value })} /></div><div className="field"><label>Nombre *</label><input value={formActivo.nombre} onChange={(e) => cambiarActivo({ nombre: e.target.value })} /></div><div className="field"><label>Categoría *</label><select value={formActivo.categoria} onChange={(e) => { const c = CATEGORIAS_ACTIVO.find((x) => x.valor === e.target.value); cambiarActivo({ categoria: e.target.value, porcentaje_depreciacion_anual: c ? c.tope : "" }); }}>{CATEGORIAS_ACTIVO.map((c) => <option value={c.valor} key={c.valor}>{c.etiqueta}</option>)}</select></div>
