@@ -20,6 +20,7 @@ import {
   pedirMotivoDialogo,
 } from "@/components/Dialogo";
 import { useProteccionSalida } from "@/components/useProteccionSalida";
+import { esFaltaMigracion } from "@/lib/errores";
 import ComprobanteDeposito, { type ArchivoComprobante } from "./ComprobanteDeposito";
 
 type Movimiento = {
@@ -459,7 +460,7 @@ export default function CajaFranquicia({
         comprobanteId = comprobanteDeposito.id;
       }
 
-      const { error } = await supabase.rpc("registrar_deposito_caja_v138", {
+      const parametrosNuevos = {
         p_cierre_id: cierre.id,
         p_fecha: deposito.fecha,
         p_monto: Number(deposito.monto),
@@ -468,7 +469,24 @@ export default function CajaFranquicia({
         p_comprobante_id: comprobanteId,
         p_nota: deposito.nota.trim() || null,
         p_idempotency_key: claveDeposito,
-      });
+      };
+      let { error } = await supabase.rpc("registrar_deposito_caja_v138", parametrosNuevos);
+      // La base se migra manualmente y puede quedar unos minutos detrás del
+      // despliegue web. Durante ese intervalo se conserva el alta anterior si
+      // no hay archivo; un comprobante nunca se descarta silenciosamente.
+      if (error && !comprobanteId && esFaltaMigracion(error)) {
+        const legado = await supabase.rpc("registrar_deposito_caja_v87", {
+          p_cierre_id: cierre.id,
+          p_fecha: deposito.fecha,
+          p_monto: Number(deposito.monto),
+          p_banco: deposito.banco.trim(),
+          p_referencia: deposito.referencia.trim(),
+          p_comprobante_url: null,
+          p_nota: deposito.nota.trim() || null,
+          p_idempotency_key: claveDeposito,
+        });
+        error = legado.error;
+      }
       if (error) throw error;
       confirmar(
         "Depósito registrado",
