@@ -1,4 +1,5 @@
 "use client";
+import { useEstadoConsulta } from "@/lib/useEstadoConsulta";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -74,7 +75,9 @@ const PROVEEDOR_VACIO: FormularioProveedor = {
 
 export default function ComprasCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
-  const [tab, setTab] = useState<"ordenes" | "proveedores">("ordenes");
+  const [consulta, actualizarConsulta] = useEstadoConsulta({ tab: "ordenes" });
+  const tab = consulta.tab === "proveedores" ? "proveedores" : "ordenes";
+  const setTab = (tab: "ordenes" | "proveedores") => actualizarConsulta({ tab }, true);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);

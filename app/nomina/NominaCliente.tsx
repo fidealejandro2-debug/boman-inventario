@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useEstadoConsulta } from "@/lib/useEstadoConsulta";
 import { createClient } from "@/lib/supabase/client";
 import PersonalTab from "./PersonalTab";
 import AusenciasTab from "./AusenciasTab";
@@ -65,7 +66,9 @@ export default function NominaCliente({
   permisos: PermisoCodigo[];
 }) {
   const supabase = createClient();
-  const [tab, setTab] = useState<Pestana>("personal");
+  const [consulta, actualizarConsulta] = useEstadoConsulta({ tab: "personal" });
+  const tab: Pestana = PESTANAS.find(p => p.id === consulta.tab)?.id ?? "personal";
+  const setTab = (tab: Pestana) => actualizarConsulta({ tab }, true);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -142,6 +145,7 @@ export default function NominaCliente({
           <button
             type="button"
             key={p.id}
+            aria-current={tab === p.id ? "page" : undefined}
             className={tab === p.id ? "activo" : ""}
             onClick={() => setTab(p.id)}
           >

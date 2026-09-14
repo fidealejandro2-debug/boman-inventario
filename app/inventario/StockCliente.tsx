@@ -4,14 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import BuscadorCodigoProducto from "@/components/BuscadorCodigoProducto";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
 import GaleriaImagenes from "@/components/GaleriaImagenes";
-import ProductoConImagen from "@/components/ProductoConImagen";
+import ModalOperativo from "@/components/ModalOperativo";
+import ExistenciasTabla from "./ExistenciasTabla";
+import { useEstadoConsulta } from "@/lib/useEstadoConsulta";
 import type { Perfil } from "@/lib/getPerfil";
 import { cargarPortadasProductos, type PortadaProducto } from "@/lib/portadasProductos";
 import { createClient } from "@/lib/supabase/client";
 import { exportarCSV } from "@/lib/utils";
 
 type Almacen = { id: string; codigo: string; nombre: string; tipo: string };
-type Fila = {
+export type Fila = {
   producto_id: string; sku: string; producto: string;
   categoria: string | null; categoria_id: string;
   subcategoria: string | null; subcategoria_id: string | null;
@@ -33,19 +35,22 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
-  const [almacenId, setAlmacenId] = useState("");
+  const [consulta, actualizarConsulta] = useEstadoConsulta({ local: "", buscar: "", categoria: "", subcategoria: "", alertas: false, ocultarCero: true, pagina: 1, completa: false });
+  const almacenId = consulta.local;
+  const setAlmacenId = (local: string) => actualizarConsulta({ local, pagina: 1 });
   const [filas, setFilas] = useState<Fila[]>([]);
   const [portadas, setPortadas] = useState<Map<string, PortadaProducto>>(new Map());
   const [fotosDe, setFotosDe] = useState<{ id: string; sku: string; nombre: string } | null>(null);
   const [cargandoAlmacenes, setCargandoAlmacenes] = useState(true);
   const [cargandoStock, setCargandoStock] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busqueda, setBusqueda] = useState("");
-  const [categoria, setCategoria] = useState("");
-  const [subcategoria, setSubcategoria] = useState("");
-  const [soloAlerta, setSoloAlerta] = useState(false);
-  const [ocultarCero, setOcultarCero] = useState(true);
-  const [pagina, setPagina] = useState(1);
+  const { buscar: busqueda, categoria, subcategoria, alertas: soloAlerta, ocultarCero } = consulta;
+  const setBusqueda = (buscar: string) => actualizarConsulta({ buscar, pagina: 1 });
+  const setCategoria = (categoria: string) => actualizarConsulta({ categoria, subcategoria: "", pagina: 1 });
+  const setSubcategoria = (subcategoria: string) => actualizarConsulta({ subcategoria, pagina: 1 });
+  const setSoloAlerta = (alertas: boolean) => actualizarConsulta({ alertas, pagina: 1 });
+  const setOcultarCero = (ocultarCero: boolean) => actualizarConsulta({ ocultarCero, pagina: 1 });
+  const setPagina = (valor: number | ((actual: number) => number)) => actualizarConsulta({ pagina: typeof valor === "function" ? valor(pagina) : valor });
 
   const almacenSeleccionado = almacenes.find((item) => item.id === almacenId) ?? null;
 
@@ -91,7 +96,7 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
 
   useEffect(() => {
     let cancelado = false;
-    if (!almacenId) {
+    if (!almacenId || cargandoAlmacenes || !almacenes.some(item => item.id === almacenId)) {
       setFilas([]);
       setPortadas(new Map());
       setCargandoStock(false);
@@ -103,7 +108,6 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
       setError(null);
       setFilas([]);
       setPortadas(new Map());
-      setPagina(1);
       const acumulado: Fila[] = [];
       let desde = 0;
       while (true) {
@@ -143,7 +147,7 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
       if (!cancelado) setCargandoStock(false);
     })();
     return () => { cancelado = true; };
-  }, [almacenId, supabase]);
+  }, [almacenId, almacenes, cargandoAlmacenes, supabase]);
 
   async function refrescarPortadas() {
     try {
@@ -188,9 +192,12 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
     });
   }, [filas, busqueda, categoria, subcategoria, soloAlerta, ocultarCero]);
 
-  useEffect(() => { setPagina(1); }, [busqueda, categoria, subcategoria, soloAlerta, ocultarCero]);
+  useEffect(() => {
+    if (!cargandoAlmacenes && almacenes.length && almacenId && !almacenes.some(item => item.id === almacenId)) actualizarConsulta({ local: "", pagina: 1 });
+  }, [almacenId, almacenes, cargandoAlmacenes]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / FILAS_POR_PAGINA));
+  const pagina = Math.min(consulta.pagina, totalPaginas);
   const filasPagina = filtradas.slice((pagina - 1) * FILAS_POR_PAGINA, pagina * FILAS_POR_PAGINA);
   const totalUnidades = filtradas.reduce((a, f) => a + f.stock_fisico, 0);
   const totalDisponible = filtradas.reduce((a, f) => a + f.stock_disponible, 0);
@@ -213,7 +220,7 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
   return (
     <>
       <header className="page-heading workspace-heading">
-        <div><span className="eyebrow">INVENTARIO</span><h1>Existencias por local</h1><p>Selecciona primero una bodega o tienda. Así la pantalla carga solamente su inventario y puedes buscar en todos sus SKU sin el límite de 1000 filas.</p></div>
+        <div><span className="eyebrow">INVENTARIO</span><h1>Existencias por local</h1><p>Consulta la disponibilidad de tus productos y detecta qué necesitas reponer.</p></div>
       </header>
 
       <section className="card context-selector" style={{ marginBottom: 16 }}>
@@ -227,6 +234,7 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
           </div>
           {almacenSeleccionado && <div className="acciones"><span className="badge ok">{almacenSeleccionado.tipo === "bodega" ? "Bodega" : "Tienda"}</span><button type="button" className="secondary" onClick={cambiarLocal}>Cambiar local</button></div>}
         </div>
+        {error && !almacenSeleccionado && <div className="error-box" role="alert">{error}</div>}
         {!cargandoAlmacenes && almacenes.length === 0 && <div className="error-box">No tienes locales asignados para consultar existencias.</div>}
       </section>
 
@@ -264,15 +272,14 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
             {error && <div className="error-box">{error}</div>}
             {cargandoStock ? <div className="vacio" style={{ padding: 40 }}>Cargando todas las existencias de {almacenSeleccionado?.nombre}…</div> : (
               <>
-                <div className="tabla-scroll">
-                  <table>
-                    <thead><tr><th>SKU</th><th>Producto</th><th>Categoría / subcategoría</th><th>Talla / color</th><th>Ubicación</th><th className="num">Físico</th><th className="num">Reserv.</th><th className="num">Disponible</th><th className="num">En tránsito</th><th className="num">Seguimiento</th><th>Estado</th></tr></thead>
-                    <tbody>
-                      {filasPagina.map((f) => <tr key={`${f.producto_id}-${f.almacen_id}`} className={f.bajo_minimo && f.stock_fisico > 0 ? "fila-alerta" : ""}><td><strong>{f.sku}</strong></td><td><ProductoConImagen nombre={f.producto} sku={f.sku} portada={portadas.get(f.producto_id)} puedeAgregarFoto={puedeEditarFotos} onAbrirGaleria={portadas.has(f.producto_id) || puedeEditarFotos ? () => setFotosDe({ id: f.producto_id, sku: f.sku, nombre: f.producto }) : undefined} /></td><td><div>{f.categoria ?? "-"}</div>{f.subcategoria && <small className="conteo">{f.subcategoria}</small>}</td><td><div>{f.talla ?? "-"}</div>{f.color && <small className="conteo">{f.color}</small>}</td><td>{f.ubicacion ?? "-"}</td><td className="num">{f.stock_fisico}</td><td className="num">{f.stock_reservado}</td><td className="num"><strong>{f.stock_disponible}</strong></td><td className="num">{f.transito_entrada > 0 ? `+${f.transito_entrada}` : "-"}</td><td className="num">{f.transito_incidencia + f.stock_cuarentena || "-"}</td><td>{f.transito_incidencia > 0 || f.stock_cuarentena > 0 ? <span className="badge bajo">Seguimiento</span> : f.stock_fisico === 0 && f.transito_entrada === 0 ? <span className="badge cero">Sin stock</span> : f.bajo_minimo ? <span className="badge bajo">Reponer {f.sugerido_reponer || ""}</span> : <span className="badge ok">OK</span>}</td></tr>)}
-                      {!filtradas.length && <tr><td colSpan={11} className="vacio">No hay resultados con esos filtros. Si buscas un producto sin unidades, desmarca “Ocultar sin stock”.</td></tr>}
-                    </tbody>
-                  </table>
+                <div className="view-toolbar">
+                  <div role="group" aria-label="Vista de existencias" className="view-switch">
+                    <button type="button" className="secondary" aria-pressed={!consulta.completa} onClick={() => actualizarConsulta({ completa: false })}>Vista resumida</button>
+                    <button type="button" className="secondary" aria-pressed={consulta.completa} onClick={() => actualizarConsulta({ completa: true })}>Vista completa</button>
+                  </div>
+                  <span className="ayuda">{consulta.completa ? "Físico, reservas, tránsito y cuarentena por separado." : "La información esencial. Abre Ver stock para consultar el desglose."}</span>
                 </div>
+                {filtradas.length > 0 ? <ExistenciasTabla filas={filasPagina} completa={consulta.completa} portadas={portadas} puedeEditarFotos={puedeEditarFotos} onFotos={fila => setFotosDe({ id: fila.producto_id, sku: fila.sku, nombre: fila.producto })}/> : !error && <div className="empty-state"><strong>{filas.length ? "No encontramos productos con estos filtros" : "Este local todavía no tiene existencias registradas"}</strong><p>{filas.length ? "Prueba otro nombre o incluye los productos sin stock." : "Selecciona otro local para consultar sus productos."}</p>{filas.length > 0 && <button type="button" className="secondary" onClick={() => { limpiarFiltros(); setOcultarCero(false); }}>Mostrar todos los productos</button>}</div>}
                 {filtradas.length > FILAS_POR_PAGINA && <div className="acciones" style={{ justifyContent: "center", marginTop: 16 }}><button type="button" className="secondary" disabled={pagina === 1} onClick={() => setPagina((actual) => Math.max(1, actual - 1))}>Anterior</button><span className="conteo">Página {pagina} de {totalPaginas} · mostrando {filasPagina.length}</span><button type="button" className="secondary" disabled={pagina === totalPaginas} onClick={() => setPagina((actual) => Math.min(totalPaginas, actual + 1))}>Siguiente</button></div>}
               </>
             )}
@@ -280,7 +287,7 @@ export default function StockCliente({ perfil, puedeEditarFotos = false }: {
         </>
       )}
 
-      {fotosDe && <div className="modal-operativo" onMouseDown={(e) => { if (e.target === e.currentTarget) { setFotosDe(null); void refrescarPortadas(); } }}><div className="modal-contenido ancho"><div className="header-row"><div><h2 style={{ margin: 0 }}>{fotosDe.sku} · {fotosDe.nombre}</h2><p className="conteo">La portada aparecerá en Inventario y Productos.</p></div><button className="secondary" onClick={() => { setFotosDe(null); void refrescarPortadas(); }}>Cerrar</button></div><GaleriaImagenes entidadTipo="producto" entidadId={fotosDe.id} titulo={fotosDe.nombre} puedeEditar={puedeEditarFotos} /></div></div>}
+      {fotosDe && <ModalOperativo titulo={fotosDe.sku + " · " + fotosDe.nombre} onCerrar={() => { setFotosDe(null); void refrescarPortadas(); }}><GaleriaImagenes entidadTipo="producto" entidadId={fotosDe.id} titulo={fotosDe.nombre} puedeEditar={puedeEditarFotos} /></ModalOperativo>}
     </>
   );
 }

@@ -106,7 +106,7 @@ const ETIQUETA_GRUPO: Record<GrupoId, string> = {
   nomina: "Talento Humano y Nómina",
   administracion: "Administración",
   notificaciones: "Notificaciones",
-  reportes: "Análisis",
+  reportes: "Reportes y análisis",
   importaciones: "Importaciones",
 };
 
@@ -315,7 +315,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/compras/importar-xml", etiqueta: "XML y homologación", descripcion: "Carga masiva de facturas recibidas", visible: puedeVerCompras },
     ] },
     { id: "finanzas", etiqueta: "Tesorería", opciones: [
-      { href: "/cuentas-por-pagar", etiqueta: "Cartera y cheques", descripcion: "Cuentas por pagar, vencimientos y efectivo comprometido", visible: puedeVerTesoreria },
+      { href: "/cuentas-por-pagar", etiqueta: "Cuentas por pagar", descripcion: "Cuentas por pagar, vencimientos y efectivo comprometido", visible: puedeVerTesoreria },
     ] },
     { id: "produccion", etiqueta: "Producción", opciones: [
       { href: "/produccion/dashboard", etiqueta: "Dashboard de producción", descripcion: "Carga, capacidad, entregas y saldos de Boman Sport", visible: puedeVerProduccion },
@@ -333,7 +333,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     ] },
     { id: "inventario", etiqueta: "Inventario", opciones: [
       { href: "/inventario", etiqueta: "Existencias", descripcion: "Stock disponible por almacén", visible: tienePermiso(perfil, "inventario.acceder") },
-      { href: "/operaciones", etiqueta: "Operaciones", descripcion: "Solicitudes y transferencias", visible: tienePermiso(perfil, "operaciones.acceder") },
+      { href: "/operaciones", etiqueta: "Solicitudes y transferencias", descripcion: "Reposición, despacho y recepción", visible: tienePermiso(perfil, "operaciones.acceder") },
       { href: "/conteos", etiqueta: "Conteos físicos", descripcion: "Conteo, reconteo y diferencias", visible: tienePermiso(perfil, "conteos.acceder") },
       { href: "/movimientos", etiqueta: "Movimientos", descripcion: "Entradas, salidas y trazabilidad", visible: tienePermiso(perfil, "movimientos.acceder") },
       { href: "/control", etiqueta: "Centro de control", descripcion: "Aprobaciones e incidencias", visible: puedeVerControl },
@@ -455,6 +455,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       <div className="nav-subenlace-fila" key={opcion.href}>
         <Link
           href={opcion.href}
+          aria-current={rutaActiva(opcion.href) ? "page" : undefined}
           className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
           title={`${opcion.etiqueta} — ${opcion.descripcion}`}
           onPointerEnter={() => precargarRuta(opcion.href)}

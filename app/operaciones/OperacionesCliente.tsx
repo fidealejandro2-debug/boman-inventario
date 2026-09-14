@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useEstadoConsulta } from "@/lib/useEstadoConsulta";
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/getPerfil";
 import { fecha } from "@/lib/utils";
@@ -50,7 +51,9 @@ const VACIO: LineaDocumentoEdicion[] = [];
 
 export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
-  const [tab, setTab] = useState<"solicitudes" | "transferencias">("solicitudes");
+  const [consulta, actualizarConsulta] = useEstadoConsulta({ tab: "solicitudes" });
+  const tab = consulta.tab === "transferencias" ? "transferencias" : "solicitudes";
+  const setTab = (tab: "solicitudes" | "transferencias") => actualizarConsulta({ tab }, true);
   const [productos, setProductos] = useState<ProductoDocumento[]>([]);
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
   const [permitidos, setPermitidos] = useState<string[]>([]);

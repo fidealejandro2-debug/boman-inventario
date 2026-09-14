@@ -1,4 +1,5 @@
 "use client";
+import { useEstadoConsulta } from "@/lib/useEstadoConsulta";
 
 import { useEffect, useMemo, useState } from "react";
 import { confirmarDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
@@ -82,16 +83,21 @@ export default function CuentasPorPagarCliente({ perfil }: { perfil: Perfil }) {
   const supabase = useMemo(() => createClient(), []);
   const puedeEditar = tienePermiso(perfil, "tesoreria.editar");
   const hoy = fechaISOEcuador();
-  const [tab, setTab] = useState<Tab>("cartera");
+  const [consulta, actualizarConsulta] = useEstadoConsulta({ tab: "cartera", buscar: "", estado: "", pagadora: "" });
+  const tab: Tab = consulta.tab === "calendario" || consulta.tab === "instrumentos" ? consulta.tab : "cartera";
+  const setTab = (tab: Tab) => actualizarConsulta({ tab }, true);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [compromisos, setCompromisos] = useState<Compromiso[]>([]);
   const [resumen, setResumen] = useState<Resumen[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [configuracion, setConfiguracion] = useState<Configuracion | null>(null);
-  const [busqueda, setBusqueda] = useState("");
-  const [estado, setEstado] = useState("");
-  const [pagadoraId, setPagadoraId] = useState("");
+  const busqueda = consulta.buscar;
+  const setBusqueda = (buscar: string) => actualizarConsulta({ buscar });
+  const estado = consulta.estado;
+  const setEstado = (estado: string) => actualizarConsulta({ estado });
+  const pagadoraId = consulta.pagadora;
+  const setPagadoraId = (pagadora: string) => actualizarConsulta({ pagadora });
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);

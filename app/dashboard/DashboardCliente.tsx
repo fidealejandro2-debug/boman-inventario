@@ -510,7 +510,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
             <span className={styles.livePill}><i /> OPERACIÓN EN VIVO</span>
             <span>{ETIQUETAS_ROL[perfil.rol] ?? perfil.rol}</span>
           </div>
-          <h1>Buenos días,<br /><strong>{nombreParaSaludo(perfil.nombre_completo)}</strong>.</h1>
+          <h1>Tu operación, <strong>{nombreParaSaludo(perfil.nombre_completo)}</strong></h1>
           <p>Lo importante de tu operación, ordenado para actuar sin perder tiempo.</p>
           <div className={styles.heroActions}>
             {accesos[0] && <Link className={styles.primaryAction} href={accesos[0].href}>
@@ -522,12 +522,12 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
 
         <article className={styles.priorityCard} aria-label="Prioridad de tu operación">
           <div className={styles.priorityHead}><span>PRÓXIMA ACCIÓN</span><IconoPanel nombre="reloj" /></div>
-          {prioridad && <b>{ENTERO.format(prioridad.cantidad)}</b>}
+          {listo && prioridad && <b>{ENTERO.format(prioridad.cantidad)}</b>}
           <strong>{cargando ? "Preparando tu jornada" : error ? "Tus accesos siguen disponibles" : prioridad ? prioridad.titulo : "Operación bajo control"}</strong>
           <p>{cargando ? "Estamos reuniendo tus indicadores." : error ? "Actualiza el resumen cuando recuperes la conexión." : prioridad ? prioridad.detalle : "No existen pendientes críticos en este momento."}</p>
-          {prioridad
+          {listo && prioridad
             ? <Link href={prioridad.href}>Resolver ahora <IconoPanel nombre="flecha" /></Link>
-            : <span className={styles.priorityReady}>✓ Sin bloqueos críticos</span>}
+            : <span className={listo ? styles.priorityReady : styles.priorityUnknown} role="status">{cargando ? "Consultando pendientes…" : error ? "Estado no disponible" : "✓ Sin bloqueos críticos"}</span>}
         </article>
 
         <div className={styles.heroKpis} aria-label="Resumen de hoy">
@@ -573,40 +573,6 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
       </nav>}
 
       <div className="panel-contenido">
-        <section className="panel-modulos-seccion" id="mis-modulos">
-          <div className="panel-seccion-titulo">
-            <div><span>EXPLORA TU ESPACIO</span><h2>Mis módulos</h2></div>
-            <small>{modulosVisibles.length} disponibles según tu rol</small>
-          </div>
-          <div className="panel-modulos-grid">
-            {modulosVisibles.map((modulo) => (
-              <article className={`panel-modulo ${modulo.tono}`} key={modulo.id}>
-                <div className="panel-modulo-cabecera">
-                  <span className="panel-modulo-icono"><IconoPanel nombre={modulo.id} /></span>
-                  {listo && modulo.pendiente > 0 && <span className="panel-modulo-contador">
-                    {ENTERO.format(modulo.pendiente)} {modulo.pendienteTexto}
-                  </span>}
-                </div>
-                <span className="panel-modulo-subtitulo">{modulo.subtitulo}</span>
-                <h3><Link href={modulo.href}>{modulo.titulo}</Link></h3><p>{modulo.descripcion}</p>
-                <details className={styles.moduleOptions}>
-                  <summary>Opciones de {modulo.titulo}<span aria-hidden="true">+</span></summary>
-                  <div className="panel-modulo-enlaces">
-                  {modulo.enlaces.map((enlace) => <Link href={enlace.href} key={`${modulo.id}-${enlace.href}`}>{enlace.etiqueta}</Link>)}
-                  </div>
-                </details>
-                <Link href={modulo.href} className="panel-modulo-abrir" aria-label={`Abrir ${modulo.titulo}`}>
-                  Abrir <span aria-hidden="true">→</span>
-                </Link>
-              </article>
-            ))}
-            {!modulosVisibles.length && <div className="panel-sin-resultados">
-              <strong>No encontramos ese acceso</strong><span>Prueba con otro nombre o limpia la búsqueda.</span>
-              <button type="button" onClick={() => setBusqueda("")}>Ver todos mis módulos</button>
-            </div>}
-          </div>
-        </section>
-
         <aside className="panel-lateral">
           <section className="panel-pendientes">
             <div className="panel-seccion-titulo compacto">
@@ -642,6 +608,41 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
             </div>
           </section>
         </aside>
+        <section className="panel-modulos-seccion" id="mis-modulos">
+          <div className="panel-seccion-titulo">
+            <div><span>EXPLORA TU ESPACIO</span><h2>Mis módulos</h2></div>
+            <small>{modulosVisibles.length} disponibles según tu rol</small>
+          </div>
+          <div className="panel-modulos-grid">
+            {modulosVisibles.map((modulo) => (
+              <article className={`panel-modulo ${modulo.tono}`} key={modulo.id}>
+                <div className="panel-modulo-cabecera">
+                  <span className="panel-modulo-icono"><IconoPanel nombre={modulo.id} /></span>
+                  {listo && modulo.pendiente > 0 && <span className="panel-modulo-contador">
+                    {ENTERO.format(modulo.pendiente)} {modulo.pendienteTexto}
+                  </span>}
+                </div>
+                <span className="panel-modulo-subtitulo">{modulo.subtitulo}</span>
+                <h3><Link href={modulo.href}>{modulo.titulo}</Link></h3><p>{modulo.descripcion}</p>
+                <details className={styles.moduleOptions}>
+                  <summary>Opciones de {modulo.titulo}<span aria-hidden="true">+</span></summary>
+                  <div className="panel-modulo-enlaces">
+                  {modulo.enlaces.map((enlace) => <Link href={enlace.href} key={`${modulo.id}-${enlace.href}`}>{enlace.etiqueta}</Link>)}
+                  </div>
+                </details>
+                <Link href={modulo.href} className="panel-modulo-abrir" aria-label={`Abrir ${modulo.titulo}`}>
+                  Abrir <span aria-hidden="true">→</span>
+                </Link>
+              </article>
+            ))}
+            {!modulosVisibles.length && <div className="panel-sin-resultados">
+              <strong>No encontramos ese acceso</strong><span>Prueba con otro nombre o limpia la búsqueda.</span>
+              <button type="button" onClick={() => setBusqueda("")}>Ver todos mis módulos</button>
+            </div>}
+          </div>
+        </section>
+
+
       </div>
     </main>
   );

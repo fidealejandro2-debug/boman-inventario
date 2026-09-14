@@ -605,7 +605,7 @@ tbody tr:hover { background: var(--azul-suave); }
 
 input, select, button, textarea {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   padding: 9px 11px;
   border-radius: 9px;
   border: 1px solid var(--borde);
@@ -663,7 +663,7 @@ button.danger:hover { background: #991b1b; }
 
 label {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   margin-bottom: 5px;
   color: var(--texto-secundario);
@@ -2698,3 +2698,30 @@ button.producto-sin-foto {
 }
 .celdaEtapa:hover:not(:disabled) { background: var(--superficie-suave); outline: 1px solid var(--borde); }
 .celdaEtapa:disabled { opacity: .5; cursor: progress; }
+
+/* Controles compartidos de consulta y lectura cómoda. */
+.view-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0; }
+.view-switch { display: flex; flex-wrap: wrap; gap: 6px; }
+.view-switch button[aria-pressed="true"] { background: var(--azul); border-color: var(--azul); color: #fff; }
+.view-toolbar .ayuda { margin: 0; max-width: 460px; }
+.nav-enlace-texto strong { font-size: 13px; line-height: 1.4; }
+.nav-enlace-texto small { font-size: 12px; line-height: 1.4; }
+.nav-subenlace { min-height: 48px; }
+.dlg-caja { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.modal-contenido > .header-row h2 { margin: 0; overflow-wrap: anywhere; }
+.contract-summary { display: flex; flex-wrap: wrap; gap: 10px 24px; padding: 14px 18px; margin: 0 0 16px; border: 1px solid var(--borde); border-radius: 12px; background: var(--superficie); }
+.contract-summary > div { display: grid; gap: 4px; min-width: 100px; flex: 1; }
+.contract-summary dt { color: var(--texto-secundario); font-size: 12px; }
+.contract-summary dd { margin: 0; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.contract-summary .draft-status { flex-basis: 100%; padding-top: 8px; border-top: 1px solid var(--borde); color: var(--texto-secundario); font-size: 13px; }
+@media (max-width: 700px) {
+  .container input:not([type="checkbox"]):not([type="radio"]), .container select, .container textarea,
+  .modal-contenido input:not([type="checkbox"]):not([type="radio"]), .modal-contenido select, .modal-contenido textarea { font-size: 16px; }
+  .view-switch, .view-switch button { flex: 1; }
+  .view-switch { width: 100%; }
+  .view-switch button { min-height: 44px; }
+  .nav-subenlace { padding-right: 43px; }
+  .nav-favorito { width: 36px; height: 40px; }
+  .modal-contenido { max-height: calc(100dvh - 24px); }
+}
+@media print { .view-toolbar, .contract-summary { display: none; } }

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useProteccionSalida } from "@/components/useProteccionSalida";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/permisos";
@@ -361,13 +362,38 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
  const [busqueda,setBusqueda]=useState(""); const [coincidencias,setCoincidencias]=useState<any[]>([]); const [buscando,setBuscando]=useState(false); const [preview,setPreview]=useState(false);
  const [almacenesVenta,setAlmacenesVenta]=useState<AlmacenVenta[]>([]);
  const diferenciasTallasAceptadas=useRef("");
+ const [borradorListo,setBorradorListo]=useState(false);
+ const [estadoBorrador,setEstadoBorrador]=useState("Preparando borrador…");
+ const [firmaGuardada,setFirmaGuardada]=useState<string|null>(null);
+ const [visitados,setVisitados]=useState<number[]>([0]);
+ const recuperarRef=useRef<Promise<boolean>|null>(null);
+ const formularioRef=useRef<HTMLElement>(null);
+ const firmaActual=JSON.stringify(form);
+ const archivosPendientes=form.archivos.some(archivo=>archivo.file&&!archivo.url);
+ useProteccionSalida(!resultado && (editando ? firmaGuardada!==null && firmaGuardada!==firmaActual : archivosPendientes || estadoBorrador==="Guardando borrador…" || estadoBorrador==="No se pudo guardar el borrador en este dispositivo."));
+ useEffect(()=>{setVisitados(actual=>actual.includes(paso)?actual:[...actual,paso]);formularioRef.current?.focus();},[paso]);
  const total=useMemo(()=>form.prendas.reduce((s,x)=>s+Math.max(0,Number(x.cantidad)||0),0),[form.prendas]);
  const saldo=Math.max(0,Number(form.cab.presupuesto||0)-Number(form.cab.abono||0));
  const setCab=<K extends keyof Cab>(k:K,v:Cab[K])=>setForm(f=>({...f,cab:{...f.cab,[k]:v}}));
  const cambiar=<T extends {id:string}>(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string,cambio:Partial<T>)=>setForm(f=>({...f,[lista]:(f[lista] as unknown as T[]).map(x=>x.id===id?{...x,...cambio}:x)} as Form));
  const quitar=(lista:keyof Pick<Form,"prendas"|"jugadores"|"archivos"|"specs"|"facturacion">,id:string)=>setForm(f=>({...f,[lista]:(f[lista] as {id:string}[]).filter(x=>x.id!==id)} as Form));
 
- useEffect(()=>{if(editando)return;const raw=localStorage.getItem(BORRADOR);if(!raw)return;try{const d=JSON.parse(raw) as Form;if(d?.cab&&Array.isArray(d.prendas))void confirmarDialogo("Hay un borrador guardado en este dispositivo. ¿Deseas recuperarlo?").then(si=>si?setForm({...d,cab:{...cabInicial(perfil.nombre_completo),...d.cab},archivos:(d.archivos||[]).filter(x=>x.url)}):localStorage.removeItem(BORRADOR))}catch{localStorage.removeItem(BORRADOR)}},[perfil.nombre_completo,editando]);
+ useEffect(()=>{
+  if(editando){setBorradorListo(true);return}
+  let vivo=true;
+  void (async()=>{
+   try{
+    const raw=localStorage.getItem(BORRADOR);
+    if(raw){const d=JSON.parse(raw) as Form;if(d?.cab&&Array.isArray(d.prendas)){
+     recuperarRef.current??=confirmarDialogo("Hay un borrador guardado en este dispositivo. ¿Deseas recuperarlo?");
+     const recuperar=await recuperarRef.current;if(!vivo)return;
+     if(recuperar)setForm({...d,cab:{...cabInicial(perfil.nombre_completo),...d.cab},archivos:(d.archivos||[]).filter(x=>x.url)});
+     else localStorage.removeItem(BORRADOR);
+    }}
+   }catch{if(vivo)setEstadoBorrador("No se pudo recuperar el borrador anterior.")}
+   finally{if(vivo)setBorradorListo(true)}
+  })();return()=>{vivo=false};
+ },[perfil.nombre_completo,editando]);
  // Se reusa el mismo expediente que ya alimenta el brief, y formDesdeContrato
  // para volverlo Form: no hay un segundo lector del contrato que pueda quedar
  // desalineado con el primero.
@@ -375,11 +401,18 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
   void supabase.rpc("obtener_expediente_contrato_v97",{p_contrato_id:editarId}).then(({data,error})=>{
    if(!vivo)return;setCargandoEdicion(false);
    if(error||!data)return void mostrarAvisoDialogo(error?.message||"No se pudo abrir el contrato","No se pudo cargar",true);
-   try{setForm(formDesdeContrato(data as never))}
+   try{const cargado=formDesdeContrato(data as never);cargado.prendas=expandirLineas(cargado.lineas);setFirmaGuardada(JSON.stringify(cargado));setForm(cargado)}
    catch(e){void mostrarAvisoDialogo(e instanceof Error?e.message:"Datos del contrato ilegibles","No se pudo cargar",true)}});
   return()=>{vivo=false}},[editarId,supabase]);
  useEffect(()=>{void supabase.rpc("catalogo_ingreso_contrato_v115").then(({data,error})=>{if(error)void mostrarAvisoDialogo(error.message,"No se pudieron cargar los locales",true);else setAlmacenesVenta(((data as{almacenes?:AlmacenVenta[]})?.almacenes)||[])})},[supabase]);
- useEffect(()=>{if(editando)return;const t=setTimeout(()=>{const seguro={...form,archivos:form.archivos.filter(x=>x.url).map(({file,preview,...x})=>x)};localStorage.setItem(BORRADOR,JSON.stringify(seguro))},900);return()=>clearTimeout(t)},[form,editando]);
+ useEffect(()=>{
+  if(editando||!borradorListo||resultado)return;
+  setEstadoBorrador("Guardando borrador…");
+  const t=setTimeout(()=>{
+   try{const seguro={...form,archivos:form.archivos.filter(x=>x.url).map(({file,preview,...x})=>x)};localStorage.setItem(BORRADOR,JSON.stringify(seguro));setEstadoBorrador("Borrador guardado en este dispositivo.")}
+   catch{setEstadoBorrador("No se pudo guardar el borrador en este dispositivo.")}
+  },900);return()=>clearTimeout(t);
+ },[form,editando,borradorListo,resultado]);
 
  // "prendas" es el formato de guardado (una fila por combinacion con cantidad
  // > 0) y se deriva SIEMPRE de la matriz: asi la tabla de tallas es la unica
@@ -497,7 +530,7 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Jugadores");XLSX.writeFile(wb,"plantilla_jugadores_boman.xlsx");
  }
 
- async function guardar(){const falla=[0,1,2,4,6].map(errorPaso).find(Boolean);if(falla)return mostrarAvisoDialogo(falla,"Contrato incompleto",true);
+ async function guardar(){const pasoIncompleto=[0,1,2,4,5,6].find(i=>Boolean(errorPaso(i)));if(pasoIncompleto!==undefined){setPaso(pasoIncompleto);await mostrarAvisoDialogo(errorPaso(pasoIncompleto),"Contrato incompleto",true);formularioRef.current?.focus();return;}
   let motivoEdicion="";
   if(!await nominaCuadra())return;
   if(editando){
@@ -511,16 +544,17 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
   const mapa=new Map<string,Prenda>();for(const x of form.prendas){const k=[x.prenda,x.calidad,x.detalle,x.genero,x.talla].join("¦");const anterior=mapa.get(k);mapa.set(k,{...x,cantidad:(anterior?.cantidad||0)+Number(x.cantidad)})}
   const payload={contrato:{...form.cab,prendas_txt:form.prendasSel.map(etiquetaPrenda).join(", "),colores_generales:form.cab.colores.split(",").map(x=>x.trim()).filter(Boolean).map(nombre=>({nombre})),adicionales:{detalle:form.cab.adicionales,items:ADICIONALES.filter(a=>form.adicCant[a.clave]>0||form.adic[a.clave]!==a.opciones[0]).map(a=>({tipo:a.titulo,valor:form.adic[a.clave],cantidad:form.adicCant[a.clave]})),medidas_bandera:form.medidasBandera}},prendas:Array.from(mapa.values()).map(({id,...x})=>x),jugadores:form.jugadores.map(({id,...x},orden)=>({...x,orden})),archivos:archivos.map(({id,...x})=>x),especificaciones:form.specs.map(({id,mockup,campos,observacion,...x},orden)=>({...x,orden,variante_mockup:mockup,spec:{campos,observacion}})),facturacion:form.facturacion.map(({id,...x},orden)=>({...x,orden}))};
   if(editarId){const upd=await supabase.rpc("actualizar_contrato_v120",{p_contrato_id:editarId,p_datos:payload,p_motivo:motivoEdicion,p_idempotency_key:uuid()});if(upd.error)throw upd.error;const ru:any=upd.data;setResultado({numero:ru.numero,id:editarId,respaldo:"en_curso"});setPreview(false);void respaldar(editarId);return}
-  const alta=await supabase.rpc("crear_contrato_v115",{p_datos:payload,p_idempotency_key:uuid()});if(alta.error)throw alta.error;const r:any=alta.data;localStorage.removeItem(BORRADOR);setResultado({numero:r.numero,id:r.contrato_id,respaldo:"en_curso"});setPreview(false);void respaldar(r.contrato_id)}catch(e){await mostrarAvisoDialogo(e instanceof Error?e.message:"No se pudo registrar el contrato","Error al registrar",true)}finally{setGuardando(false)}}
+  const alta=await supabase.rpc("crear_contrato_v115",{p_datos:payload,p_idempotency_key:uuid()});if(alta.error)throw alta.error;const r:any=alta.data;try{localStorage.removeItem(BORRADOR)}catch{}setResultado({numero:r.numero,id:r.contrato_id,respaldo:"en_curso"});setPreview(false);void respaldar(r.contrato_id)}catch(e){await mostrarAvisoDialogo(e instanceof Error?e.message:"No se pudo registrar el contrato","Error al registrar",true)}finally{setGuardando(false)}}
 
  async function respaldar(id:string){try{const res=await fetch("/api/bomansport/respaldo-contrato",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contrato_id:id})});const data=await res.json();setResultado(x=>x&&x.id===id?{...x,respaldo:data.ok?"ok":"pendiente"}:x)}catch{setResultado(x=>x&&x.id===id?{...x,respaldo:"pendiente"}:x)}}
 
  if(resultado)return <section className={`card ${estilos.exito}`}><div>✓</div><h1>{editando?"Contrato actualizado":"Contrato registrado"}</h1><strong>{resultado.numero}</strong><p>Ya está disponible en Producción → Contratos y en el tablero.</p><p className={resultado.respaldo==="pendiente"?estilos.respaldoPendiente:estilos.respaldoOk}>{resultado.respaldo==="en_curso"?"Respaldando en Google Sheets…":resultado.respaldo==="ok"?"✓ Copia de respaldo guardada en Google Sheets":"El respaldo en Sheets quedó pendiente; el contrato está seguro en Supabase."}</p><div>{resultado.respaldo==="pendiente"&&<button className="secondary" onClick={()=>void respaldar(resultado.id)}>Reintentar respaldo</button>}{!editando&&<button onClick={()=>{setResultado(null);setForm(inicial(perfil.nombre_completo));setPaso(0)}}>Ingresar otro</button>}<a className="button secondary" href="/produccion/contratos">Abrir expedientes</a></div></section>;
  if(cargandoEdicion)return <section className="card"><p className="conteo">Cargando el contrato…</p></section>;
  return <>
-  <header className={estilos.cabecera}><div><span className="eyebrow">{editando?"PRODUCCIÓN · REEDICIÓN":"VENTAS · v115"}</span><h1>{editando?"Editar contenido del contrato":"Ingreso de contratos"}</h1><p>{editando?"Prendas, tallas, jugadores, especificaciones y mockups. El número, el estado y las cifras no se tocan desde aquí.":"Pedido, brief técnico, tallas, diseños y valores conectados directamente con producción."}</p></div><button className="secondary" onClick={()=>setPreview(true)}>Vista previa</button></header>
-  <nav className={estilos.pasos}>{PASOS.map((x,i)=><button key={x} className={i===paso?estilos.activo:i<paso?estilos.completo:""} onClick={()=>void abrirPaso(i)}><b>{i<paso?"✓":i+1}</b><span>{x}</span></button>)}</nav>
-  <section className={`card ${estilos.formulario}`}>
+  <header className={estilos.cabecera}><div><span className="eyebrow">{editando?"PRODUCCIÓN · REEDICIÓN":"VENTAS"}</span><h1>{editando?"Editar contenido del contrato":"Ingreso de contratos"}</h1><p>{editando?"Prendas, tallas, jugadores, especificaciones y mockups. El número, el estado y las cifras no se tocan desde aquí.":"Pedido, brief técnico, tallas, diseños y valores conectados directamente con producción."}</p></div><button className="secondary" onClick={()=>setPreview(true)}>Vista previa</button></header>
+  <nav className={estilos.pasos} aria-label="Pasos del contrato">{PASOS.map((x,i)=>{const completo=visitados.includes(i)&&!errorPaso(i);return <button type="button" key={x} disabled={guardando} aria-current={i===paso?"step":undefined} aria-label={x+(i===paso?", paso actual":completo?", revisado":", pendiente de revisar")} className={i===paso?estilos.activo:completo?estilos.completo:""} onClick={()=>void abrirPaso(i)}><b>{i!==paso&&completo?"✓":i+1}</b><span>{x}</span></button>})}</nav>
+  <dl className="contract-summary" aria-label="Resumen del contrato"><div><dt>Cliente</dt><dd>{form.cab.cliente||"Por completar"}</dd></div><div><dt>Prendas</dt><dd>{total}</dd></div><div><dt>Entrega</dt><dd>{form.cab.fecha_entrega||"Por definir"}</dd></div><div><dt>Presupuesto</dt><dd>{Number(form.cab.presupuesto||0).toLocaleString("es-EC",{style:"currency",currency:"USD"})}</dd></div><div className="draft-status" role="status">{editando ? firmaActual!==firmaGuardada?"Cambios pendientes de guardar.":"Sin cambios pendientes." : estadoBorrador}{archivosPendientes&&" Hay archivos que se subirán al registrar el contrato."}</div></dl>
+  <section ref={formularioRef} tabIndex={-1} aria-label={"Paso "+(paso+1)+": "+PASOS[paso]} className={`card ${estilos.formulario}`}>
    {paso===0&&<PasoCliente supabase={supabase} form={form} setCab={setCab} almacenes={almacenesVenta} busqueda={busqueda} setBusqueda={setBusqueda} buscar={buscarAnterior} buscando={buscando} coincidencias={coincidencias} cargar={cargarReposicion}/>} 
    {paso===1&&<PasoContrato form={form} setCab={setCab}/>}
    {paso===2&&<PasoPrendas form={form} setForm={setForm} setCab={setCab} total={total} supabase={supabase}/>}
@@ -528,7 +562,7 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
    {paso===4&&<PasoTecnica form={form} setCab={setCab} agregarFicha={agregarFicha} cambiar={cambiar} quitar={quitar}/>} 
    {paso===5&&<PasoJugadores form={form} importar={importarJugadores} plantilla={plantillaJugadores} agregar={agregarJugador} setForm={setForm} cambiar={cambiar} quitar={quitar}/>} 
    {paso===6&&<PasoCierre form={form} setCab={setCab} saldo={saldo} agregar={agregarFact} cambiar={cambiar} quitar={quitar}/>} 
-   <footer className={estilos.acciones}><button className="secondary" disabled={paso===0||guardando} onClick={()=>setPaso(x=>x-1)}>Anterior</button><span>Paso {paso+1} de 7{editando?"":" · borrador automático"}</span>{paso<6?<button onClick={()=>void irSiguiente()}>Continuar</button>:<><button className="secondary" onClick={()=>setPreview(true)}>Revisar</button><button onClick={()=>void guardar()} disabled={guardando}>{guardando?"Subiendo y guardando…":editando?"Guardar cambios":"Registrar contrato"}</button></>}</footer>
+   <footer className={estilos.acciones}><button className="secondary" disabled={paso===0||guardando} onClick={()=>setPaso(x=>x-1)}>Anterior</button><span>Paso {paso+1} de 7</span>{paso<6?<button onClick={()=>void irSiguiente()}>Continuar</button>:<><button className="secondary" onClick={()=>setPreview(true)}>Revisar</button><button onClick={()=>void guardar()} disabled={guardando}>{guardando?"Subiendo y guardando…":editando?"Guardar cambios":"Registrar contrato"}</button></>}</footer>
   </section>
   {preview&&<VistaPrevia form={form} total={total} cerrar={()=>setPreview(false)}/>} 
  </>;

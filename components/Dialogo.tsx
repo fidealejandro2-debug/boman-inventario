@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocoDialogo } from "@/components/useFocoDialogo";
 
 /**
  * Diálogos del sistema, en reemplazo de window.prompt y window.confirm.
@@ -77,6 +78,8 @@ export default function DialogoAnfitrion() {
   const [tocado, setTocado] = useState(false);
   const resolver = useRef<((v: string | boolean | null) => void) | null>(null);
   const campo = useRef<HTMLTextAreaElement | null>(null);
+  const caja = useRef<HTMLDivElement>(null);
+  useFocoDialogo(caja, Boolean(peticion));
 
   const abrir = useCallback<Abridor>((p) => {
     setPeticion(p);
@@ -102,13 +105,15 @@ export default function DialogoAnfitrion() {
 
   useEffect(() => {
     if (!peticion) return;
-    const t = setTimeout(() => campo.current?.focus(), 30);
     const alTeclado = (e: KeyboardEvent) => {
-      if (e.key === "Escape") cerrar(peticion.clase === "motivo" ? null : false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        cerrar(peticion.clase === "motivo" ? null : false);
+      }
     };
     window.addEventListener("keydown", alTeclado);
     return () => {
-      clearTimeout(t);
       window.removeEventListener("keydown", alTeclado);
     };
   }, [peticion, cerrar]);
@@ -131,8 +136,12 @@ export default function DialogoAnfitrion() {
   return (
     <div
       className="dlg-fondo no-imprimir"
+      ref={caja}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="dialogo-titulo"
+      aria-describedby="dialogo-texto"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) cerrar(esMotivo ? null : false);
       }}
@@ -140,9 +149,9 @@ export default function DialogoAnfitrion() {
       <div className="dlg-caja">
         <div className="dlg-cabecera">
           <span className="dlg-marca">BOMAN</span>
-          <span className="dlg-titulo">
+          <span className="dlg-titulo" id="dialogo-titulo">
             {esMotivo
-              ? "Motivo requerido"
+              ? peticion.minimo > 0 ? "Motivo requerido" : "Completa la información"
               : esAviso
                 ? peticion.titulo ?? "Atención"
                 : "Confirma la acción"}
@@ -150,7 +159,7 @@ export default function DialogoAnfitrion() {
         </div>
 
         <div className="dlg-cuerpo">
-          <p className="dlg-texto">{peticion.texto}</p>
+          <p className="dlg-texto" id="dialogo-texto">{peticion.texto}</p>
 
           {esMotivo && (
             <>
@@ -158,6 +167,9 @@ export default function DialogoAnfitrion() {
                 {peticion.etiqueta ?? "Motivo"}
                 <textarea
                   ref={campo}
+                  data-foco-inicial
+                  aria-invalid={!valido && tocado}
+                  aria-describedby="dialogo-ayuda"
                   rows={3}
                   value={valor}
                   onChange={(e) => setValor(e.target.value)}
@@ -171,10 +183,10 @@ export default function DialogoAnfitrion() {
                   placeholder="Explica brevemente por qué…"
                 />
               </label>
-              <div className={`dlg-contador ${!valido && tocado ? "corto" : ""}`}>
+              <div id="dialogo-ayuda" className={`dlg-contador ${!valido && tocado ? "corto" : ""}`} aria-live="polite">
                 {faltan > 0
                   ? `Faltan ${faltan} caracter(es) — mínimo ${minimo}`
-                  : "Queda registrado en la auditoría con tu usuario y la fecha."}
+                  : minimo > 0 ? "Queda registrado en la auditoría con tu usuario y la fecha." : "Revisa el texto antes de guardar."}
               </div>
             </>
           )}
@@ -194,7 +206,7 @@ export default function DialogoAnfitrion() {
             onClick={aceptar}
             disabled={esMotivo && !valido && tocado}
           >
-            {esMotivo ? "Guardar motivo" : esAviso ? "Entendido" : "Sí, continuar"}
+            {esMotivo ? minimo > 0 ? "Guardar motivo" : "Guardar texto" : esAviso ? "Entendido" : "Sí, continuar"}
           </button>
         </div>
       </div>

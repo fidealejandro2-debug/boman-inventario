@@ -87,14 +87,15 @@
  .vistaPrevia{position:static!important;padding:0!important;background:#fff!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
  .noPrint{display:none!important}
  .hoja{max-width:none;margin:0;padding:0;border-radius:0;box-shadow:none}
- .bSeccion,.bCols,.bMk{break-inside:auto}
- /* La foto ata por ANCHO, no por alto. Con 340px de columna y tope de 380px,
-    un mockup vertical (3:4) topaba en alto y se quedaba en ~285px de ancho:
-    ~55px de blanco a cada lado y altura reservada que no usaba. A 300x400 la
-    proporcion 3:4 encaja justa, se va el blanco lateral y la columna de al
-    lado -specs o jugadores- gana 40px de ancho util por hoja. */
- .bMk{grid-template-columns:300px 1fr;gap:10px}
- .bMkFoto{max-height:400px}
+ .bCols{break-inside:avoid}
+ .bSeccion{break-inside:auto}
+ /* A4 tiene menos de 900 px CSS. Las reglas responsive deben limitarse a
+    pantalla o convertirían este bloque en una sola columna al imprimir. */
+ .bMk{grid-template-columns:minmax(0,42%) minmax(0,58%);gap:6px;align-items:start;break-inside:auto}
+ .bMk>div{min-width:0}
+ /* La imagen ocupa su columna según su proporción real. No se le asigna una
+    caja alta de ancho completo: esa caja fue la franja blanca de la captura. */
+ .bMkFoto{width:100%;height:auto;max-height:102mm;object-fit:contain;object-position:top center}
  /* Menos aire entre secciones: son 22px por mockup que en un contrato de
     varios mockups suman una franja entera de hoja. El filete de separacion
     se queda -es lo que deja ver donde empieza cada mockup- pero mas fino. */
@@ -104,8 +105,8 @@
     aguanta una impresora domestica sin recortar. */
  @page{size:A4 portrait;margin:5mm 6mm}
 }
-@media(max-width:1050px){.pasos span{display:none}.grid{grid-template-columns:repeat(2,1fr)}.filaPrenda{grid-template-columns:repeat(3,1fr)}.filaJugador{grid-template-columns:30px repeat(3,1fr)}.filaFact{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.bMk{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr 1fr}.tarjetaSpec>header>span{display:none}}
-@media(max-width:650px){.cabecera{display:block}.cabecera button{margin-top:12px}.grid,.tipos,.cargas,.resumen{grid-template-columns:1fr}.filaPrenda,.filaSpec,.filaJugador,.filaFact{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr}.filaJugador b{display:none}.tituloAccion{align-items:flex-start;flex-direction:column}.acciones{flex-wrap:wrap}.acciones span{width:100%;order:-1}.acciones button{flex:1}}
+@media screen and (max-width:1050px){.pasos span{display:none}.grid{grid-template-columns:repeat(2,1fr)}.filaPrenda{grid-template-columns:repeat(3,1fr)}.filaJugador{grid-template-columns:30px repeat(3,1fr)}.filaFact{grid-template-columns:repeat(3,1fr)}}@media screen and (max-width:900px){.bMk{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr 1fr}.tarjetaSpec>header>span{display:none}}
+@media screen and (max-width:650px){.cabecera{display:block}.cabecera button{margin-top:12px}.grid,.tipos,.cargas,.resumen{grid-template-columns:1fr}.filaPrenda,.filaSpec,.filaJugador,.filaFact{grid-template-columns:1fr}.tarjetaSpec>header{grid-template-columns:1fr}.filaJugador b{display:none}.tituloAccion{align-items:flex-start;flex-direction:column}.acciones{flex-wrap:wrap}.acciones span{width:100%;order:-1}.acciones button{flex:1}}
 
 .pista{font-size:.72rem;color:var(--texto-secundario);margin-top:2px}
 
@@ -140,7 +141,7 @@
 .filaAdic{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:10px 12px;border:1px solid var(--borde);border-radius:9px;background:var(--superficie-suave)}
 .filaAdic label{display:grid;gap:5px}
 .filaAdic label>span{font-size:.75rem;font-weight:800;color:var(--texto-secundario)}
-@media(max-width:650px){.prendasGrid{grid-template-columns:1fr}.filaAdic{grid-template-columns:1fr}}
+@media screen and (max-width:650px){.prendasGrid{grid-template-columns:1fr}.filaAdic{grid-template-columns:1fr}}
 
 /* Matriz de tallas por prenda y calidad (como el legado) */
 .bloquePrenda{border:1px solid var(--borde);border-radius:11px;margin-bottom:14px;overflow:hidden}
@@ -161,7 +162,7 @@
 .tablaTalla td input:focus{outline:2px solid var(--azul);outline-offset:-2px;border-radius:3px}
 .celdaTotal{background:#fffbeb;font-weight:800;font-variant-numeric:tabular-nums;padding:5px 4px!important}
 .filaTotal th,.filaTotal td{background:var(--superficie-suave);font-weight:900;padding:6px 4px!important;font-variant-numeric:tabular-nums}
-@media(max-width:900px){.tablasTalla{grid-template-columns:1fr}.lineaCab{grid-template-columns:1fr 1fr}}
+@media screen and (max-width:900px){.tablasTalla{grid-template-columns:1fr}.lineaCab{grid-template-columns:1fr 1fr}}
 .factOk{padding:9px 12px;border:1px solid #10b981;background:#ecfdf5;color:#065f46;border-radius:8px;font-size:.82rem;font-weight:700}
 .factMal{display:grid;gap:3px;padding:10px 12px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:8px;font-size:.82rem}
 

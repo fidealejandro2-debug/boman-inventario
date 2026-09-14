@@ -10,3 +10,16 @@
 .destinos{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .destinos li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--borde);border-radius:8px;background:var(--superficie)}
 .destinos span{font-size:.85rem}
+
+.editorCabecera{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 10px;flex-wrap:wrap}
+.editorCabecera h3{margin:0}
+.contactoFila{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(160px,1.3fr) minmax(130px,1fr) auto auto;align-items:end;gap:12px;padding:14px;border:1px solid var(--borde);border-radius:10px;margin:0 0 12px;min-width:0;background:var(--superficie-suave)}
+.contactoFila legend{font-size:13px;font-weight:600;color:var(--texto-secundario);padding:0 5px}
+.contactoFila label{margin:0;min-width:0}
+.contactoFila input:not([type="checkbox"]),.contactoFila select,.form>.field input,.form>.field select{display:block;width:100%;margin-top:6px;min-width:0}
+.contactoFila .principal{display:flex;align-items:center;gap:6px;min-height:42px}
+.direccionFila{grid-template-columns:minmax(180px,2fr) minmax(130px,1fr) auto auto}
+.barraFusion{background:var(--badge-amarillo-bg);border-color:var(--badge-amarillo-fg)}
+.barraFusion>strong{color:var(--badge-amarillo-fg)}
+@media(max-width:1100px){.contactoFila,.direccionFila{grid-template-columns:1fr 1fr}.contactoFila>button{justify-self:end}}
+@media(max-width:600px){.contactoFila,.direccionFila{grid-template-columns:1fr}.contactoFila>button{justify-self:stretch}.editorCabecera button{width:100%}}
