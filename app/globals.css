@@ -388,6 +388,44 @@ a { color: inherit; }
 }
 .nav-contraer:hover { color: #fff; background: #bf0c2b; }
 .nav-mobile-bar, .nav-overlay { display: none; }
+.nav-progreso {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 120;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(19,22,29,.94);
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.nav-progreso::after {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 38%;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, transparent, #ed1237, #ff6982, transparent);
+  animation: navProgreso 1s ease-in-out infinite;
+}
+.nav-progreso span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ed1237;
+  box-shadow: 0 0 0 4px rgba(237,18,55,.16);
+  animation: navPulso .8s ease-in-out infinite alternate;
+}
+@keyframes navProgreso { from { transform: translateX(-110%); } to { transform: translateX(265%); } }
+@keyframes navPulso { to { opacity: .42; transform: scale(.78); } }
 
 .navbar.nav-contraido { width: var(--sidebar-compacto); }
 .navbar.nav-contraido .nav-encabezado { padding-inline: 7px; }

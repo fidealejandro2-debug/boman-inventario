@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import {
   TODOS_LOS_PERMISOS,
   type Perfil,
@@ -70,8 +71,58 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
   ],
 };
 
-export async function getPerfilActual(): Promise<Perfil> {
+type PerfilNavegacionV137 = {
+  id: string;
+  nombre_completo: string;
+  rol: RolUsuario;
+  entidad_id: string | null;
+  activo: boolean;
+  clave_temporal_desde: string | null;
+  permisos: string[];
+  modo_boman_especifico: boolean;
+  estaciones: string[];
+};
+
+function esPerfilNavegacion(valor: unknown): valor is PerfilNavegacionV137 {
+  if (!valor || typeof valor !== "object") return false;
+  const perfil = valor as Partial<PerfilNavegacionV137>;
+  return typeof perfil.id === "string"
+    && typeof perfil.nombre_completo === "string"
+    && typeof perfil.rol === "string"
+    && typeof perfil.activo === "boolean"
+    && Array.isArray(perfil.permisos)
+    && Array.isArray(perfil.estaciones)
+    && typeof perfil.modo_boman_especifico === "boolean";
+}
+
+// cache() evita repetir esta lectura cuando una misma renderizacion del
+// servidor necesita el perfil mas de una vez. v137, ademas, reduce cinco
+// solicitudes a Supabase a una sola llamada. El camino anterior queda como
+// compatibilidad para poder publicar la app antes de instalar la migracion.
+export const getPerfilActual = cache(async (): Promise<Perfil> => {
   const supabase = await createClient();
+
+  const { data: resumen } = await supabase.rpc("perfil_navegacion_v137");
+  if (esPerfilNavegacion(resumen)) {
+    if (!resumen.activo) {
+      await supabase.auth.signOut();
+      redirect("/login?motivo=inactivo");
+    }
+    if (resumen.clave_temporal_desde) {
+      redirect("/establecer-clave?motivo=clave-temporal");
+    }
+    return {
+      id: resumen.id,
+      nombre_completo: resumen.nombre_completo,
+      rol: resumen.rol,
+      entidad_id: resumen.entidad_id,
+      activo: resumen.activo,
+      permisos: resumen.permisos as PermisoCodigo[],
+      modo_boman_especifico: resumen.modo_boman_especifico,
+      estaciones: resumen.estaciones,
+    };
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -119,4 +170,4 @@ export async function getPerfilActual(): Promise<Perfil> {
     // mismo criterio que el fallback de permisos de arriba.
     modo_boman_especifico: !modoBomanError && typeof modoBoman === "boolean" ? modoBoman : true,
   };
-}
+});

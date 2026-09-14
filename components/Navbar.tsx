@@ -167,12 +167,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const router = useRouter();
   const pathname = usePathname();
   const buscarRef = useRef<HTMLInputElement>(null);
+  const rutasPrecargadasRef = useRef(new Set<string>());
   const [movilAbierto, setMovilAbierto] = useState(false);
   const [contraido, setContraido] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [moduloAbierto, setModuloAbierto] = useState<GrupoId | null>(null);
   const [favoritos, setFavoritos] = useState<string[]>([]);
   const [mostrarSecundarios, setMostrarSecundarios] = useState(false);
+  const [navegandoA, setNavegandoA] = useState<string | null>(null);
 
   useEffect(() => {
     setContraido(window.localStorage.getItem("boman-sidebar-contraido") === "1");
@@ -186,6 +188,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
 
   useEffect(() => {
     setMovilAbierto(false);
+    setNavegandoA(null);
   }, [pathname]);
 
   useEffect(() => {
@@ -219,7 +222,20 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     });
   }
 
+  function precargarRuta(href: string) {
+    if (rutaActiva(href) || rutasPrecargadasRef.current.has(href)) return;
+    rutasPrecargadasRef.current.add(href);
+    router.prefetch(href);
+  }
+
+  function iniciarNavegacion(href: string) {
+    if (!rutaActiva(href)) setNavegandoA(href);
+    setMovilAbierto(false);
+  }
+
   function alternarModulo(id: GrupoId) {
+    grupos.find((grupo) => grupo.id === id)?.opciones.slice(0, 2)
+      .forEach((opcion) => precargarRuta(opcion.href));
     if (contraido) {
       setContraido(false);
       window.localStorage.setItem("boman-sidebar-contraido", "0");
@@ -404,6 +420,22 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     .filter((opcion): opcion is OpcionMenu => Boolean(opcion))
     .slice(0, 4);
 
+  // Deja listas las tareas frecuentes cuando el navegador esta libre. El
+  // resto se prepara al abrir su modulo o al pasar el puntero por el enlace.
+  useEffect(() => {
+    const preparar = () => accesosRapidos.forEach((opcion) => precargarRuta(opcion.href));
+    const navegador = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, opciones?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (navegador.requestIdleCallback) {
+      const id = navegador.requestIdleCallback(preparar, { timeout: 1800 });
+      return () => navegador.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(preparar, 350);
+    return () => window.clearTimeout(id);
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     setModuloAbierto(pathname === "/dashboard" ? null : grupoActivoId ?? null);
     const principales = PRINCIPALES_POR_ROL[perfil.rol] ?? ["ventas", "produccion", "inventario", "reportes"];
@@ -425,6 +457,9 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
           href={opcion.href}
           className={`nav-subenlace ${rutaActiva(opcion.href) ? "activo" : ""}`}
           title={`${opcion.etiqueta} — ${opcion.descripcion}`}
+          onPointerEnter={() => precargarRuta(opcion.href)}
+          onFocus={() => precargarRuta(opcion.href)}
+          onClick={() => iniciarNavegacion(opcion.href)}
         >
           <span className="nav-subenlace-marca" aria-hidden="true" />
           <span className="nav-enlace-texto"><strong>{opcion.etiqueta}</strong><small>{opcion.descripcion}</small></span>
@@ -439,7 +474,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     const activo = grupoActivoId === grupo.id;
     return (
       <section className={`nav-seccion ${expandido ? "abierta" : ""}`} key={grupo.id} aria-label={grupo.etiqueta}>
-        <button type="button" className={`nav-modulo ${activo ? "activo" : ""}`} onClick={() => alternarModulo(grupo.id)} aria-expanded={expandido} aria-controls={`nav-submenu-${grupo.id}`} title={grupo.etiqueta}>
+        <button type="button" className={`nav-modulo ${activo ? "activo" : ""}`} onPointerEnter={() => grupo.opciones.slice(0, 2).forEach((opcion) => precargarRuta(opcion.href))} onFocus={() => grupo.opciones.slice(0, 2).forEach((opcion) => precargarRuta(opcion.href))} onClick={() => alternarModulo(grupo.id)} aria-expanded={expandido} aria-controls={`nav-submenu-${grupo.id}`} title={grupo.etiqueta}>
           <span className="nav-enlace-icono"><Icono nombre={grupo.id} /></span>
           <span className="nav-modulo-texto">{grupo.etiqueta}</span>
           <span className="nav-modulo-cantidad">{grupo.opciones.length}</span>
@@ -462,7 +497,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
 
       <nav id="menu-principal" className={`navbar ${contraido ? "nav-contraido" : ""} ${movilAbierto ? "nav-movil-abierto" : ""}`} aria-label="Navegación principal">
         <div className="nav-encabezado">
-          <Link href="/dashboard" className="brand" aria-label="Ir al panel principal">
+          <Link href="/dashboard" className="brand" aria-label="Ir al panel principal" onPointerEnter={() => precargarRuta("/dashboard")} onFocus={() => precargarRuta("/dashboard")} onClick={() => iniciarNavegacion("/dashboard")}>
             <BomanLogo className="brand-logo" priority />
             <span className="brand-sistema">GESTIÓN EMPRESARIAL</span>
           </Link>
@@ -477,14 +512,14 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
         </div>
 
         <div className="nav-scroll">
-          <Link href="/dashboard" className={`nav-enlace nav-inicio ${rutaActiva("/dashboard") ? "activo" : ""}`} title="Panel principal">
+          <Link href="/dashboard" className={`nav-enlace nav-inicio ${rutaActiva("/dashboard") ? "activo" : ""}`} title="Panel principal" onPointerEnter={() => precargarRuta("/dashboard")} onFocus={() => precargarRuta("/dashboard")} onClick={() => iniciarNavegacion("/dashboard")}>
             <span className="nav-enlace-icono"><Icono nombre="inicio" /></span>
             <span className="nav-enlace-texto"><strong>Panel principal</strong><small>Resumen de tu operación</small></span>
           </Link>
 
           {!contraido && accesosRapidos.length > 0 && <section className="nav-rapidos" aria-label="Accesos rápidos">
             <span className="nav-seccion-titulo">Accesos rápidos</span>
-            <div>{accesosRapidos.map((opcion) => <Link href={opcion.href} className={rutaActiva(opcion.href) ? "activo" : ""} key={`rapido-${opcion.href}`} title={opcion.descripcion}><span>↗</span>{opcion.etiqueta}</Link>)}</div>
+            <div>{accesosRapidos.map((opcion) => <Link href={opcion.href} className={rutaActiva(opcion.href) ? "activo" : ""} key={`rapido-${opcion.href}`} title={opcion.descripcion} onPointerEnter={() => precargarRuta(opcion.href)} onFocus={() => precargarRuta(opcion.href)} onClick={() => iniciarNavegacion(opcion.href)}><span>↗</span>{opcion.etiqueta}</Link>)}</div>
           </section>}
 
           {!contraido && <div className="nav-seccion-titulo nav-seccion-divisor">Principal</div>}
@@ -509,6 +544,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       </nav>
 
       {movilAbierto && <button type="button" className="nav-overlay" onClick={() => setMovilAbierto(false)} aria-label="Cerrar navegación" />}
+      {navegandoA && <div className="nav-progreso" role="status" aria-live="polite"><span />Abriendo módulo…</div>}
     </>
   );
 }
