@@ -121,7 +121,11 @@ export const aSnake = (k: string) => k.replace(/([a-z0-9])([A-Z])/g, "$1_$2").to
 export function aplanarSpec(o: Record<string, unknown>, prefijo = ""): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(o)) {
-    if (!prefijo && (k === "observacion" || k === "indicaciones")) continue;
+    // "variante" es metadata (mockup/calidad/otro) que solo etiqueta el título de
+    // la sección — igual que _etqVar_ en Codigo.gs, nunca se imprime como fila.
+    // Se guarda tal cual en el spec (bomansportProduccion.ts lo deja sin recortar),
+    // así que sin este skip aparecía como "Variante mockup / calidad / otro".
+    if (!prefijo && (k === "observacion" || k === "indicaciones" || k === "variante")) continue;
     if (v === null || v === undefined) continue;
     const id = prefijo ? `${prefijo}_${aSnake(k)}` : aSnake(k);
     if (Array.isArray(v)) {

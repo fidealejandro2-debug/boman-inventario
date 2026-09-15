@@ -108,6 +108,24 @@ test("los valores no se apelmazan en un solo campo", () => {
   assert.equal(Object.keys(campos).length, 4);
 });
 
+test("'variante' (mockup/calidad/otro) es metadata del título, no una fila de la ficha", () => {
+  // En Codigo.gs, _etqVar_ usa spec.variante SOLO para el título (" — Mockup 2 ·
+  // Profesional"); nunca se imprime como dato. bomansportProduccion.ts guarda el
+  // spec migrado tal cual, con ese "variante" adentro, así que sin este skip
+  // aparecía como "Variante mockup / Variante calidad / Variante otro" en la ficha.
+  const campos = aplanarSpec({
+    corte: "Recta",
+    variante: { mockup: "Mockup 2", calidad: "Profesional", otro: "nota" },
+  });
+  assert.equal(campos.corte, "Recta");
+  assert.equal(campos.variante_mockup, undefined);
+  assert.equal(campos.variante_calidad, undefined);
+  assert.equal(campos.variante_otro, undefined);
+  // El formato legado {tipo,valor} usa la misma clave "variante": igual se ignora.
+  const legado = aplanarSpec({ variante: { tipo: "mockup", valor: "Mockup 1" } });
+  assert.deepEqual(legado, {});
+});
+
 test("leerSpec entiende la forma nueva, la vieja y la anidada", () => {
   assert.equal(leerSpec({ campos: { basta: "Normal" }, observacion: "ojo" }).campos.basta, "Normal");
   assert.equal(leerSpec({ indicaciones: "texto viejo" }).observacion, "texto viejo");
