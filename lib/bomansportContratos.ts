@@ -32,6 +32,11 @@ export type ContratoTipado = {
   tipo_contrato: string;
   reposicion: boolean;
   email_ingresante: string | null;
+  nombre_tecnica: string;
+  numero_tecnica: string;
+  sellos_tpu: string;
+  ubicacion_tpu: string;
+  bordado: string;
   datos: ContratoCrudo;
   fila_hash: string;
 };
@@ -111,6 +116,14 @@ export function mapearContrato(crudo: ContratoCrudo): ResultadoMapeo {
       tipo_contrato: texto(crudo.tipoContrato) || "Normal",
       reposicion: texto(crudo.reposicion).toLowerCase() === "sí" || texto(crudo.reposicion).toLowerCase() === "si",
       email_ingresante: texto(crudo.emailIngresante) || null,
+      // r[26]/r[27]/r[39]/r[40]/r[41] en Codigo.gs. Sin este mapeo, el brief
+      // de todo contrato migrado mostraba "—" en Técnica nombre/número y
+      // Sellos TPU aunque el vendedor sí los hubiera llenado en su momento.
+      nombre_tecnica: texto(crudo.nombreTec),
+      numero_tecnica: texto(crudo.numeroTec),
+      sellos_tpu: texto(crudo.sellosTPU),
+      ubicacion_tpu: texto(crudo.ubicTPU),
+      bordado: texto(crudo.bordado),
       datos: crudo,
       fila_hash: hashContrato(crudo),
     };

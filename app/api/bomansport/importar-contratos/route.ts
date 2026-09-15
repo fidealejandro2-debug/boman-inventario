@@ -62,7 +62,10 @@ const TIPOS_CONTRATO_V79 = ["Normal", "Equipo Profesional", "Mercadería", "Emer
  * direccion, colores_generales...) se queda en el default de la columna:
  * mapearlos exigiria conocer el encabezado real exacto de ~20 columnas mas
  * de la hoja, y ninguna pantalla construida hasta ahora (v95/v96/v98) los
- * necesita. */
+ * necesita.
+ * nombre_tecnica/numero_tecnica/sellos_tpu/ubicacion_tpu/bordado SÍ se
+ * mapean: el brief (BloqueSpecs, "Resumen técnico") ya los imprime, y sin
+ * esto salían siempre en "—" para cualquier contrato migrado de BomanSport. */
 function filaContratoV79(c: ContratoTipado, avisos: string[]) {
   const presupuesto = Math.max(0, c.presupuesto_usd ?? 0);
   const abonoBruto = Math.max(0, c.abono_usd ?? 0);
@@ -98,6 +101,11 @@ function filaContratoV79(c: ContratoTipado, avisos: string[]) {
     prioridad: c.prioridad === "Urgente" ? "Urgente" : "Normal",
     tipo_contrato: TIPOS_CONTRATO_V79.includes(c.tipo_contrato) ? c.tipo_contrato : "Normal",
     reposicion: c.reposicion,
+    nombre_tecnica: c.nombre_tecnica || null,
+    numero_tecnica: c.numero_tecnica || null,
+    sellos_tpu: c.sellos_tpu || null,
+    ubicacion_tpu: c.ubicacion_tpu || null,
+    bordado: c.bordado || null,
     adicionales: adicionalesDesdeDatosContrato(c.datos),
     total_prendas: Math.max(0, c.total_prendas),
     estado: c.estado || "Ingresado",
