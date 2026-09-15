@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fecha } from "@/lib/utils";
 import { confirmarDialogo } from "@/components/Dialogo";
 
-type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "produccion" | "nomina" | "vendedor" | "franquiciado" | "vendedor_franquicia";
+type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "supervisor" | "tienda" | "control" | "produccion" | "nomina" | "vendedor" | "franquiciado" | "vendedor_franquicia";
 type Almacen = { id: string; nombre: string; tipo: string; activo: boolean };
 type Usuario = {
   id: string;
@@ -33,13 +33,14 @@ const ROLES: { valor: Rol; etiqueta: string }[] = [
   { valor: "control", etiqueta: "Control" },
   { valor: "produccion", etiqueta: "Producción" },
   { valor: "gerencia", etiqueta: "Gerencia" },
+  { valor: "supervisor", etiqueta: "Supervisor" },
   { valor: "nomina", etiqueta: "Nómina" },
   { valor: "vendedor", etiqueta: "Vendedor" },
   { valor: "franquiciado", etiqueta: "Franquiciado" },
   { valor: "vendedor_franquicia", etiqueta: "Vendedor de franquicia" },
 ];
 
-const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "nomina"];
+const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "supervisor", "nomina"];
 const ROLES_UN_SOLO_ALMACEN: Rol[] = ["vendedor", "franquiciado", "vendedor_franquicia"];
 
 const NUEVO = {

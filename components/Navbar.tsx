@@ -117,6 +117,7 @@ const ETIQUETA_GRUPO: Record<GrupoId, string> = {
 const PRINCIPALES_POR_ROL: Record<string, GrupoId[]> = {
   admin: ["gerencia", "ventas", "produccion", "inventario", "reportes"],
   gerencia: ["gerencia", "reportes", "finanzas", "produccion", "inventario"],
+  supervisor: ["gerencia", "franquicias", "reportes", "inventario"],
   control: ["inventario", "produccion", "ventas", "reportes"],
   produccion: ["produccion", "notificaciones"],
   bodega: ["inventario", "compras", "produccion", "notificaciones"],
@@ -131,6 +132,7 @@ const PRINCIPALES_POR_ROL: Record<string, GrupoId[]> = {
 const RAPIDOS_POR_ROL: Record<string, string[]> = {
   admin: ["/gerencia", "/ventas/contratos", "/produccion/dashboard", "/reportes/comercial"],
   gerencia: ["/gerencia", "/reportes/comercial", "/cuentas-por-pagar", "/produccion/dashboard"],
+  supervisor: ["/supervision", "/franquicias/consolidado", "/reportes", "/inventario"],
   control: ["/control", "/conteos", "/produccion/calidad", "/reportes/comercial"],
   produccion: ["/tablero", "/produccion/cronograma", "/produccion/calidad", "/produccion/dashboard"],
   bodega: ["/inventario", "/operaciones", "/movimientos", "/conteos"],
@@ -266,6 +268,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeConfigurarStock = perfil.rol === "admin" || perfil.rol === "control";
   const puedeVerControl = tienePermiso(perfil, "control.acceder");
   const puedeVerGerencia = tienePermiso(perfil, "gerencia.acceder");
+  const puedeVerSupervision = tienePermiso(perfil, "supervision.acceder");
   const puedeVerVentas = tienePermiso(perfil, "ventas.acceder");
   const puedeVerCompras = tienePermiso(perfil, "compras.acceder");
   const puedeVerTesoreria = tienePermiso(perfil, "tesoreria.acceder");
@@ -302,6 +305,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     bodega: "Bodega",
     logistica: "Logística",
     gerencia: "Gerencia",
+    supervisor: "Supervisor",
     tienda: "Tienda",
     control: "Control",
     produccion: "Producción",
@@ -314,6 +318,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const modulosBase: ModuloMenu[] = [
     { id: "gerencia", etiqueta: "Gerencia", opciones: [
       { href: "/gerencia", etiqueta: "Panel ejecutivo", descripcion: "Indicadores, alertas, tendencias y todos los reportes", visible: puedeVerGerencia },
+      { href: "/supervision", etiqueta: "Supervisión de locales", descripcion: "Cierres, ingresos, egresos, diferencias y depósitos por tienda", visible: puedeVerSupervision },
     ] },
     { id: "notificaciones", etiqueta: "Notificaciones", opciones: [
       { href: "/notificaciones", etiqueta: "Centro de avisos", descripcion: "Pendientes, vencimientos y comunicados", visible: puedeVerNotificaciones },

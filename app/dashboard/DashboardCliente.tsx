@@ -88,6 +88,7 @@ const RESUMEN_VACIO: ResumenPanel = {
 
 const ETIQUETAS_ROL: Record<string, string> = {
   admin: "Administración", bodega: "Bodega", logistica: "Logística", gerencia: "Gerencia",
+  supervisor: "Supervisor",
   tienda: "Tienda", control: "Control", nomina: "Nómina", franquiciado: "Franquiciado",
   produccion: "Producción",
   vendedor_franquicia: "Vendedor de franquicia",
@@ -232,6 +233,12 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
     const totalFranquicia = numero(resumen.franquicia.alertas) + numero(resumen.franquicia.cierres_pendientes_hoy);
 
     return [
+      {
+        id: "supervision", titulo: "Supervisión", subtitulo: "Control diario de locales",
+        descripcion: "Revisa cierres, ingresos, egresos, diferencias de efectivo y depósitos de cada tienda.",
+        href: "/supervision", icono: "SUP", tono: "oscuro", visible: puede("supervision.acceder"),
+        pendiente: 0, pendienteTexto: "", enlaces: [{ href: "/supervision", etiqueta: "Abrir panel de supervisión" }],
+      },
       {
         id: "gerencia", titulo: "Gerencia", subtitulo: "Centro de decisiones",
         descripcion: "Reúne ventas, cartera, producción, calidad, inventario, caja y todos los reportes ejecutivos.",
@@ -478,6 +485,7 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
   const ordenPorRol: Record<string, string[]> = {
     admin: ["contratos", "produccion", "inventario", "tesoreria"],
     gerencia: ["reportes", "contratos", "produccion", "tesoreria"],
+    supervisor: ["supervision", "franquicia", "reportes", "inventario"],
     bodega: ["inventario", "operaciones", "compras", "produccion"],
     logistica: ["operaciones", "inventario", "contratos", "compras"],
     control: ["operaciones", "inventario", "compras", "produccion"],

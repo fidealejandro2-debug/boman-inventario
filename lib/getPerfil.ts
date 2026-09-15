@@ -36,6 +36,11 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "nomina.acceder", "notificaciones.acceder", "notificaciones.publicar",
     "mantenimiento.acceder", "franquicia.consolidado", "tesoreria.acceder",
   ],
+  supervisor: [
+    "supervision.acceder", "reportes.acceder", "inventario.acceder",
+    "franquicia.consolidado", "franquicia.comprobantes.auditar_todo",
+    "notificaciones.acceder",
+  ],
   tienda: [
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "notificaciones.acceder",

@@ -137,5 +137,11 @@ from(values
  ,(151,'v151_fotos_productos_tienda_propia.sql',
    to_regprocedure('public.puede_editar_fotos_producto_v89(uuid)')is not null
    and exists(select 1 from public.schema_migrations_boman where id='v151'))
+ ,(152,'v152_paso1_rol_supervisor.sql',
+   exists(select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid
+     where t.typname='rol_usuario' and e.enumlabel='supervisor'))
+ ,(152,'v152_paso2_panel_supervision.sql',
+   to_regprocedure('public.panel_supervision_v152(date,date,uuid)')is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v152'))
 )as v(orden,archivo,existe)
 order by v.orden;

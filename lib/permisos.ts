@@ -3,6 +3,7 @@ export type RolUsuario =
   | "bodega"
   | "logistica"
   | "gerencia"
+  | "supervisor"
   | "tienda"
   | "control"
   | "produccion"
@@ -13,6 +14,7 @@ export type RolUsuario =
 
 export type PermisoCodigo =
   | "gerencia.acceder"
+  | "supervision.acceder"
   | "inventario.acceder"
   | "operaciones.acceder"
   | "conteos.acceder"
@@ -69,6 +71,7 @@ export type PermisoCodigo =
 
 export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "gerencia.acceder",
+  "supervision.acceder",
   "inventario.acceder",
   "operaciones.acceder",
   "conteos.acceder",

@@ -23,6 +23,7 @@ const ETIQUETAS_ROL: Record<string, string> = {
   bodega: "Bodega",
   logistica: "Logística",
   gerencia: "Gerencia",
+  supervisor: "Supervisor",
   tienda: "Tienda",
   control: "Control",
   produccion: "Producción",

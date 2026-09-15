@@ -20,6 +20,7 @@ const ETIQUETA_NIVEL: Record<Nivel, string> = {
 const ROLES = [
   ["", "Todos los roles"], ["bodega", "Bodega"], ["logistica", "Logística"],
   ["gerencia", "Gerencia"], ["tienda", "Tienda"], ["control", "Control"],
+  ["supervisor", "Supervisor"],
   ["produccion", "Producción"],
   ["nomina", "Nómina"], ["franquiciado", "Franquiciado"],
   ["vendedor", "Vendedor"],
