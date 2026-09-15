@@ -157,5 +157,8 @@ from(values
  ,(156,'v156_ranking_locales.sql',
    to_regprocedure('public.ranking_locales_v156(date,date)') is not null
    and exists(select 1 from public.schema_migrations_boman where id='v156'))
+ ,(157,'v157_fix_grants_venta_rapida.sql',
+   has_table_privilege('authenticated','public.venta_rapida_v148','select')
+   and exists(select 1 from public.schema_migrations_boman where id='v157'))
 )as v(orden,archivo,existe)
 order by v.orden;
