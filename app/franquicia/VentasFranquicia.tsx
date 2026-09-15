@@ -10,6 +10,9 @@ import { dinero, hoyLocalISO, MEDIOS_PAGO, mensajeError } from "./lib";
 import { pedirMotivoDialogo, pedirTextoDialogo } from "@/components/Dialogo";
 import DevolucionVentaFranquicia from "./DevolucionVentaFranquicia";
 import { diferenciaPagos as calcularDiferenciaPagos } from "@/lib/integridadOperativa";
+import ComprobanteDeposito, { type ArchivoComprobante } from "./ComprobanteDeposito";
+
+const BUCKET_COMPROBANTES_VENTA = "ventas-comprobantes";
 
 type Disponible = {
   producto_id: string;
@@ -44,6 +47,7 @@ type PagoVenta = {
   medio_pago: string;
   monto: number;
   referencia: string | null;
+  comprobante_id?: string | null;
 };
 
 type PagoMixto = Record<
@@ -113,6 +117,10 @@ export default function VentasFranquicia({
     tarjeta: { monto: "", referencia: "" },
     credito: { monto: "", referencia: "" },
   });
+  // Solo transferencia exige comprobante (v149). Un único slot alcanza para
+  // el pago único; el mixto solo puede tener UNA línea de transferencia.
+  const [comprobante, setComprobante] = useState<ArchivoComprobante | null>(null);
+  const [comprobanteMixto, setComprobanteMixto] = useState<ArchivoComprobante | null>(null);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [vencimiento, setVencimiento] = useState("");
@@ -304,6 +312,9 @@ export default function VentasFranquicia({
   }
   if (pagos.some((p) => ["transferencia", "tarjeta"].includes(p.medio_pago) && !p.referencia?.trim())) problemas.push("Transferencia y tarjeta requieren número de referencia");
   if (pagos.some((p) => p.medio_pago === "credito") && (!clienteId || !vencimiento)) problemas.push("El crédito requiere cliente y fecha de vencimiento");
+  const tieneTransferencia = pagos.some((p) => p.medio_pago === "transferencia");
+  const comprobanteTransferencia = medioPago === "mixto" ? comprobanteMixto : comprobante;
+  if (tieneTransferencia && !comprobanteTransferencia) problemas.push("Adjunta el comprobante de la transferencia");
 
   async function registrar() {
     if (!lineas.length) return setError("Agrega al menos un producto o servicio.");
@@ -313,26 +324,60 @@ export default function VentasFranquicia({
 
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("registrar_venta_franquicia_v143", {
-      p_fecha: fechaVenta,
-      p_items: lineas.map((l) => ({
-        tipo: l.tipo,
-        producto_id: l.producto_id,
-        servicio_id: l.servicio_id,
-        cantidad: l.cantidad,
-        precio_unitario: l.precio_unitario,
-        descuento: l.descuento,
-      })),
-      p_pagos: pagos,
-      p_descuento: Number(descuentoGeneral || 0),
-      p_referencia: medioPago === "mixto" ? null : referencia || null,
-      p_nota: nota || null,
-      p_cliente_id: clienteId || null,
-      p_fecha_vencimiento: vencimiento || null,
-      p_idempotency_key: nuevaClaveIdempotencia(),
-    });
+    try {
+      let comprobanteId: string | null = null;
+      const archivoTransferencia = medioPago === "mixto" ? comprobanteMixto : comprobante;
+      if (tieneTransferencia && archivoTransferencia) {
+        const { data: preparado, error: errorPreparacion } = await supabase.rpc(
+          "preparar_comprobante_venta_v148",
+          {
+            p_almacen_id: franquicia.almacen_id,
+            p_nombre_archivo: archivoTransferencia.file.name,
+            p_mime_type: archivoTransferencia.file.type,
+            p_tamano_bytes: archivoTransferencia.file.size,
+            p_idempotency_key: archivoTransferencia.id,
+          }
+        );
+        if (errorPreparacion) throw errorPreparacion;
+        const path = (preparado as { path: string }).path;
+        const { error: errorSubida } = await supabase.storage
+          .from(BUCKET_COMPROBANTES_VENTA)
+          .upload(path, archivoTransferencia.file, {
+            contentType: archivoTransferencia.file.type,
+            upsert: false,
+          });
+        if (errorSubida && !/already exists|duplicate/i.test(errorSubida.message)) throw errorSubida;
+        comprobanteId = archivoTransferencia.id;
+      }
+
+      const pagosConComprobante = pagos.map((p) =>
+        p.medio_pago === "transferencia" ? { ...p, comprobante_id: comprobanteId } : p
+      );
+
+      const { error } = await supabase.rpc("registrar_venta_franquicia_v143", {
+        p_fecha: fechaVenta,
+        p_items: lineas.map((l) => ({
+          tipo: l.tipo,
+          producto_id: l.producto_id,
+          servicio_id: l.servicio_id,
+          cantidad: l.cantidad,
+          precio_unitario: l.precio_unitario,
+          descuento: l.descuento,
+        })),
+        p_pagos: pagosConComprobante,
+        p_descuento: Number(descuentoGeneral || 0),
+        p_referencia: medioPago === "mixto" ? null : referencia || null,
+        p_nota: nota || null,
+        p_cliente_id: clienteId || null,
+        p_fecha_vencimiento: vencimiento || null,
+        p_idempotency_key: nuevaClaveIdempotencia(),
+      });
+      if (error) throw error;
+    } catch (error) {
+      setGuardando(false);
+      return setError(mensajeError(error instanceof Error ? error : { message: String(error) }));
+    }
     setGuardando(false);
-    if (error) return setError(mensajeError(error));
 
     confirmar("Venta registrada", `Por ${dinero(total)}. El stock se descontó únicamente en las líneas de producto.`);
     setLineas([]);
@@ -344,6 +389,8 @@ export default function VentasFranquicia({
       tarjeta: { monto: "", referencia: "" },
       credito: { monto: "", referencia: "" },
     });
+    setComprobante(null);
+    setComprobanteMixto(null);
     setNota("");
     setClienteId(""); setVencimiento("");
     cargar();
@@ -620,6 +667,15 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                 />
               </label>
               )}
+              {medioPago === "transferencia" && (
+                <div className="ancho-total">
+                  <ComprobanteDeposito
+                    archivo={comprobante}
+                    onChange={setComprobante}
+                    titulo="Comprobante de la transferencia"
+                  />
+                </div>
+              )}
               {(medioPago === "credito" || (medioPago === "mixto" && Number(pagosMixtos.credito.monto)>0)) && <>
                 <label>Cliente<select value={clienteId} onChange={e=>setClienteId(e.target.value)}><option value="">Selecciona…</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}{c.identificacion?` · ${c.identificacion}`:""}</option>)}</select><button type="button" className="btn-mini secondary" onClick={crearCliente}>+ Nuevo cliente</button></label>
                 <label>Vencimiento<input type="date" min={fechaVenta} value={vencimiento} onChange={e=>setVencimiento(e.target.value)}/></label>
@@ -665,6 +721,13 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                             }
                           />
                         </label>
+                      )}
+                      {medio === "transferencia" && Number(pagosMixtos.transferencia.monto) > 0 && (
+                        <ComprobanteDeposito
+                          archivo={comprobanteMixto}
+                          onChange={setComprobanteMixto}
+                          titulo="Comprobante de la transferencia"
+                        />
                       )}
                     </div>
                   ))}

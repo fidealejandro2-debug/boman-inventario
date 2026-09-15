@@ -3,9 +3,9 @@ export const dynamic = "force-dynamic";
 import { getPerfilActual, tienePermiso } from "@/lib/getPerfil";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import CajaTiendaCliente from "./CajaTiendaCliente";
+import TiendaCliente from "./TiendaCliente";
 
-export default async function CajaTiendaPage({
+export default async function TiendaPage({
   searchParams,
 }: {
   searchParams?: { local?: string };
@@ -19,7 +19,7 @@ export default async function CajaTiendaPage({
     <>
       <Navbar perfil={perfil} />
       <div className="container">
-        <CajaTiendaCliente rol={perfil.rol} tiendaInicialId={searchParams?.local} />
+        <TiendaCliente rol={perfil.rol} tiendaInicialId={searchParams?.local} />
       </div>
     </>
   );

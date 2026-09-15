@@ -123,6 +123,17 @@ from(values
  ,(147,'v147_paso2_contratos_vendedor_caja.sql',
    to_regprocedure('public.registrar_abono_contrato_v147(uuid,date,numeric,text,text,text,text,uuid)')is not null
    and exists(select 1 from public.schema_migrations_boman where id='v147'))
+ ,(148,'v148_venta_rapida_tienda.sql',
+   to_regclass('public.venta_rapida_v148') is not null
+   and to_regprocedure('public.registrar_venta_rapida_v148(date,text,jsonb,jsonb,numeric,text,uuid,uuid)') is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v148'))
+ ,(149,'v149_comprobante_transferencia_franquicia.sql',
+   exists(select 1 from information_schema.columns where table_schema='public'
+     and table_name='venta_franquicia_pagos' and column_name='comprobante_storage_path')
+   and exists(select 1 from public.schema_migrations_boman where id='v149'))
+ ,(150,'v150_supervisor_comprobantes.sql',
+   to_regclass('public.vista_comprobantes_venta_pendientes_v150') is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v150'))
  ,(151,'v151_fotos_productos_tienda_propia.sql',
    to_regprocedure('public.puede_editar_fotos_producto_v89(uuid)')is not null
    and exists(select 1 from public.schema_migrations_boman where id='v151'))

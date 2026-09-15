@@ -57,6 +57,7 @@ export type PermisoCodigo =
   | "franquicia.turnos"
   | "franquicia.cobros"
   | "franquicia.devoluciones"
+  | "franquicia.comprobantes.auditar_todo"
   | "notificaciones.acceder"
   | "notificaciones.publicar"
   | "mantenimiento.acceder"
@@ -112,6 +113,7 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "franquicia.turnos",
   "franquicia.cobros",
   "franquicia.devoluciones",
+  "franquicia.comprobantes.auditar_todo",
   "notificaciones.acceder",
   "notificaciones.publicar",
   "mantenimiento.acceder",

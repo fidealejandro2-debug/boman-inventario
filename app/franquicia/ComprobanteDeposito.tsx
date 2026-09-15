@@ -74,10 +74,14 @@ export default function ComprobanteDeposito({
   archivo,
   onChange,
   disabled = false,
+  titulo = "Comprobante del depósito",
 }: {
   archivo: ArchivoComprobante | null;
   onChange: (archivo: ArchivoComprobante | null) => void;
   disabled?: boolean;
+  /** El picker es genérico (foto/PDF, optimiza, vista previa); solo cambia
+   * el rótulo según quién lo use (depósito de caja, pago por transferencia…). */
+  titulo?: string;
 }) {
   const camaraRef = useRef<HTMLInputElement>(null);
   const archivoRef = useRef<HTMLInputElement>(null);
@@ -119,7 +123,7 @@ export default function ComprobanteDeposito({
     <div className={estilos.contenedor}>
       <div className={estilos.cabecera}>
         <div>
-          <strong>Comprobante del depósito</strong>
+          <strong>{titulo}</strong>
           <small>Foto o PDF · se guarda de forma privada · máximo 8 MB</small>
         </div>
         <div className={estilos.acciones}>

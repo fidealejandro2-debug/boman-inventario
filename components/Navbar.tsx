@@ -287,6 +287,12 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeVerCajaTienda = tienePermiso(perfil, "franquicia.caja")
     && ["admin", "control", "gerencia", "tienda"].includes(perfil.rol);
   const puedeVerConsolidadoFranquicias = tienePermiso(perfil, "franquicia.consolidado") && modoBoman;
+  // Admin/control ya ven todo por su rol (RLS de las tablas base); este
+  // permiso es para delegar la revisión a una persona puntual sin volverla
+  // admin/control (v150). Sin modoBoman: comprobantes de tienda propia
+  // también existen fuera de la marca blanca de Boman Sport.
+  const puedeVerComprobantesVenta = tienePermiso(perfil, "franquicia.comprobantes.auditar_todo")
+    || ["admin", "control"].includes(perfil.rol);
   const puedeVerNotificaciones = tienePermiso(perfil, "notificaciones.acceder");
   const puedeVerMantenimiento = tienePermiso(perfil, "mantenimiento.acceder");
   const puedeVerImportaciones = tienePermiso(perfil, "importaciones.acceder");
@@ -354,6 +360,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     { id: "franquicias", etiqueta: "Franquicias", opciones: [
       { href: "/franquicia", etiqueta: "Operación del local", descripcion: "Ventas, caja e inventario", visible: puedeVerFranquicia },
       { href: "/franquicias/consolidado", etiqueta: "Panel consolidado", descripcion: "Comparativo de todos los locales", visible: puedeVerConsolidadoFranquicias },
+      { href: "/franquicia/comprobantes", etiqueta: "Comprobantes de venta", descripcion: "Transferencias pendientes de revisar, de todas las tiendas", visible: puedeVerComprobantesVenta },
     ] },
     { id: "mantenimiento", etiqueta: "Mantenimiento", opciones: [
       { href: "/mantenimiento", etiqueta: "Maquinaria y activos", descripcion: "Preventivos, órdenes y costos", visible: puedeVerMantenimiento },
