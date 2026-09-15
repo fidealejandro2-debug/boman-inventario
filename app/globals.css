@@ -2569,6 +2569,9 @@ button.btn-mini {
 .calidad-descuento { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--badge-naranja-fg) 40%, transparent); border-radius: 9px; background: var(--badge-naranja-bg); color: var(--badge-naranja-fg); }
 .calidad-descuento span { font-size: 12px; }
 .calidad-descuento b { color: var(--badge-naranja-fg); font-size: 11px; }
+.calidad-responsables-resumen { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; }
+.calidad-responsables-resumen span { display: inline-flex; align-items: center; gap: 7px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--badge-naranja-fg) 25%, transparent); border-radius: 999px; background: var(--superficie); }
+.calidad-responsables-resumen em { font-size: 11px; font-style: normal; font-weight: 800; }
 .calidad-acciones { justify-content: flex-end; padding-top: 2px; }
 button.advertencia { background: #b45309; }
 button.advertencia:hover { background: #92400e; }
@@ -2581,6 +2584,20 @@ button.advertencia:hover { background: #92400e; }
 .check-line span { display: grid; gap: 2px; }
 .check-line strong { color: var(--azul-fuerte); }
 .check-line small { color: var(--texto-secundario); font-weight: 500; line-height: 1.4; }
+.calidad-selector-empleados { display: grid; gap: 8px; }
+.calidad-selector-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--texto); font-size: 12px; }
+.calidad-selector-cabecera span { color: var(--azul-fuerte); font-weight: 700; }
+.calidad-empleados-lista { display: grid; max-height: 190px; overflow: auto; border: 1px solid var(--borde); border-radius: 9px; background: var(--superficie); }
+.calidad-empleados-lista label { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-bottom: 1px solid var(--borde); cursor: pointer; }
+.calidad-empleados-lista label:last-child { border-bottom: 0; }
+.calidad-empleados-lista label:hover, .calidad-empleados-lista label.seleccionado { background: var(--azul-suave); }
+.calidad-empleados-lista input { width: auto; }
+.calidad-empleados-lista label > span { display: grid; gap: 1px; }
+.calidad-empleados-lista small { color: var(--texto-secundario); font-size: 10px; }
+.calidad-reparto { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 10px; border: 1px solid var(--borde); border-radius: 9px; background: var(--superficie-suave); }
+.calidad-reparto > strong { grid-column: 1 / -1; font-size: 12px; }
+.calidad-reparto span { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 7px; background: var(--superficie); font-size: 11px; }
+.calidad-reparto em { color: var(--azul-fuerte); font-style: normal; font-weight: 800; }
 
 @media (max-width: 1150px) {
   .calidad-kpis { grid-template-columns: repeat(3, 1fr); }
@@ -2598,6 +2615,7 @@ button.advertencia:hover { background: #92400e; }
   .calidad-datos { grid-template-columns: 1fr; }
   .calidad-descuento { grid-template-columns: 1fr; }
   .calidad-modal .grid-form > .ancho-doble { grid-column: auto; }
+  .calidad-reparto { grid-template-columns: 1fr; }
 }
 
 /* Miniaturas y previsualizacion de productos (v88). El visor vive en un

@@ -108,6 +108,10 @@ from(values
    and exists (select 1 from public.schema_migrations_boman where id='v142')),
  (143,'v143_servicios_caja_bomansport.sql',
    to_regprocedure('public.registrar_venta_franquicia_v143(date,jsonb,jsonb,numeric,text,text,uuid,date,uuid)') is not null
-   and exists (select 1 from public.schema_migrations_boman where id='v143'))
+   and exists (select 1 from public.schema_migrations_boman where id='v143')),
+ (144,'v144_descuento_falla_varias_personas.sql',
+   to_regclass('public.novedad_calidad_responsables_v144') is not null
+   and to_regprocedure('public.generar_novedades_laborales_calidad_v144(uuid,uuid,text,text,uuid)') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v144'))
 )as v(orden,archivo,existe)
 order by v.orden;
