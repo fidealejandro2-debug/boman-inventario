@@ -15,7 +15,11 @@ export default async function SeguimientoVentasPage() {
     <>
       <Navbar perfil={perfil} />
       <main className="container">
-        <PanelVendedoresCliente />
+        <PanelVendedoresCliente
+          esVendedor={perfil.rol === "vendedor"}
+          puedeRegistrarAbonos={tienePermiso(perfil, "contratos.abonos.registrar")}
+          puedeEntregar={tienePermiso(perfil, "contratos.entregar")}
+        />
       </main>
     </>
   );

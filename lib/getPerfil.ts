@@ -60,6 +60,10 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "produccion.calidad.descuento",
     "notificaciones.acceder", "importaciones.acceder",
   ],
+  vendedor: [
+    "contratos.acceder", "contratos.editar", "contratos.abonos.registrar",
+    "clientes.acceder", "notificaciones.acceder",
+  ],
   franquiciado: [
     "inventario.acceder", "operaciones.acceder", "franquicia.acceder",
     "franquicia.ventas", "franquicia.caja", "franquicia.inventario",

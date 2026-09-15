@@ -118,5 +118,10 @@ from(values
  (146,'v146_panel_gerencia.sql',
    exists(select 1 from public.permisos_sistema where codigo='gerencia.acceder' and activo)
    and exists (select 1 from public.schema_migrations_boman where id='v146'))
+ ,(147,'v147_paso1_rol_vendedor.sql',
+   exists(select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='rol_usuario' and e.enumlabel='vendedor'))
+ ,(147,'v147_paso2_contratos_vendedor_caja.sql',
+   to_regprocedure('public.registrar_abono_contrato_v147(uuid,date,numeric,text,text,text,text,uuid)')is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v147'))
 )as v(orden,archivo,existe)
 order by v.orden;

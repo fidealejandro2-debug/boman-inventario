@@ -11,3 +11,5 @@
    pantalla del panel -KPIs, filtros y la tabla entera- antes del documento,
    porque el modal no es un portal: vive dentro del mismo <main>. */
 @media print{.noPrint{display:none!important}.modal{position:static;inset:auto;overflow:visible;padding:0;background:#fff;backdrop-filter:none}.modalCuerpo{max-width:none;margin:0}:global(body):has(.modal) :global(main)>*:not(.modal){display:none!important}}
+.pagoModal{max-width:680px;margin:7vh auto;padding:22px}.pagoModal header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.pagoModal h2{margin:4px 0}.pagoModal p{margin:0;color:var(--texto-suave)}.pagoGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px 0}.pagoGrid>div:last-child{grid-column:1/-1}.pagoGrid small{display:block;margin-top:5px;color:var(--texto-suave)}.pagoModal footer{display:flex;justify-content:flex-end}
+@media(max-width:600px){.pagoGrid{grid-template-columns:1fr}.pagoGrid>div:last-child{grid-column:auto}.pagoModal{margin:3vh auto;padding:16px}}

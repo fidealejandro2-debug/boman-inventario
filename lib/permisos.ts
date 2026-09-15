@@ -7,6 +7,7 @@ export type RolUsuario =
   | "control"
   | "produccion"
   | "nomina"
+  | "vendedor"
   | "franquiciado"
   | "vendedor_franquicia";
 
@@ -31,6 +32,7 @@ export type PermisoCodigo =
   | "contratos.marcar_etapa"
   | "contratos.finanzas.ver"
   | "contratos.finanzas.editar"
+  | "contratos.abonos.registrar"
   | "contratos.entregar"
   | "contratos.revertir_entrega"
   | "clientes.acceder"
@@ -85,6 +87,7 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "contratos.marcar_etapa",
   "contratos.finanzas.ver",
   "contratos.finanzas.editar",
+  "contratos.abonos.registrar",
   "contratos.entregar",
   "contratos.revertir_entrega",
   "clientes.acceder",

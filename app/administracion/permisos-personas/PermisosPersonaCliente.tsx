@@ -27,6 +27,7 @@ const ETIQUETAS_ROL: Record<string, string> = {
   control: "Control",
   produccion: "Producción",
   nomina: "Nómina",
+  vendedor: "Vendedor",
   franquiciado: "Franquiciado",
   vendedor_franquicia: "Vendedor de franquicia",
 };

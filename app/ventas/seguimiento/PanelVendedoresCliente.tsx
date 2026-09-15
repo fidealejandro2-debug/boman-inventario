@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { confirmarDialogo, mostrarAvisoDialogo, pedirTextoDialogo } from "@/components/Dialogo";
+import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo, pedirTextoDialogo } from "@/components/Dialogo";
 import ImagenMockup from "@/components/ImagenMockup";
 import { createClient } from "@/lib/supabase/client";
 import ExpedienteContrato, { type Expediente } from "@/app/produccion/contratos/ExpedienteContrato";
@@ -74,7 +74,9 @@ function SelectorVendedores({ opciones, valor, cambiar }: { opciones: string[]; 
   </details>;
 }
 
-export default function PanelVendedoresCliente() {
+type Pago = { contrato: Fila; fecha: string; monto: string; medio: "efectivo" | "transferencia"; referencia: string; nota: string };
+
+export default function PanelVendedoresCliente({esVendedor,puedeRegistrarAbonos,puedeEntregar}:{esVendedor:boolean;puedeRegistrarAbonos:boolean;puedeEntregar:boolean}) {
   const supabase = useRef(createClient()).current;
   const inicial = useMemo<Filtros>(() => ({ vendedores: [], desde: isoLocal(), hasta: isoLocal(14), estado: "", prioridad: "", cliente: "" }), []);
   const [filtros, setFiltros] = useState<Filtros>(inicial);
@@ -84,6 +86,8 @@ export default function PanelVendedoresCliente() {
   const [cargando, setCargando] = useState(true);
   const [expediente, setExpediente] = useState<Expediente | null>(null);
   const [abriendo, setAbriendo] = useState<string | null>(null);
+  const [pago,setPago]=useState<Pago|null>(null);
+  const [guardandoPago,setGuardandoPago]=useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -151,6 +155,20 @@ export default function PanelVendedoresCliente() {
     setExpediente(data as Expediente);
   }
 
+  async function registrarPago(){
+    if(!pago)return;
+    const monto=Number(pago.monto);
+    if(!pago.fecha||!Number.isFinite(monto)||monto<=0||monto>pago.contrato.saldo)return mostrarAvisoDialogo("Revisa la fecha y escribe un monto entre $0,01 y el saldo pendiente.","Pago incompleto",true);
+    if(pago.medio==="transferencia"&&pago.referencia.trim().length<3)return mostrarAvisoDialogo("Escribe el número o referencia del comprobante de transferencia.","Falta la referencia",true);
+    const motivo=await pedirMotivoDialogo(`Registrarás ${DINERO.format(monto)} en ${pago.contrato.numero} con fecha real ${fecha(pago.fecha)}. La fecha de registro quedará guardada automáticamente.`,10,"Motivo del registro");
+    if(!motivo)return;
+    setGuardandoPago(true);
+    const {error}=await supabase.rpc("registrar_abono_contrato_v147",{p_contrato_id:pago.contrato.id,p_fecha:pago.fecha,p_monto:monto,p_medio_pago:pago.medio,p_referencia:pago.referencia.trim()||null,p_nota:pago.nota.trim()||null,p_motivo:motivo,p_idempotency_key:crypto.randomUUID()});
+    setGuardandoPago(false);
+    if(error)return mostrarAvisoDialogo(error.message,"No se pudo registrar el pago",true);
+    setPago(null);await cargar();await mostrarAvisoDialogo("El abono quedó aplicado al contrato y registrado en Caja con la fecha real del pago.","Pago registrado");
+  }
+
   const totalPaginas = Math.max(1, Math.ceil(datos.total / POR_PAGINA));
   return <>
     <div className={estilos.noPrint}>
@@ -160,7 +178,7 @@ export default function PanelVendedoresCliente() {
       </header>
 
       <section className={`card ${estilos.filtros}`}>
-        <div className="field"><label>Vendedores</label><SelectorVendedores opciones={datos.catalogos.vendedores} valor={filtros.vendedores} cambiar={(v) => setFiltros((x) => ({ ...x, vendedores: v }))} /></div>
+        {!esVendedor&&<div className="field"><label>Vendedores</label><SelectorVendedores opciones={datos.catalogos.vendedores} valor={filtros.vendedores} cambiar={(v) => setFiltros((x) => ({ ...x, vendedores: v }))} /></div>}
         <div className="field"><label>Entrega desde</label><input type="date" value={filtros.desde} onChange={(e) => setFiltros((x) => ({ ...x, desde: e.target.value }))} /></div>
         <div className="field"><label>Entrega hasta</label><input type="date" value={filtros.hasta} onChange={(e) => setFiltros((x) => ({ ...x, hasta: e.target.value }))} /></div>
         <div className="field"><label>Estado</label><select value={filtros.estado} onChange={(e) => setFiltros((x) => ({ ...x, estado: e.target.value }))}><option value="">Todos</option>{datos.catalogos.estados.map((x) => <option key={x}>{x}</option>)}</select></div>
@@ -200,7 +218,7 @@ export default function PanelVendedoresCliente() {
               <div className={estilos.prendas}>{fila.prendas.slice(0, 5).map((p, i) => <span key={`${p.prenda}-${p.calidad}-${i}`}><b>{p.cantidad}</b> {p.prenda}{p.calidad ? ` · ${p.calidad}` : ""}</span>)}{fila.prendas.length > 5 && <span>+{fila.prendas.length - 5} líneas</span>}{!fila.prendas.length && <span>{fila.total_prendas} prendas · sin desglose</span>}</div>
               <div className={estilos.finanzas}><div><span>Presupuesto</span><strong>{DINERO.format(fila.presupuesto)}</strong></div><div><span>Abono</span><strong>{DINERO.format(fila.abono)}</strong></div><div><span>Saldo</span><strong className={fila.saldo > 0 ? estilos.saldo : ""}>{DINERO.format(fila.saldo)}</strong></div></div>
               <div className={estilos.barra}><i style={{ width: `${avance}%` }} /></div>
-              <div className={estilos.pie}><span className="badge ok">{fila.estado}</span><button disabled={abriendo === fila.id} onClick={() => void abrirBrief(fila.id)}>{abriendo === fila.id ? "Abriendo…" : "Abrir brief"}</button>{fila.estado !== "Entregado" && <button className="secondary" disabled={entregando === fila.id} onClick={() => void marcarEntregado(fila)}>{entregando === fila.id ? "Entregando…" : "Marcar entregado"}</button>}</div>
+              <div className={estilos.pie}><span className="badge ok">{fila.estado}</span><button disabled={abriendo === fila.id} onClick={() => void abrirBrief(fila.id)}>{abriendo === fila.id ? "Abriendo…" : "Abrir brief"}</button>{puedeRegistrarAbonos&&fila.saldo>0&&<button onClick={()=>setPago({contrato:fila,fecha:isoLocal(),monto:"",medio:"transferencia",referencia:"",nota:""})}>Registrar abono</button>}{puedeEntregar&&fila.estado !== "Entregado" && <button className="secondary" disabled={entregando === fila.id} onClick={() => void marcarEntregado(fila)}>{entregando === fila.id ? "Entregando…" : "Marcar entregado"}</button>}</div>
             </div>
           </article>;
         })}
@@ -214,6 +232,19 @@ export default function PanelVendedoresCliente() {
         <div className={`${estilos.modalBarra} ${estilos.noPrint}`}><div><strong>{expediente.contrato.numero}</strong><span>{expediente.contrato.cliente}</span></div><div><button className="secondary" onClick={() => window.print()}>Imprimir</button><button onClick={() => setExpediente(null)}>Cerrar</button></div></div>
         <ExpedienteContrato datos={expediente} />
       </div>
+    </div>}
+    {pago&&<div className={estilos.modal} role="dialog" aria-modal="true" aria-label={`Registrar abono ${pago.contrato.numero}`}>
+      <section className={`card ${estilos.pagoModal}`}>
+        <header><div><span className="eyebrow">COBRO · {pago.contrato.numero}</span><h2>Registrar abono</h2><p>{pago.contrato.cliente} · saldo {DINERO.format(pago.contrato.saldo)}</p></div><button className="secondary" onClick={()=>setPago(null)} disabled={guardandoPago}>Cerrar</button></header>
+        <div className={estilos.pagoGrid}>
+          <div className="field"><label>Fecha real del pago</label><input type="date" max={isoLocal()} value={pago.fecha} onChange={e=>setPago({...pago,fecha:e.target.value})}/><small>Puedes registrar hoy un pago recibido ayer. Caja usará esta fecha.</small></div>
+          <div className="field"><label>Monto</label><input type="number" min="0.01" max={pago.contrato.saldo} step="0.01" value={pago.monto} onChange={e=>setPago({...pago,monto:e.target.value})}/></div>
+          <div className="field"><label>Medio</label><select value={pago.medio} onChange={e=>setPago({...pago,medio:e.target.value as Pago["medio"]})}><option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option></select></div>
+          <div className="field"><label>Referencia del comprobante</label><input value={pago.referencia} onChange={e=>setPago({...pago,referencia:e.target.value})} placeholder={pago.medio==="transferencia"?"Número, banco o referencia":"Opcional"}/></div>
+          <div className="field"><label>Nota</label><textarea rows={3} value={pago.nota} onChange={e=>setPago({...pago,nota:e.target.value})} placeholder="Detalle útil para conciliación"/></div>
+        </div>
+        <footer><button onClick={()=>void registrarPago()} disabled={guardandoPago}>{guardandoPago?"Registrando…":"Registrar en contrato y Caja"}</button></footer>
+      </section>
     </div>}
   </>;
 }

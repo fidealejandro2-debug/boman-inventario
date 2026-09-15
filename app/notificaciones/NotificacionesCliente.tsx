@@ -22,6 +22,7 @@ const ROLES = [
   ["gerencia", "Gerencia"], ["tienda", "Tienda"], ["control", "Control"],
   ["produccion", "Producción"],
   ["nomina", "Nómina"], ["franquiciado", "Franquiciado"],
+  ["vendedor", "Vendedor"],
   ["vendedor_franquicia", "Vendedor de franquicia"],
 ];
 

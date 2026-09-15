@@ -123,6 +123,7 @@ const PRINCIPALES_POR_ROL: Record<string, GrupoId[]> = {
   logistica: ["inventario", "produccion", "notificaciones"],
   tienda: ["ventas", "inventario", "compras", "notificaciones"],
   nomina: ["nomina", "notificaciones", "importaciones"],
+  vendedor: ["ventas", "notificaciones"],
   franquiciado: ["franquicias", "inventario", "notificaciones"],
   vendedor_franquicia: ["franquicias", "inventario", "notificaciones"],
 };
@@ -136,6 +137,7 @@ const RAPIDOS_POR_ROL: Record<string, string[]> = {
   logistica: ["/operaciones", "/inventario", "/produccion/cronograma"],
   tienda: ["/tienda", "/ventas", "/inventario"],
   nomina: ["/nomina", "/notificaciones", "/importar"],
+  vendedor: ["/ventas/contratos", "/ventas/seguimiento", "/notificaciones"],
   franquiciado: ["/franquicia", "/inventario", "/notificaciones"],
   vendedor_franquicia: ["/franquicia", "/inventario", "/notificaciones"],
 };
@@ -298,6 +300,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
     control: "Control",
     produccion: "Producción",
     nomina: "Nómina",
+    vendedor: "Vendedor",
     franquiciado: "Franquiciado",
     vendedor_franquicia: "Vendedor de franquicia",
   } as Record<string, string>)[perfil.rol] ?? perfil.rol;

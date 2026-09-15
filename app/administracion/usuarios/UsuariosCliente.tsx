@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fecha } from "@/lib/utils";
 import { confirmarDialogo } from "@/components/Dialogo";
 
-type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "produccion" | "nomina" | "franquiciado" | "vendedor_franquicia";
+type Rol = "admin" | "bodega" | "logistica" | "gerencia" | "tienda" | "control" | "produccion" | "nomina" | "vendedor" | "franquiciado" | "vendedor_franquicia";
 type Almacen = { id: string; nombre: string; tipo: string; activo: boolean };
 type Usuario = {
   id: string;
@@ -34,12 +34,13 @@ const ROLES: { valor: Rol; etiqueta: string }[] = [
   { valor: "produccion", etiqueta: "Producción" },
   { valor: "gerencia", etiqueta: "Gerencia" },
   { valor: "nomina", etiqueta: "Nómina" },
+  { valor: "vendedor", etiqueta: "Vendedor" },
   { valor: "franquiciado", etiqueta: "Franquiciado" },
   { valor: "vendedor_franquicia", etiqueta: "Vendedor de franquicia" },
 ];
 
 const ROLES_SIN_ALMACEN: Rol[] = ["admin", "control", "gerencia", "nomina"];
-const ROLES_UN_SOLO_ALMACEN: Rol[] = ["franquiciado", "vendedor_franquicia"];
+const ROLES_UN_SOLO_ALMACEN: Rol[] = ["vendedor", "franquiciado", "vendedor_franquicia"];
 
 const NUEVO = {
   email: "",
@@ -108,7 +109,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
       return;
     }
     if (ROLES_UN_SOLO_ALMACEN.includes(nuevo.rol) && nuevo.almacen_ids.length !== 1) {
-      setMsg({ tipo: "error", texto: "Los usuarios de franquicia deben tener exactamente un local asignado." });
+      setMsg({ tipo: "error", texto: "Este rol debe tener exactamente un local asignado." });
       return;
     }
 
@@ -157,7 +158,7 @@ export default function UsuariosCliente({ usuarioActualId }: { usuarioActualId: 
       return;
     }
     if (Boolean(edicion.activo) && ROLES_UN_SOLO_ALMACEN.includes(rol) && almacenIds.length !== 1) {
-      setMsg({ tipo: "error", texto: "Los usuarios de franquicia deben tener exactamente un local asignado." });
+      setMsg({ tipo: "error", texto: "Este rol debe tener exactamente un local asignado." });
       return;
     }
     setGuardando(true);
