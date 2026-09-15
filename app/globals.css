@@ -1957,12 +1957,8 @@ button.btn-mini {
   font-family: Calibri, "Segoe UI", Arial, sans-serif;
   font-size: 12px;
 }
-.rol-marca { display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
-.rol-logo-b {
-  background: var(--rol-rojo); color: #fff; font-weight: 800;
-  font-size: 18px; line-height: 1; padding: 4px 7px; border-radius: 3px;
-}
-.rol-logo-txt { color: var(--rol-rojo); font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+.rol-marca { display: flex; align-items: center; margin-bottom: 8px; min-height: 48px; }
+.rol-logo-imagen { width: 128px; height: 48px; object-fit: contain; object-position: left center; }
 
 .rol-titulo {
   background: var(--rol-azul); color: #fff; text-align: center;

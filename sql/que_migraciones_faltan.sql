@@ -99,6 +99,9 @@ from(values
  (139,'v139_recuperar_adicionales_contratos.sql',
    exists (select 1 from public.schema_migrations_boman where id='v139')),
  (140,'v140_recuperar_adicionales_extra_appscript.sql',
-   exists (select 1 from public.schema_migrations_boman where id='v140'))
+   exists (select 1 from public.schema_migrations_boman where id='v140')),
+ (141,'v141_ausencias_respaldo_pendiente.sql',
+   to_regprocedure('public.adjuntar_respaldo_ausencia_v141(uuid,uuid,uuid)') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v141'))
 )as v(orden,archivo,existe)
 order by v.orden;

@@ -15,7 +15,7 @@ import {
 import SelectorDocumento from "./SelectorDocumento";
 import CalendarioFeriados from "./CalendarioFeriados";
 import Aviso from "@/components/Aviso";
-import { pedirMotivoDialogo } from "@/components/Dialogo";
+import { pedirMotivoDialogo, mostrarAvisoDialogo } from "@/components/Dialogo";
 
 type Ausencia = {
   id: string;
@@ -31,9 +31,15 @@ type Ausencia = {
   dias_habiles: number;
   estado: string;
   observacion: string | null;
+  documento_respaldo_id: string | null;
   dias_vacaciones_aplicados: number;
   periodos_fifo_usados: number;
 };
+
+const TIPOS_RESPALDO_OBLIGATORIO = new Set([
+  "enfermedad_iess", "enfermedad_particular", "maternidad", "paternidad",
+  "calamidad_domestica", "suspension_disciplinaria",
+]);
 
 type Saldo = {
   empleado_id: string;
@@ -184,6 +190,23 @@ export default function AusenciasTab({
     cargar();
   }
 
+  async function adjuntarRespaldo(ausencia: Ausencia, documentoId: string | null) {
+    if (!documentoId) return;
+    setGuardando(true);
+    const { error } = await supabase.rpc("adjuntar_respaldo_ausencia_v141", {
+      p_ausencia_id: ausencia.id,
+      p_documento_respaldo_id: documentoId,
+      p_idempotency_key: nuevaClaveIdempotencia(),
+    });
+    setGuardando(false);
+    if (error) {
+      await mostrarAvisoDialogo(mensajeError(error), "No se pudo adjuntar el respaldo", true);
+      return;
+    }
+    setAviso(`Respaldo registrado para ${ausencia.apellidos} ${ausencia.nombres}.`);
+    cargar();
+  }
+
   async function generarPeriodos(empleadoId: string) {
     setGuardando(true);
     // v33: cuenta sobre la antigüedad reconocida del vínculo, no sobre la
@@ -212,6 +235,9 @@ export default function AusenciasTab({
   }, [ausencias, filtroEstado, busqueda]);
 
   const pendientes = ausencias.filter((a) => a.estado === "solicitada").length;
+  const respaldosPendientes = ausencias.filter((a) =>
+    a.estado === "solicitada" && TIPOS_RESPALDO_OBLIGATORIO.has(a.tipo) && !a.documento_respaldo_id
+  ).length;
   const conAlerta = saldos.filter((s) => s.alerta_mas_tres_periodos);
 
   if (cargando) return <p className="ayuda">Cargando ausencias…</p>;
@@ -328,6 +354,13 @@ export default function AusenciasTab({
         reducen únicamente el tiempo no trabajado. No generan una multa adicional automática.
       </p>
 
+      {respaldosPendientes > 0 && (
+        <p className="aviso">
+          <strong>{respaldosPendientes}</strong> solicitud(es) siguen pendientes de documento.
+          Talento Humano debe adjuntar el respaldo antes de aprobarlas.
+        </p>
+      )}
+
       <div className="filtros">
         <select value={vista} onChange={(e) => setVista(e.target.value as any)}>
           <option value="ausencias">Ausencias ({pendientes} por resolver)</option>
@@ -372,6 +405,7 @@ export default function AusenciasTab({
                 <th className="num">Hábiles</th>
                 <th>Estado</th>
                 <th>Observación</th>
+                <th>Respaldo</th>
                 {puedeEscribir && <th>Acciones</th>}
               </tr>
             </thead>
@@ -405,6 +439,21 @@ export default function AusenciasTab({
                     <span className={`badge estado-${a.estado}`}>{a.estado}</span>
                   </td>
                   <td>{observacionVisible(a)}</td>
+                  <td>
+                    {a.documento_respaldo_id ? (
+                      <span className="badge ok">Adjunto</span>
+                    ) : TIPOS_RESPALDO_OBLIGATORIO.has(a.tipo) ? (
+                      puedeEscribir && a.estado === "solicitada" ? (
+                        <SelectorDocumento
+                          empleadoId={a.empleado_id}
+                          valor={null}
+                          onCambio={(id) => void adjuntarRespaldo(a, id)}
+                          tipoSugerido="certificado_medico"
+                          etiqueta="Pendiente · adjuntar"
+                        />
+                      ) : <span className="badge warning">Pendiente</span>
+                    ) : <span className="conteo">Opcional</span>}
+                  </td>
                   {puedeEscribir && (
                     <td>
                       {a.estado === "solicitada" && (
@@ -440,7 +489,7 @@ export default function AusenciasTab({
               ))}
               {!visibles.length && (
                 <tr>
-                  <td colSpan={puedeEscribir ? 9 : 8} className="vacio">
+                  <td colSpan={puedeEscribir ? 10 : 9} className="vacio">
                     Sin ausencias que coincidan.
                   </td>
                 </tr>

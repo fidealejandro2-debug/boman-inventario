@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { dinero, soloFecha } from "./lib";
+import BomanLogo from "@/components/BomanLogo";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -226,8 +227,7 @@ export default function RolImpresion({
 
       <article className="rol-hoja">
         <div className="rol-marca">
-          <span className="rol-logo-b">B</span>
-          <span className="rol-logo-txt">BOMAN</span>
+          <BomanLogo className="rol-logo-imagen" priority />
         </div>
 
         <div className="rol-titulo">
@@ -315,7 +315,7 @@ export default function RolImpresion({
             <thead>
               <tr className="rol-verde">
                 <th colSpan={2}>BENEFICIOS DE LEY</th>
-                <th className="col-valor">ACUMULADO {real.anio}</th>
+                <th className="col-valor">ESTADO / ACUMULADO {real.anio}</th>
               </tr>
             </thead>
             <tbody>
@@ -326,7 +326,7 @@ export default function RolImpresion({
                 </td>
                 <td className="num">
                   {beneficios.mensualiza_decimo_tercero
-                    ? "—"
+                    ? "Pagado en este rol"
                     : dinero(beneficios.acumulado_decimo_tercero)}
                 </td>
               </tr>
@@ -337,7 +337,7 @@ export default function RolImpresion({
                 </td>
                 <td className="num">
                   {beneficios.mensualiza_decimo_cuarto
-                    ? "—"
+                    ? "Pagado en este rol"
                     : dinero(beneficios.acumulado_decimo_cuarto)}
                 </td>
               </tr>
