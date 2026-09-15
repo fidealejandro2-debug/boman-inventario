@@ -1,4 +1,4 @@
-const CACHE_NAME = "boman-shell-v2";
+const CACHE_NAME = "boman-shell-v3";
 const APP_SHELL = ["/login", "/boman-logo.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -41,8 +41,10 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ||
           fetch(request).then((res) => {
-            const copia = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
+            if (res.ok) {
+              const copia = res.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
+            }
             return res;
           })
       )
@@ -54,8 +56,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copia = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
+          if (res.ok) {
+            const copia = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
+          }
           return res;
         })
         .catch(() => caches.match(request).then((cached) => cached || caches.match("/login")))
