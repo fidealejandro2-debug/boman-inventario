@@ -143,5 +143,19 @@ from(values
  ,(152,'v152_paso2_panel_supervision.sql',
    to_regprocedure('public.panel_supervision_v152(date,date,uuid)')is not null
    and exists(select 1 from public.schema_migrations_boman where id='v152'))
+ ,(153,'v153_configuracion_operativa_almacenes.sql',
+   to_regclass('public.almacen_configuracion_operativa_v153') is not null
+   and to_regprocedure('public.guardar_configuracion_operativa_v153(uuid,time,numeric)') is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v153'))
+ ,(154,'v154_novedades_operativas.sql',
+   to_regclass('public.novedades_operativas_v154') is not null
+   and to_regprocedure('public.crear_novedad_operativa_v154(jsonb,uuid)') is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v154'))
+ ,(155,'v155_alertas_cierre_cron.sql',
+   to_regprocedure('public.revisar_operacion_diaria_v155()') is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v155'))
+ ,(156,'v156_ranking_locales.sql',
+   to_regprocedure('public.ranking_locales_v156(date,date)') is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v156'))
 )as v(orden,archivo,existe)
 order by v.orden;

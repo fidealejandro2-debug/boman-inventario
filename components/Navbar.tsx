@@ -296,6 +296,11 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   // también existen fuera de la marca blanca de Boman Sport.
   const puedeVerComprobantesVenta = tienePermiso(perfil, "franquicia.comprobantes.auditar_todo")
     || ["admin", "control"].includes(perfil.rol);
+  // Igual que comprobantes: sin modoBoman, porque descuadres/cierres pendientes/
+  // depositos y el ranking financiero aplican tanto a franquicias como a
+  // tiendas propias fuera de la marca blanca de Boman Sport.
+  const puedeVerNovedadesOperativas = tienePermiso(perfil, "operativas.novedades.gestionar");
+  const puedeVerRankingLocales = tienePermiso(perfil, "franquicia.consolidado");
   const puedeVerNotificaciones = tienePermiso(perfil, "notificaciones.acceder");
   const puedeVerMantenimiento = tienePermiso(perfil, "mantenimiento.acceder");
   const puedeVerImportaciones = tienePermiso(perfil, "importaciones.acceder");
@@ -366,6 +371,8 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
       { href: "/franquicia", etiqueta: "Operación del local", descripcion: "Ventas, caja e inventario", visible: puedeVerFranquicia },
       { href: "/franquicias/consolidado", etiqueta: "Panel consolidado", descripcion: "Comparativo de todos los locales", visible: puedeVerConsolidadoFranquicias },
       { href: "/franquicia/comprobantes", etiqueta: "Comprobantes de venta", descripcion: "Transferencias pendientes de revisar, de todas las tiendas", visible: puedeVerComprobantesVenta },
+      { href: "/franquicias/novedades", etiqueta: "Novedades operativas", descripcion: "Descuadres, cierres pendientes y depósitos faltantes por resolver", visible: puedeVerNovedadesOperativas },
+      { href: "/franquicias/ranking", etiqueta: "Ranking de locales", descripcion: "Ticket promedio, medios de pago y comparación contra el período anterior", visible: puedeVerRankingLocales },
     ] },
     { id: "mantenimiento", etiqueta: "Mantenimiento", opciones: [
       { href: "/mantenimiento", etiqueta: "Maquinaria y activos", descripcion: "Preventivos, órdenes y costos", visible: puedeVerMantenimiento },
