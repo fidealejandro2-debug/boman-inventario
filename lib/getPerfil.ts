@@ -32,6 +32,7 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
     "produccion.acceder", "produccion.calidad.resolver",
+    "contratos.asignar_vendedor",
     "control.acceder", "reportes.acceder",
     "nomina.acceder", "notificaciones.acceder", "notificaciones.publicar",
     "mantenimiento.acceder", "franquicia.consolidado", "tesoreria.acceder",
@@ -53,6 +54,7 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "produccion.calidad.resolver", "control.acceder", "reportes.acceder",
     "notificaciones.acceder", "notificaciones.publicar",
     "mantenimiento.acceder", "mantenimiento.editar", "franquicia.consolidado",
+    "contratos.asignar_vendedor",
     "importaciones.acceder", "tesoreria.acceder", "tesoreria.editar",
   ],
   produccion: [

@@ -128,7 +128,7 @@ export default function PanelVendedoresCliente({esVendedor,puedeRegistrarAbonos,
     if (!responsable || !responsable.trim()) return;
     setEntregando(fila.id);
     try {
-      const pend = await supabase.rpc("obtener_despacho_contrato_v112", { p_contrato_id: fila.id });
+      const pend = await supabase.rpc("obtener_centro_contrato_v158", { p_contrato_id: fila.id });
       if (pend.error) return void mostrarAvisoDialogo(pend.error.message, "No se pudo leer el despacho", true);
       const lineas = (((pend.data as { contrato?: { lineas?: { id: string; pendientes: number }[] } })?.contrato?.lineas) || [])
         .filter((x) => Number(x.pendientes) > 0)

@@ -37,6 +37,7 @@ export type PermisoCodigo =
   | "contratos.abonos.registrar"
   | "contratos.entregar"
   | "contratos.revertir_entrega"
+  | "contratos.asignar_vendedor"
   | "clientes.acceder"
   | "clientes.editar"
   | "clientes.fusionar"
@@ -96,6 +97,7 @@ export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
   "contratos.abonos.registrar",
   "contratos.entregar",
   "contratos.revertir_entrega",
+  "contratos.asignar_vendedor",
   "clientes.acceder",
   "clientes.editar",
   "clientes.fusionar",

@@ -160,5 +160,9 @@ from(values
  ,(157,'v157_fix_grants_venta_rapida.sql',
    has_table_privilege('authenticated','public.venta_rapida_v148','select')
    and exists(select 1 from public.schema_migrations_boman where id='v157'))
+ ,(158,'v158_asignacion_vendedores_centro_contratos.sql',
+   to_regprocedure('public.listar_centro_contratos_v158(text,boolean,integer,integer)')is not null
+   and to_regprocedure('public.asignar_vendedor_contratos_v158(uuid,text,uuid,text,uuid)')is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v158'))
 )as v(orden,archivo,existe)
 order by v.orden;
