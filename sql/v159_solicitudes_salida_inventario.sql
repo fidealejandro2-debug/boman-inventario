@@ -278,7 +278,7 @@ grant execute on function public.crear_solicitud_salida_v159(uuid,jsonb,text,tex
 
 insert into public.schema_migrations_boman(id, version, archivo, notas)
 values (
-  'v159', 158, 'v159_solicitudes_salida_inventario.sql',
+  'v159', 159, 'v159_solicitudes_salida_inventario.sql',
   'Solicitudes de salida de inventario para tienda, con aprobacion de bodega/supervisor/admin (nuevo tipo salida en documentos_inventario).'
 )
 on conflict (id) do update set version=excluded.version, archivo=excluded.archivo,
