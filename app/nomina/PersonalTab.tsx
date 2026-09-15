@@ -41,6 +41,8 @@ type Personal = {
   paga_otro_ruc: boolean | null;
   mensualiza_decimo_tercero: boolean | null;
   mensualiza_decimo_cuarto: boolean | null;
+  inicio_mensualiza_decimo_tercero: string | null;
+  inicio_mensualiza_decimo_cuarto: string | null;
   paga_fondos_reserva_mensual: boolean | null;
 };
 
@@ -256,6 +258,8 @@ export default function PersonalTab({
           afiliado={beneficios.afiliado}
           decimoTerceroActual={beneficios.mensualiza_decimo_tercero}
           decimoCuartoActual={beneficios.mensualiza_decimo_cuarto}
+          inicioDecimoTerceroActual={beneficios.inicio_mensualiza_decimo_tercero}
+          inicioDecimoCuartoActual={beneficios.inicio_mensualiza_decimo_cuarto}
           fondosMensualActual={beneficios.paga_fondos_reserva_mensual}
           onCancelar={() => setBeneficios(null)}
           onListo={() => {

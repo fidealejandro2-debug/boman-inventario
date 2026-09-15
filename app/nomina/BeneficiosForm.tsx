@@ -6,6 +6,7 @@ import { nuevaClaveIdempotencia } from "@/lib/erp";
 import { mensajeError } from "./lib";
 import { mostrarAvisoDialogo } from "@/components/Dialogo";
 import { normalizarBeneficiosNomina } from "@/lib/integridadOperativa";
+import { fechaISOEcuador } from "@/lib/utils";
 
 /**
  * Décimos y fondos de reserva: mensualizados o acumulados.
@@ -21,6 +22,8 @@ export default function BeneficiosForm({
   afiliado,
   decimoTerceroActual,
   decimoCuartoActual,
+  inicioDecimoTerceroActual,
+  inicioDecimoCuartoActual,
   fondosMensualActual,
   onListo,
   onCancelar,
@@ -31,6 +34,8 @@ export default function BeneficiosForm({
   afiliado: boolean | null;
   decimoTerceroActual: boolean | null;
   decimoCuartoActual: boolean | null;
+  inicioDecimoTerceroActual: string | null;
+  inicioDecimoCuartoActual: string | null;
   fondosMensualActual: boolean | null;
   onListo: () => void;
   onCancelar: () => void;
@@ -38,15 +43,26 @@ export default function BeneficiosForm({
   const supabase = createClient();
   const [guardando, setGuardando] = useState(false);
   const esAfiliado = Boolean(afiliado);
+  const mesActual = fechaISOEcuador().slice(0, 7);
   const [form, setForm] = useState({
     decimoTercero: esAfiliado && Boolean(decimoTerceroActual),
     decimoCuarto: esAfiliado && Boolean(decimoCuartoActual),
+    inicioDecimoTercero: inicioDecimoTerceroActual?.slice(0, 7) || mesActual,
+    inicioDecimoCuarto: inicioDecimoCuartoActual?.slice(0, 7) || mesActual,
     // El default de la base es true, pero solo aplica a afiliados.
     fondosMensual: fondosMensualActual ?? true,
     motivo: "",
   });
 
   async function guardar() {
+    if (form.decimoTercero && !form.inicioDecimoTercero) {
+      await mostrarAvisoDialogo("Selecciona el mes desde el que se pagará el décimo tercero.", "Falta el mes de inicio", true);
+      return;
+    }
+    if (form.decimoCuarto && !form.inicioDecimoCuarto) {
+      await mostrarAvisoDialogo("Selecciona el mes desde el que se pagará el décimo cuarto.", "Falta el mes de inicio", true);
+      return;
+    }
     if (form.motivo.trim().length < 10) {
       await mostrarAvisoDialogo("Explica el motivo con al menos 10 caracteres: queda auditado.", "Motivo incompleto", true);
       return;
@@ -58,12 +74,14 @@ export default function BeneficiosForm({
       decimoCuarto: form.decimoCuarto,
       fondosMensual: form.fondosMensual,
     });
-    const { error: fallo } = await supabase.rpc("configurar_beneficios_empleado_v30", {
+    const { error: fallo } = await supabase.rpc("configurar_beneficios_empleado_v142", {
       p_empleado_id: empleadoId,
       // La base también impone esta condición (v129). Se replica aquí para
       // que la solicitud y lo que ve el usuario sean exactamente lo mismo.
       p_mensualiza_decimo_tercero: beneficios.decimoTercero,
       p_mensualiza_decimo_cuarto: beneficios.decimoCuarto,
+      p_inicio_decimo_tercero: beneficios.decimoTercero ? `${form.inicioDecimoTercero}-01` : null,
+      p_inicio_decimo_cuarto: beneficios.decimoCuarto ? `${form.inicioDecimoCuarto}-01` : null,
       // Sin afiliación no hay fondos de reserva que mensualizar; se manda el
       // default para no dejar el campo en un estado que la pantalla no mostró.
       p_paga_fondos_reserva_mensual: beneficios.fondosMensual,
@@ -103,6 +121,13 @@ export default function BeneficiosForm({
           </small>
         </label>}
 
+        {esAfiliado && form.decimoTercero && <label>
+          Mes de inicio del décimo tercero
+          <input type="month" required value={form.inicioDecimoTercero}
+            onChange={(e) => setForm({ ...form, inicioDecimoTercero: e.target.value })} />
+          <small className="ayuda">Desde este rol aparecerá como pagado; los meses anteriores conservan su historial.</small>
+        </label>}
+
         {esAfiliado && <label className="check-inline">
           <input
             type="checkbox"
@@ -115,6 +140,13 @@ export default function BeneficiosForm({
               ? "Se paga cada mes junto al sueldo."
               : "Se acumula y se paga según la región del trabajador."}
           </small>
+        </label>}
+
+        {esAfiliado && form.decimoCuarto && <label>
+          Mes de inicio del décimo cuarto
+          <input type="month" required value={form.inicioDecimoCuarto}
+            onChange={(e) => setForm({ ...form, inicioDecimoCuarto: e.target.value })} />
+          <small className="ayuda">Desde este rol aparecerá como pagado; los meses anteriores conservan su historial.</small>
         </label>}
 
         {esAfiliado ? (

@@ -102,6 +102,12 @@ from(values
    exists (select 1 from public.schema_migrations_boman where id='v140')),
  (141,'v141_ausencias_respaldo_pendiente.sql',
    to_regprocedure('public.adjuntar_respaldo_ausencia_v141(uuid,uuid,uuid)') is not null
-   and exists (select 1 from public.schema_migrations_boman where id='v141'))
+   and exists (select 1 from public.schema_migrations_boman where id='v141')),
+ (142,'v142_inicio_mensualizacion_decimos.sql',
+   to_regprocedure('public.configurar_beneficios_empleado_v142(uuid,boolean,boolean,date,date,boolean,text,uuid)') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v142')),
+ (143,'v143_servicios_caja_bomansport.sql',
+   to_regprocedure('public.registrar_venta_franquicia_v143(date,jsonb,jsonb,numeric,text,text,uuid,date,uuid)') is not null
+   and exists (select 1 from public.schema_migrations_boman where id='v143'))
 )as v(orden,archivo,existe)
 order by v.orden;

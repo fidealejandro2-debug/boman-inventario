@@ -21,8 +21,17 @@ type Disponible = {
   stock_disponible: number;
 };
 
+type Servicio = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  precio: number;
+};
+
 type Linea = {
-  producto_id: string;
+  tipo: "producto" | "servicio";
+  producto_id: string | null;
+  servicio_id: string | null;
   sku: string;
   nombre: string;
   cantidad: number;
@@ -75,6 +84,7 @@ export default function VentasFranquicia({
 }) {
   const supabase = createClient();
   const [stock, setStock] = useState<Disponible[]>([]);
+  const [servicios, setServicios] = useState<Servicio[]>([]);
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -89,6 +99,10 @@ export default function VentasFranquicia({
   }
 
   const [busqueda, setBusqueda] = useState("");
+  const [tipoItem, setTipoItem] = useState<"producto" | "servicio">("producto");
+  const [mostrarServicio, setMostrarServicio] = useState(false);
+  const [nuevoServicio, setNuevoServicio] = useState({ nombre: "", precio: "" });
+  const [creandoServicio, setCreandoServicio] = useState(false);
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [medioPago, setMedioPago] = useState("efectivo");
   const [descuentoGeneral, setDescuentoGeneral] = useState("0");
@@ -108,12 +122,18 @@ export default function VentasFranquicia({
 
   async function cargar() {
     setCargando(true);
-    const [s, v, c] = await Promise.all([
+    const [s, sv, v, c] = await Promise.all([
       supabase
         .from("vista_stock_operativo")
         .select("producto_id, sku, producto, talla, color, precio, stock_disponible")
         .eq("almacen_id", franquicia.almacen_id)
         .order("producto"),
+      supabase
+        .from("servicios_franquicia_v143")
+        .select("id,codigo,nombre,precio")
+        .eq("franquicia_id", franquicia.id)
+        .eq("activo", true)
+        .order("nombre"),
       supabase
         .from("vista_ventas_franquicia_v47")
         .select("*")
@@ -124,6 +144,8 @@ export default function VentasFranquicia({
     ]);
     if (s.error) setError(s.error.message);
     else setStock((s.data as Disponible[]) ?? []);
+    if (sv.error) setError(`No se pudo cargar el catálogo de servicios: ${sv.error.message}`);
+    else setServicios((sv.data as Servicio[]) ?? []);
     if (!v.error) setVentas((v.data as Venta[]) ?? []);
     if (!c.error) setClientes((c.data as Cliente[]) ?? []);
     setCargando(false);
@@ -137,6 +159,11 @@ export default function VentasFranquicia({
   const resultados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return [];
+    if (tipoItem === "servicio") {
+      return servicios
+        .filter((s) => s.codigo.toLowerCase().includes(q) || s.nombre.toLowerCase().includes(q))
+        .slice(0, 12);
+    }
     return stock
       .filter(
         (p) =>
@@ -144,7 +171,7 @@ export default function VentasFranquicia({
           (p.sku.toLowerCase().includes(q) || p.producto.toLowerCase().includes(q))
       )
       .slice(0, 12);
-  }, [stock, busqueda]);
+  }, [stock, servicios, busqueda, tipoItem]);
 
   function agregar(p: Disponible) {
     setError(null);
@@ -161,7 +188,9 @@ export default function VentasFranquicia({
       setLineas([
         ...lineas,
         {
+          tipo: "producto",
           producto_id: p.producto_id,
+          servicio_id: null,
           sku: p.sku,
           nombre: `${p.producto}${p.talla ? ` · ${p.talla}` : ""}${p.color ? ` · ${p.color}` : ""}`,
           cantidad: 1,
@@ -174,9 +203,42 @@ export default function VentasFranquicia({
     setBusqueda("");
   }
 
+  function agregarServicio(s: Servicio) {
+    setError(null);
+    if (lineas.some((l) => l.servicio_id === s.id)) {
+      setLineas(lineas.map((l) => l.servicio_id === s.id ? { ...l, cantidad: l.cantidad + 1 } : l));
+    } else {
+      setLineas([...lineas, {
+        tipo: "servicio", producto_id: null, servicio_id: s.id, sku: s.codigo,
+        nombre: s.nombre, cantidad: 1, precio_unitario: Number(s.precio), descuento: 0,
+        stock: Number.MAX_SAFE_INTEGER,
+      }]);
+    }
+    setBusqueda("");
+  }
+
+  async function crearServicio() {
+    const nombre = nuevoServicio.nombre.trim();
+    const precio = Number(nuevoServicio.precio);
+    if (!nombre) return setError("Escribe el nombre del servicio.");
+    if (!Number.isFinite(precio) || precio < 0) return setError("El precio del servicio no es válido.");
+    setCreandoServicio(true);
+    setError(null);
+    const { data, error } = await supabase.rpc("guardar_servicio_franquicia_v143", {
+      p_id: null, p_nombre: nombre, p_precio: precio,
+    });
+    setCreandoServicio(false);
+    if (error) return setError(mensajeError(error));
+    const creado = data as Servicio;
+    setServicios((actual) => [...actual, creado].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")));
+    setNuevoServicio({ nombre: "", precio: "" });
+    setMostrarServicio(false);
+    agregarServicio(creado);
+  }
+
   function actualizar(id: string, campo: keyof Linea, valor: number) {
     setLineas(
-      lineas.map((l) => (l.producto_id === id ? { ...l, [campo]: valor } : l))
+      lineas.map((l) => ((l.producto_id ?? l.servicio_id) === id ? { ...l, [campo]: valor } : l))
     );
   }
 
@@ -219,14 +281,14 @@ export default function VentasFranquicia({
   const problemas = lineas
     .filter(
       (l) =>
-        l.cantidad > l.stock ||
+        (l.tipo === "producto" && l.cantidad > l.stock) ||
         l.cantidad <= 0 ||
         l.precio_unitario < 0 ||
         l.descuento < 0 ||
         l.descuento > l.cantidad * l.precio_unitario
     )
     .map((l) =>
-      l.cantidad > l.stock
+      l.tipo === "producto" && l.cantidad > l.stock
         ? `${l.sku}: solo hay ${l.stock} en el local`
         : `${l.sku}: cantidad, precio o descuento inválidos`
     );
@@ -244,17 +306,19 @@ export default function VentasFranquicia({
   if (pagos.some((p) => p.medio_pago === "credito") && (!clienteId || !vencimiento)) problemas.push("El crédito requiere cliente y fecha de vencimiento");
 
   async function registrar() {
-    if (!lineas.length) return setError("Agrega al menos un producto.");
+    if (!lineas.length) return setError("Agrega al menos un producto o servicio.");
     if (problemas.length) return setError(problemas[0]);
     if (Number(descuentoGeneral || 0) > subtotal)
       return setError("El descuento general no puede superar el subtotal.");
 
     setGuardando(true);
     setError(null);
-    const { error } = await supabase.rpc("registrar_venta_franquicia_v81", {
+    const { error } = await supabase.rpc("registrar_venta_franquicia_v143", {
       p_fecha: fechaVenta,
       p_items: lineas.map((l) => ({
+        tipo: l.tipo,
         producto_id: l.producto_id,
+        servicio_id: l.servicio_id,
         cantidad: l.cantidad,
         precio_unitario: l.precio_unitario,
         descuento: l.descuento,
@@ -270,7 +334,7 @@ export default function VentasFranquicia({
     setGuardando(false);
     if (error) return setError(mensajeError(error));
 
-    confirmar("Venta registrada", `Por ${dinero(total)}. El stock del local ya se descontó.`);
+    confirmar("Venta registrada", `Por ${dinero(total)}. El stock se descontó únicamente en las líneas de producto.`);
     setLineas([]);
     setDescuentoGeneral("0");
     setReferencia("");
@@ -350,13 +414,25 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
         <h4>Nueva venta</h4>
 
         <div className="form-inline">
+          <label>
+            Tipo de ítem
+            <select value={tipoItem} onChange={(e) => { setTipoItem(e.target.value as typeof tipoItem); setBusqueda(""); }}>
+              <option value="producto">Producto</option>
+              <option value="servicio">Servicio</option>
+            </select>
+          </label>
           <input
             type="search"
-            placeholder="Buscar por código o nombre…"
+            placeholder={tipoItem === "producto" ? "Buscar producto por código o nombre…" : "Buscar servicio por código o nombre…"}
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             style={{ minWidth: 260 }}
           />
+          {tipoItem === "servicio" && (
+            <button type="button" className="secondary" onClick={() => setMostrarServicio((v) => !v)}>
+              {mostrarServicio ? "Cancelar" : "+ Crear servicio"}
+            </button>
+          )}
           <label className="check-inline">
             Fecha
             <input
@@ -368,9 +444,23 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
           </label>
         </div>
 
-        {resultados.length > 0 && (
+        {tipoItem === "servicio" && mostrarServicio && (
+          <div className="card-interna" style={{ marginTop: 10 }}>
+            <div className="form-inline">
+              <input autoFocus placeholder="Nombre del servicio" value={nuevoServicio.nombre}
+                onChange={(e) => setNuevoServicio({ ...nuevoServicio, nombre: e.target.value })} />
+              <input type="number" min="0" step="0.01" placeholder="Precio" value={nuevoServicio.precio}
+                onChange={(e) => setNuevoServicio({ ...nuevoServicio, precio: e.target.value })} />
+              <button type="button" disabled={creandoServicio} onClick={crearServicio}>
+                {creandoServicio ? "Creando…" : "Crear y agregar"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tipoItem === "producto" && resultados.length > 0 && (
           <div className="fq-resultados">
-            {resultados.map((p) => (
+            {(resultados as Disponible[]).map((p) => (
               <button
                 key={p.producto_id}
                 className="fq-resultado"
@@ -389,8 +479,23 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
             ))}
           </div>
         )}
+        {tipoItem === "servicio" && resultados.length > 0 && (
+          <div className="fq-resultados">
+            {(resultados as Servicio[]).map((s) => (
+              <button key={s.id} className="fq-resultado" onClick={() => agregarServicio(s)}>
+                <span className="fq-sku">{s.codigo}</span>
+                <span className="fq-nom">{s.nombre}</span>
+                <span className="fq-datos">{dinero(s.precio)} · servicio</span>
+              </button>
+            ))}
+          </div>
+        )}
         {busqueda && !resultados.length && (
-          <p className="ayuda">Sin coincidencias con stock disponible en el local.</p>
+          <p className="ayuda">
+            {tipoItem === "producto"
+              ? "Sin coincidencias con stock disponible en el local."
+              : "No hay servicios con esa búsqueda. Puedes crearlo aquí mismo."}
+          </p>
         )}
 
         {lineas.length > 0 && (
@@ -399,7 +504,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
               <table>
                 <thead>
                   <tr>
-                    <th>Producto</th>
+                    <th>Producto o servicio</th>
                     <th className="num">Cant.</th>
                     <th className="num">Precio</th>
                     <th className="num">Desc.</th>
@@ -409,7 +514,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                 </thead>
                 <tbody>
                   {lineas.map((l) => (
-                    <tr key={l.producto_id}>
+                    <tr key={`${l.tipo}:${l.producto_id ?? l.servicio_id}`}>
                       <td>
                         <strong>{l.sku}</strong>
                         <br />
@@ -419,13 +524,13 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                         <input
                           type="number"
                           min="1"
-                          max={l.stock}
+                          max={l.tipo === "producto" ? l.stock : undefined}
                           value={l.cantidad}
                           onChange={(e) =>
-                            actualizar(l.producto_id, "cantidad", Number(e.target.value))
+                            actualizar(l.producto_id ?? l.servicio_id!, "cantidad", Number(e.target.value))
                           }
                         />
-                        {l.cantidad > l.stock && (
+                        {l.tipo === "producto" && l.cantidad > l.stock && (
                           <div className="fq-alerta">solo {l.stock}</div>
                         )}
                       </td>
@@ -439,7 +544,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                           title={puedePrecio ? "" : "Se vende al precio del catálogo"}
                           onChange={(e) =>
                             actualizar(
-                              l.producto_id,
+                              l.producto_id ?? l.servicio_id!,
                               "precio_unitario",
                               Number(e.target.value)
                             )
@@ -455,7 +560,7 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                           readOnly={!puedeDescuento}
                           title={puedeDescuento ? "" : "No tienes permiso para descontar"}
                           onChange={(e) =>
-                            actualizar(l.producto_id, "descuento", Number(e.target.value))
+                            actualizar(l.producto_id ?? l.servicio_id!, "descuento", Number(e.target.value))
                           }
                         />
                       </td>
@@ -466,7 +571,9 @@ El stock vuelve al local y el ingreso sale de la caja. La venta queda registrada
                         <button
                           className="btn-mini secondary"
                           onClick={() =>
-                            setLineas(lineas.filter((x) => x.producto_id !== l.producto_id))
+                            setLineas(lineas.filter((x) =>
+                              (x.producto_id ?? x.servicio_id) !== (l.producto_id ?? l.servicio_id)
+                            ))
                           }
                         >
                           Quitar

@@ -11,6 +11,7 @@ type Linea = {
   total: number;
   devuelta: number;
   producto: { sku: string; nombre: string } | null;
+  servicio: { codigo: string; nombre: string } | null;
 };
 
 export default function DevolucionVentaFranquicia({ ventaId, numero, factor, onCerrar, onListo }: {
@@ -34,7 +35,7 @@ export default function DevolucionVentaFranquicia({ ventaId, numero, factor, onC
     (async () => {
       const [{ data, error }, { data: cuenta }] = await Promise.all([
         supabase.from("venta_franquicia_lineas")
-          .select("id,cantidad,total,producto:productos(sku,nombre)").eq("venta_id", ventaId),
+          .select("id,cantidad,total,producto:productos(sku,nombre),servicio:servicios_franquicia_v143(codigo,nombre)").eq("venta_id", ventaId),
         supabase.from("cuentas_cobrar_franquicia").select("saldo")
           .eq("venta_id", ventaId).eq("estado", "pendiente").maybeSingle(),
       ]);
@@ -94,11 +95,11 @@ export default function DevolucionVentaFranquicia({ ventaId, numero, factor, onC
     <div className="modal-contenido">
       <div className="header-row"><h2>Cambio o devolución · venta #{numero}</h2><button className="secondary" onClick={onCerrar}>Cerrar</button></div>
       {error && <p className="error">{error}</p>}
-      <p className="ayuda">Selecciona únicamente lo que regresa al local. Para un cambio, registra después la prenda entregada como nueva venta; así ambos movimientos conservan trazabilidad.</p>
+      <p className="ayuda">Selecciona lo que se devolverá. Los productos regresan al inventario; los servicios solo generan el reembolso correspondiente.</p>
       <div className="tabla-scroll"><table>
-        <thead><tr><th>Producto</th><th>Disponibles para devolver</th><th>A devolver</th><th className="num">Valor</th></tr></thead>
+        <thead><tr><th>Producto o servicio</th><th>Disponibles para devolver</th><th>A devolver</th><th className="num">Valor</th></tr></thead>
         <tbody>{lineas.map((l) => { const disponible = l.cantidad - l.devuelta; return <tr key={l.id}>
-          <td>{l.producto?.sku} · {l.producto?.nombre}</td>
+          <td>{l.producto ? `${l.producto.sku} · ${l.producto.nombre}` : `${l.servicio?.codigo ?? "SERVICIO"} · ${l.servicio?.nombre ?? "Servicio"}`}</td>
           <td>{disponible}{l.devuelta > 0 ? ` (${l.devuelta} ya devuelta${l.devuelta === 1 ? "" : "s"})` : ""}</td>
           <td><input type="number" min="0" max={disponible} value={cantidades[l.id] || ""} onChange={(e) => setCantidades({ ...cantidades, [l.id]: e.target.value })} /></td>
           <td className="num">{dinero(Number(cantidades[l.id] || 0) * (Number(l.total) / l.cantidad) * factor)}</td>
