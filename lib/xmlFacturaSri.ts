@@ -84,8 +84,94 @@ function fechaSriAIso(valor: string | null) {
 
 function fechaHoraAIso(valor: string | null) {
   if (!valor) return null;
+  const sri = valor.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+  if (sri) {
+    const fechaSri = new Date(`${sri[3]}-${sri[2]}-${sri[1]}T${sri[4]}:${sri[5]}:${sri[6]}-05:00`);
+    return Number.isNaN(fechaSri.getTime()) ? null : fechaSri.toISOString();
+  }
   const fecha = new Date(valor);
   return Number.isNaN(fecha.getTime()) ? null : fecha.toISOString();
+}
+
+/** Admite el XML plano obtenido al convertir una factura disponible solo en PDF. */
+function parsearComprobanteConvertido(comprobante: Element): FacturaSri {
+  if (texto(hijo(comprobante, "codDoc")) !== "01") {
+    throw new Error("El comprobante convertido no corresponde a una factura de venta (codDoc 01).");
+  }
+  const claveAcceso = texto(hijo(comprobante, "claveAcceso")) ?? "";
+  const numeroAutorizacion = texto(hijo(comprobante, "numeroAutorizacion")) ?? "";
+  const emisorRuc = texto(hijo(comprobante, "ruc")) ?? "";
+  const razonSocialEmisor = texto(hijo(comprobante, "razonSocial")) ?? "";
+  const establecimiento = texto(hijo(comprobante, "estab")) ?? "";
+  const puntoEmision = texto(hijo(comprobante, "ptoEmi")) ?? "";
+  const secuencial = texto(hijo(comprobante, "secuencial")) ?? "";
+  if (!/^\d{49}$/.test(claveAcceso)) throw new Error("La clave de acceso de la factura convertida no es válida.");
+  if (!/^\d{49}$/.test(numeroAutorizacion)) throw new Error("La factura convertida no contiene un número de autorización válido.");
+  if (numeroAutorizacion !== claveAcceso) throw new Error("La autorización y la clave de acceso de la factura convertida no coinciden.");
+  if (!/^\d{13}$/.test(emisorRuc)) throw new Error("El RUC emisor de la factura no es válido.");
+  if (!razonSocialEmisor) throw new Error("La factura no contiene la razón social del emisor.");
+  if (!/^\d{3}$/.test(establecimiento) || !/^\d{3}$/.test(puntoEmision) || !/^\d{9}$/.test(secuencial)) {
+    throw new Error("La numeración de la factura no es válida.");
+  }
+
+  const detalles = hijo(comprobante, "detalles");
+  if (!detalles) throw new Error("La factura convertida no contiene detalle.");
+  const nodosDetalle = hijos(detalles).filter((nodo) => nodo.localName === "detalle");
+  if (!nodosDetalle.length) throw new Error("La factura no contiene productos o servicios.");
+  const lineas = nodosDetalle.map((detalle, indice) => {
+    const descripcion = texto(hijo(detalle, "descripcion")) ?? "";
+    if (!descripcion) throw new Error(`La línea ${indice + 1} no contiene descripción.`);
+    const cantidad = numero(hijo(detalle, "cantidad"), `cantidad de la línea ${indice + 1}`);
+    const precioUnitario = numero(hijo(detalle, "precioUnitario"), `precio de la línea ${indice + 1}`);
+    const descuento = numero(hijo(detalle, "descuento"), `descuento de la línea ${indice + 1}`);
+    const totalSinImpuesto = numero(hijo(detalle, "precioTotalSinImpuesto"), `total de la línea ${indice + 1}`);
+    if (cantidad <= 0) throw new Error(`La cantidad de la línea ${indice + 1} debe ser mayor que cero.`);
+    if (precioUnitario < 0 || descuento < 0 || totalSinImpuesto < 0) {
+      throw new Error(`La línea ${indice + 1} contiene valores negativos.`);
+    }
+    return {
+      numeroLinea: indice + 1,
+      codigoPrincipal: texto(hijo(detalle, "codigoPrincipal")),
+      codigoAuxiliar: texto(hijo(detalle, "codigoAuxiliar")),
+      descripcion,
+      cantidad,
+      precioUnitario,
+      descuento,
+      totalSinImpuesto,
+    };
+  });
+
+  const totalSinImpuestos = numero(hijo(comprobante, "totalSinImpuestos"), "total sin impuestos");
+  if (Math.abs(lineas.reduce((total, linea) => total + linea.totalSinImpuesto, 0) - totalSinImpuestos) > 0.02) {
+    throw new Error("El total sin impuestos de la factura convertida no cuadra con sus líneas.");
+  }
+  const totalConImpuestos = hijo(comprobante, "totalConImpuestos");
+  const impuestos = totalConImpuestos
+    ? hijos(totalConImpuestos).filter((nodo) => nodo.localName === "totalImpuesto")
+      .reduce((total, impuesto) => total + numero(hijo(impuesto, "valor"), "valor de impuesto"), 0)
+    : 0;
+  const propinaNodo = hijo(comprobante, "propina");
+  const propina = propinaNodo ? numero(propinaNodo, "propina") : 0;
+  const importeTotal = numero(hijo(comprobante, "importeTotal"), "importe total");
+  if (Math.abs(totalSinImpuestos + impuestos + propina - importeTotal) > 0.02) {
+    throw new Error("El importe total de la factura convertida no cuadra con su base e impuestos.");
+  }
+
+  return {
+    estadoSri: "AUTORIZADO",
+    claveAcceso,
+    numeroAutorizacion,
+    fechaAutorizacion: fechaHoraAIso(texto(hijo(comprobante, "fechaAutorizacion"))),
+    emisorRuc,
+    razonSocialEmisor,
+    establecimiento,
+    puntoEmision,
+    secuencial,
+    numeroDocumento: `${establecimiento}-${puntoEmision}-${secuencial}`,
+    fechaEmision: fechaSriAIso(texto(hijo(comprobante, "fechaEmision"))),
+    importeTotal,
+    lineas,
+  };
 }
 
 export function parsearFacturaSri(contenido: string): FacturaSri {
@@ -109,6 +195,9 @@ export function parsearFacturaSri(contenido: string): FacturaSri {
   const interior = comprobanteTexto ? documentoXml(comprobanteTexto, "El comprobante interno") : exterior;
   const factura = Array.from(interior.querySelectorAll("*")).find((nodo) => nodo.localName === "factura")
     ?? (interior.documentElement.localName === "factura" ? interior.documentElement : null);
+  if (!factura && interior.documentElement.localName === "comprobante") {
+    return parsearComprobanteConvertido(interior.documentElement);
+  }
   if (!factura) throw new Error("El XML no contiene una factura electrónica del SRI.");
 
   const tributaria = hijo(factura, "infoTributaria");
