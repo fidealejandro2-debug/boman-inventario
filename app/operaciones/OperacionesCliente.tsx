@@ -5,7 +5,7 @@ import { useEstadoConsulta } from "@/lib/useEstadoConsulta";
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/getPerfil";
 import { fecha } from "@/lib/utils";
-import { ETIQUETAS_ESTADO, imprimirDocumento, nuevaClaveIdempotencia } from "@/lib/erp";
+import { ETIQUETAS_DOCUMENTO, ETIQUETAS_ESTADO, imprimirDocumento, nuevaClaveIdempotencia } from "@/lib/erp";
 import LineasDocumentoEditor, {
   type LineaDocumentoEdicion,
   type ProductoDocumento,
@@ -32,7 +32,7 @@ type Linea = {
 type Documento = {
   id: string;
   numero: string;
-  tipo: "solicitud_reposicion" | "transferencia";
+  tipo: "solicitud_reposicion" | "transferencia" | "salida";
   estado: string;
   prioridad: string;
   nota: string | null;
@@ -52,8 +52,8 @@ const VACIO: LineaDocumentoEdicion[] = [];
 export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const supabase = createClient();
   const [consulta, actualizarConsulta] = useEstadoConsulta({ tab: "solicitudes" });
-  const tab = consulta.tab === "transferencias" ? "transferencias" : "solicitudes";
-  const setTab = (tab: "solicitudes" | "transferencias") => actualizarConsulta({ tab }, true);
+  const tab = consulta.tab === "transferencias" ? "transferencias" : consulta.tab === "salidas" ? "salidas" : "solicitudes";
+  const setTab = (tab: "solicitudes" | "transferencias" | "salidas") => actualizarConsulta({ tab }, true);
   const [productos, setProductos] = useState<ProductoDocumento[]>([]);
   const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
   const [permitidos, setPermitidos] = useState<string[]>([]);
@@ -62,7 +62,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const [procesando, setProcesando] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tipo: "error" | "ok"; texto: string } | null>(null);
   const [mostrarNuevo, setMostrarNuevo] = useState(false);
-  const [modoNuevo, setModoNuevo] = useState<"solicitud" | "transferencia">("solicitud");
+  const [modoNuevo, setModoNuevo] = useState<"solicitud" | "transferencia" | "salida">("solicitud");
   const [lineas, setLineas] = useState<LineaDocumentoEdicion[]>(VACIO);
   const [origenId, setOrigenId] = useState("");
   const [destinoId, setDestinoId] = useState(perfil.entidad_id ?? "");
@@ -82,6 +82,11 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
   const puedeSolicitar = ["admin", "control", "bodega", "tienda", "franquiciado"].includes(perfil.rol);
   const puedeCrearTransferencia = ["admin", "control", "bodega"].includes(perfil.rol);
   const puedeResolver = ["admin", "control", "bodega"].includes(perfil.rol);
+  // Salida de inventario: solo tienda la pide (mas admin); la aprueban bodega,
+  // supervisor o admin. Distinto del resto (control/franquiciado no entran aqui
+  // a proposito, es lo que se pidio).
+  const puedeSolicitarSalida = ["admin", "tienda"].includes(perfil.rol);
+  const puedeResolverSalida = ["admin", "bodega", "supervisor"].includes(perfil.rol);
   const puedeTransportar = ["admin", "control", "bodega", "logistica"].includes(perfil.rol);
   const puedeRecibir = ["admin", "control", "bodega", "tienda", "franquiciado"].includes(perfil.rol);
 
@@ -103,7 +108,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
           cantidad_no_conforme, cantidad_no_recibida, observacion, descripcion_libre,
           producto:productos(id, sku, nombre, talla, color)
         )
-      `).in("tipo", ["solicitud_reposicion", "transferencia"]).order("created_at", { ascending: false }).limit(300),
+      `).in("tipo", ["solicitud_reposicion", "transferencia", "salida"]).order("created_at", { ascending: false }).limit(300),
     ]);
 
     const error = p.error ?? a.error ?? pa.error ?? d.error;
@@ -125,7 +130,8 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
 
   const solicitudes = documentos.filter((d) => d.tipo === "solicitud_reposicion");
   const transferencias = documentos.filter((d) => d.tipo === "transferencia");
-  const listaActual = tab === "solicitudes" ? solicitudes : transferencias;
+  const salidas = documentos.filter((d) => d.tipo === "salida");
+  const listaActual = tab === "solicitudes" ? solicitudes : tab === "transferencias" ? transferencias : salidas;
 
   function limpiarFormulario() {
     setLineas([]); setSinCodigo([]); setNota(""); setPrioridad("normal"); setOrigenId("");
@@ -147,6 +153,9 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
     if (!destinoId || (modoNuevo === "transferencia" && !origenId)) {
       setMsg({ tipo: "error", texto: "Selecciona los almacenes del documento." }); return;
     }
+    if (modoNuevo === "salida" && nota.trim().length < 5) {
+      setMsg({ tipo: "error", texto: "Explica el motivo de la salida (mínimo 5 caracteres)." }); return;
+    }
     const clave = nuevaClaveIdempotencia();
     setProcesando("nuevo");
     const respuesta = modoNuevo === "solicitud"
@@ -154,14 +163,33 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
           p_destino_id: destinoId, p_items: items, p_prioridad: prioridad,
           p_nota: nota || null, p_idempotency_key: clave,
         })
+      : modoNuevo === "salida"
+      ? await supabase.rpc("crear_solicitud_salida_v159", {
+          p_almacen_id: destinoId, p_items: items, p_motivo: nota.trim(),
+          p_prioridad: prioridad, p_idempotency_key: clave,
+        })
       : await supabase.rpc("crear_transferencia_directa", {
           p_origen_id: origenId, p_destino_id: destinoId, p_items: items,
           p_nota: nota || null, p_idempotency_key: clave,
         });
     setProcesando(null);
     if (respuesta.error) { setMsg({ tipo: "error", texto: respuesta.error.message }); return; }
-    setMsg({ tipo: "ok", texto: modoNuevo === "solicitud" ? "Solicitud creada y enviada a bodega." : "Transferencia creada y stock reservado." });
+    setMsg({ tipo: "ok", texto: modoNuevo === "solicitud" ? "Solicitud creada y enviada a bodega." : modoNuevo === "salida" ? "Salida solicitada; queda pendiente de aprobación." : "Transferencia creada y stock reservado." });
     limpiarFormulario(); await cargar();
+  }
+
+  async function resolverSalida(documento: Documento, aprobar: boolean) {
+    const motivo = aprobar ? null : (await pedirMotivoDialogo("Motivo del rechazo:"))?.trim();
+    if (!aprobar && !motivo) return;
+    setProcesando(documento.id); setMsg(null);
+    const { error } = await supabase.rpc("resolver_solicitud_salida_v159", {
+      p_solicitud_id: documento.id, p_aprobar: aprobar,
+      p_nota: motivo, p_idempotency_key: aprobar ? nuevaClaveIdempotencia() : null,
+    });
+    setProcesando(null);
+    if (error) { setMsg({ tipo: "error", texto: error.message }); return; }
+    setMsg({ tipo: "ok", texto: aprobar ? "Salida aprobada; el stock ya se descontó." : "Salida rechazada." });
+    await cargar();
   }
 
   async function asignarProducto(linea: Linea) {
@@ -317,7 +345,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
 
   function imprimir(documento: Documento) {
     imprimirDocumento(documento.numero, `
-      <h1>${documento.numero} · ${documento.tipo === "transferencia" ? "Transferencia" : "Solicitud de reposición"}</h1>
+      <h1>${documento.numero} · ${ETIQUETAS_DOCUMENTO[documento.tipo] ?? documento.tipo}</h1>
       <p><b>Estado:</b> ${ETIQUETAS_ESTADO[documento.estado] ?? documento.estado}</p>
       <p><b>Origen:</b> ${documento.origen?.nombre ?? "Por asignar"} &nbsp; <b>Destino:</b> ${documento.destino?.nombre ?? "-"}</p>
       <p><b>Fecha:</b> ${fecha(documento.created_at)} &nbsp; <b>Responsable:</b> ${documento.creador?.nombre_completo ?? "-"}</p>
@@ -331,7 +359,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
       <div className="header-row">
         <div><h2 style={{ color: "#1f3864", margin: 0 }}>Operaciones entre bodega y tiendas</h2>
           <p className="conteo">Solicitudes, picking, despacho, tránsito y recepción confirmada.</p></div>
-        {(puedeSolicitar || puedeCrearTransferencia) && <button onClick={() => setMostrarNuevo((v) => !v)}>{mostrarNuevo ? "Cancelar" : "+ Nuevo documento"}</button>}
+        {(puedeSolicitar || puedeCrearTransferencia || puedeSolicitarSalida) && <button onClick={() => setMostrarNuevo((v) => !v)}>{mostrarNuevo ? "Cancelar" : "+ Nuevo documento"}</button>}
       </div>
       {msg && <div className={msg.tipo === "error" ? "error" : "success"}>{msg.texto}</div>}
 
@@ -340,13 +368,15 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
           <div className="tabs">
             {puedeSolicitar && <button type="button" className={`tab ${modoNuevo === "solicitud" ? "activo" : ""}`} onClick={() => setModoNuevo("solicitud")}>Solicitud de reposición</button>}
             {puedeCrearTransferencia && <button type="button" className={`tab ${modoNuevo === "transferencia" ? "activo" : ""}`} onClick={() => setModoNuevo("transferencia")}>Transferencia directa</button>}
+            {puedeSolicitarSalida && <button type="button" className={`tab ${modoNuevo === "salida" ? "activo" : ""}`} onClick={() => setModoNuevo("salida")}>Salida de inventario</button>}
           </div>
           <div className="grid-2">
             {modoNuevo === "transferencia" && <div className="field"><label>Origen</label><select required value={origenId} onChange={(e) => setOrigenId(e.target.value)} style={{ width: "100%" }}><option value="">Seleccionar...</option>{almacenesPropios.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></div>}
-            <div className="field"><label>{modoNuevo === "solicitud" ? "Tienda solicitante" : "Destino"}</label><select required value={destinoId} onChange={(e) => setDestinoId(e.target.value)} style={{ width: "100%" }}><option value="">Seleccionar...</option>{(modoNuevo === "solicitud" ? almacenesPropios : almacenes.filter((a) => a.id !== origenId)).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></div>
-            {modoNuevo === "solicitud" && <div className="field"><label>Prioridad</label><select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} style={{ width: "100%" }}><option value="normal">Normal</option><option value="urgente">Urgente</option></select></div>}
-            <div className="field"><label>Observación</label><input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Motivo, campaña o referencia" style={{ width: "100%" }} /></div>
+            <div className="field"><label>{modoNuevo === "solicitud" ? "Tienda solicitante" : modoNuevo === "salida" ? "Almacén de la salida" : "Destino"}</label><select required value={destinoId} onChange={(e) => setDestinoId(e.target.value)} style={{ width: "100%" }}><option value="">Seleccionar...</option>{(modoNuevo === "transferencia" ? almacenes.filter((a) => a.id !== origenId) : almacenesPropios).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></div>
+            {modoNuevo !== "transferencia" && <div className="field"><label>Prioridad</label><select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} style={{ width: "100%" }}><option value="normal">Normal</option><option value="urgente">Urgente</option></select></div>}
+            <div className="field"><label>{modoNuevo === "salida" ? "Motivo de la salida *" : "Observación"}</label><input required={modoNuevo === "salida"} minLength={modoNuevo === "salida" ? 5 : undefined} value={nota} onChange={(e) => setNota(e.target.value)} placeholder={modoNuevo === "salida" ? "Ej.: producto dañado, uso interno, muestra..." : "Motivo, campaña o referencia"} style={{ width: "100%" }} /></div>
           </div>
+          {modoNuevo === "salida" && <div className="info-box">La salida no tiene destino: al aprobarla, bodega/supervisor/admin descuentan el stock de inmediato de este almacén.</div>}
           <LineasDocumentoEditor productos={productos} lineas={lineas} onChange={setLineas} />
           {modoNuevo === "solicitud" && (
             <div className="bloque-sin-codigo">
@@ -373,6 +403,7 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
       <div className="tabs">
         <button className={`tab ${tab === "solicitudes" ? "activo" : ""}`} onClick={() => setTab("solicitudes")}>Solicitudes ({solicitudes.filter((d) => d.estado === "solicitado").length} pendientes)</button>
         <button className={`tab ${tab === "transferencias" ? "activo" : ""}`} onClick={() => setTab("transferencias")}>Transferencias ({transferencias.filter((d) => ["aprobado", "preparando", "despachado", "en_transito"].includes(d.estado)).length} activas)</button>
+        <button className={`tab ${tab === "salidas" ? "activo" : ""}`} onClick={() => setTab("salidas")}>Salidas ({salidas.filter((d) => d.estado === "solicitado").length} pendientes)</button>
       </div>
 
       {cargando ? <div className="card"><div className="vacio">Cargando operaciones...</div></div> : (
@@ -384,7 +415,9 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
                   <div className="conteo">{fecha(documento.created_at)} · {documento.creador?.nombre_completo ?? "-"}</div></div>
                 <button className="secondary" onClick={() => imprimir(documento)}>Imprimir guía</button>
               </div>
-              <div className="ruta-documento"><span>{documento.origen?.nombre ?? "Origen por asignar"}</span><b>→</b><span>{documento.destino?.nombre ?? "-"}</span></div>
+              <div className="ruta-documento">{documento.tipo === "salida"
+                ? <span>{documento.origen?.nombre ?? "-"} · salida de inventario</span>
+                : <><span>{documento.origen?.nombre ?? "Origen por asignar"}</span><b>→</b><span>{documento.destino?.nombre ?? "-"}</span></>}</div>
               <div className="tabla-scroll"><table><thead><tr><th>SKU</th><th>Producto</th><th className="num">Solic.</th><th className="num">Aprob.</th><th className="num">Prepar.</th><th className="num">Desp.</th><th className="num">Recib.</th></tr></thead><tbody>
                 {documento.lineas.map((l) => <tr key={l.id} className={!l.producto_id ? "fila-alerta" : ""}><td>{l.producto?.sku ?? <span className="badge bajo">sin código</span>}</td><td>{l.producto?.nombre ?? l.descripcion_libre}{l.producto?.talla ? <small> · {l.producto.talla}</small> : null}</td><td className="num">{l.cantidad_solicitada ?? "-"}</td><td className="num">{l.cantidad_aprobada ?? "-"}</td><td className="num">{l.cantidad_preparada ?? "-"}</td><td className="num">{l.cantidad_despachada ?? "-"}</td><td className="num">{l.cantidad_recibida ?? "-"}{(l.cantidad_no_conforme > 0 || l.cantidad_no_recibida > 0) && <small className="detalle-incidencia-linea">NC {l.cantidad_no_conforme} · No llegó {l.cantidad_no_recibida}</small>}</td></tr>)}
               </tbody></table></div>
@@ -411,6 +444,10 @@ export default function OperacionesCliente({ perfil }: { perfil: Perfil }) {
                 {documento.tipo === "transferencia" && documento.estado === "despachado" && puedeTransportar && <button disabled={procesando === documento.id} onClick={() => marcarTransito(documento)}>Marcar en tránsito</button>}
                 {documento.tipo === "transferencia" && ["despachado", "en_transito"].includes(documento.estado) && puedeRecibir && (["admin", "control"].includes(perfil.rol) || almacenesPropios.some((a) => a.id === documento.destino_id)) && <button disabled={procesando === documento.id} onClick={() => abrirRecepcion(documento)}>Recibir en tienda</button>}
                 {documento.tipo === "transferencia" && perfil.rol === "admin" && ["recibido", "recibido_con_diferencia", "cerrado_con_diferencia"].includes(documento.estado) && <button className="peligro" disabled={procesando === documento.id} onClick={() => { setRectificando(documento); setMotivoRectificacion(""); setMsg(null); }}>Rectificar recepción</button>}
+                {documento.tipo === "salida" && documento.estado === "solicitado" && puedeResolverSalida && <>
+                  <button disabled={procesando === documento.id} onClick={() => resolverSalida(documento, true)}>Aprobar y descontar stock</button>
+                  <button className="peligro" disabled={procesando === documento.id} onClick={() => resolverSalida(documento, false)}>Rechazar</button>
+                </>}
               </div>
             </article>
           ))}

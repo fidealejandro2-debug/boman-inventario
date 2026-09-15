@@ -164,5 +164,8 @@ from(values
    to_regprocedure('public.listar_centro_contratos_v158(text,boolean,integer,integer)')is not null
    and to_regprocedure('public.asignar_vendedor_contratos_v158(uuid,text,uuid,text,uuid)')is not null
    and exists(select 1 from public.schema_migrations_boman where id='v158'))
+ ,(159,'v159_solicitudes_salida_inventario.sql',
+   to_regprocedure('public.crear_solicitud_salida_v159(uuid,jsonb,text,text,uuid)')is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v159'))
 )as v(orden,archivo,existe)
 order by v.orden;

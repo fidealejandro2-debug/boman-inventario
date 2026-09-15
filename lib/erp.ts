@@ -19,6 +19,7 @@ export const ETIQUETAS_DOCUMENTO: Record<string, string> = {
   solicitud_reposicion: "Solicitud de reposición",
   transferencia: "Transferencia",
   conteo: "Conteo físico",
+  salida: "Salida de inventario",
 };
 
 export function nuevaClaveIdempotencia() {
