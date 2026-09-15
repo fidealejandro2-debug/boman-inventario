@@ -14,7 +14,7 @@ export default async function InventarioPage() {
       <div className="container">
         <StockCliente
           perfil={perfil}
-          puedeEditarFotos={perfil.rol === "admin" || perfil.rol === "franquiciado"}
+          puedeEditarFotos={["admin", "franquiciado", "tienda"].includes(perfil.rol)}
         />
       </div>
     </>

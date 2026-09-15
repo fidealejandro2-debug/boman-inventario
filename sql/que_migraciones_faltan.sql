@@ -123,5 +123,8 @@ from(values
  ,(147,'v147_paso2_contratos_vendedor_caja.sql',
    to_regprocedure('public.registrar_abono_contrato_v147(uuid,date,numeric,text,text,text,text,uuid)')is not null
    and exists(select 1 from public.schema_migrations_boman where id='v147'))
+ ,(151,'v151_fotos_productos_tienda_propia.sql',
+   to_regprocedure('public.puede_editar_fotos_producto_v89(uuid)')is not null
+   and exists(select 1 from public.schema_migrations_boman where id='v151'))
 )as v(orden,archivo,existe)
 order by v.orden;
