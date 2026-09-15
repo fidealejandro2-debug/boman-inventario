@@ -28,6 +28,7 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "mantenimiento.acceder", "mantenimiento.editar",
   ],
   gerencia: [
+    "gerencia.acceder",
     "inventario.acceder", "operaciones.acceder", "conteos.acceder",
     "movimientos.acceder", "ventas.acceder", "compras.acceder",
     "produccion.acceder", "produccion.calidad.resolver",

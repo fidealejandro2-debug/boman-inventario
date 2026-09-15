@@ -233,6 +233,12 @@ export default function DashboardCliente({ perfil }: { perfil: Perfil }) {
 
     return [
       {
+        id: "gerencia", titulo: "Gerencia", subtitulo: "Centro de decisiones",
+        descripcion: "Reúne ventas, cartera, producción, calidad, inventario, caja y todos los reportes ejecutivos.",
+        href: "/gerencia", icono: "GER", tono: "oscuro", visible: puede("gerencia.acceder"),
+        pendiente: 0, pendienteTexto: "", enlaces: [{ href: "/gerencia", etiqueta: "Abrir panel ejecutivo" }],
+      },
+      {
         id: "contratos", titulo: "Contratos", subtitulo: "Gestión comercial",
         descripcion: "Da seguimiento a tus contratos, entregas y compromisos con clientes.",
         href: "/ventas/seguimiento", icono: "CTR", tono: "azul", visible: Boolean(perfil.modo_boman_especifico) && puede("contratos.acceder"),

@@ -11,6 +11,7 @@ export type RolUsuario =
   | "vendedor_franquicia";
 
 export type PermisoCodigo =
+  | "gerencia.acceder"
   | "inventario.acceder"
   | "operaciones.acceder"
   | "conteos.acceder"
@@ -64,6 +65,7 @@ export type PermisoCodigo =
   | "contratos.editar_contenido";
 
 export const TODOS_LOS_PERMISOS: PermisoCodigo[] = [
+  "gerencia.acceder",
   "inventario.acceder",
   "operaciones.acceder",
   "conteos.acceder",

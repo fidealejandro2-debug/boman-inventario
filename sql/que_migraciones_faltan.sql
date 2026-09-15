@@ -114,6 +114,9 @@ from(values
    and to_regprocedure('public.generar_novedades_laborales_calidad_v144(uuid,uuid,text,text,uuid)') is not null
    and exists (select 1 from public.schema_migrations_boman where id='v144')),
  (145,'v145_renombrar_campos_specs.sql',
-   exists (select 1 from public.schema_migrations_boman where id='v145'))
+   exists (select 1 from public.schema_migrations_boman where id='v145')),
+ (146,'v146_panel_gerencia.sql',
+   exists(select 1 from public.permisos_sistema where codigo='gerencia.acceder' and activo)
+   and exists (select 1 from public.schema_migrations_boman where id='v146'))
 )as v(orden,archivo,existe)
 order by v.orden;

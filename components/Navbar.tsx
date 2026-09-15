@@ -8,6 +8,7 @@ import { tienePermiso, type Perfil } from "@/lib/permisos";
 import BomanLogo from "@/components/BomanLogo";
 
 type ModuloId =
+  | "gerencia"
   | "notificaciones"
   | "ventas"
   | "compras"
@@ -36,6 +37,7 @@ type ModuloMenu = {
 };
 
 const ICONOS: Record<ModuloId | "inicio" | "buscar" | "salir", ReactNode> = {
+  gerencia: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="m3 7 6-4 6 6 6-5"/></>,
   inicio: <><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5M9 20v-6h6v6"/></>,
   notificaciones: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
   ventas: <><path d="M4 19V5h16v14H4Z"/><path d="M8 9h8M8 13h5"/><path d="M16 16h.01"/></>,
@@ -73,6 +75,7 @@ function Icono({ nombre, size = 19 }: { nombre: keyof typeof ICONOS; size?: numb
 type GrupoId = ModuloId;
 
 const GRUPO_DE_MODULO: Record<ModuloId, GrupoId> = {
+  gerencia: "gerencia",
   notificaciones: "notificaciones",
   ventas: "ventas",
   compras: "compras",
@@ -89,12 +92,13 @@ const GRUPO_DE_MODULO: Record<ModuloId, GrupoId> = {
 };
 
 const ORDEN_GRUPOS: GrupoId[] = [
-  "ventas", "produccion", "inventario", "reportes", "compras", "finanzas",
+  "gerencia", "ventas", "produccion", "inventario", "reportes", "compras", "finanzas",
   "franquicias", "nomina", "mantenimiento", "notificaciones",
   "importaciones", "administracion", "contabilidad",
 ];
 
 const ETIQUETA_GRUPO: Record<GrupoId, string> = {
+  gerencia: "Gerencia",
   compras: "Compras",
   finanzas: "Tesorería",
   contabilidad: "Contabilidad",
@@ -111,8 +115,8 @@ const ETIQUETA_GRUPO: Record<GrupoId, string> = {
 };
 
 const PRINCIPALES_POR_ROL: Record<string, GrupoId[]> = {
-  admin: ["ventas", "produccion", "inventario", "reportes"],
-  gerencia: ["reportes", "finanzas", "produccion", "inventario"],
+  admin: ["gerencia", "ventas", "produccion", "inventario", "reportes"],
+  gerencia: ["gerencia", "reportes", "finanzas", "produccion", "inventario"],
   control: ["inventario", "produccion", "ventas", "reportes"],
   produccion: ["produccion", "notificaciones"],
   bodega: ["inventario", "compras", "produccion", "notificaciones"],
@@ -124,8 +128,8 @@ const PRINCIPALES_POR_ROL: Record<string, GrupoId[]> = {
 };
 
 const RAPIDOS_POR_ROL: Record<string, string[]> = {
-  admin: ["/ventas/contratos", "/produccion/dashboard", "/inventario", "/reportes/comercial"],
-  gerencia: ["/dashboard", "/reportes/comercial", "/cuentas-por-pagar", "/produccion/dashboard"],
+  admin: ["/gerencia", "/ventas/contratos", "/produccion/dashboard", "/reportes/comercial"],
+  gerencia: ["/gerencia", "/reportes/comercial", "/cuentas-por-pagar", "/produccion/dashboard"],
   control: ["/control", "/conteos", "/produccion/calidad", "/reportes/comercial"],
   produccion: ["/tablero", "/produccion/cronograma", "/produccion/calidad", "/produccion/dashboard"],
   bodega: ["/inventario", "/operaciones", "/movimientos", "/conteos"],
@@ -259,6 +263,7 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   const puedeAdministrar = perfil.rol === "admin";
   const puedeConfigurarStock = perfil.rol === "admin" || perfil.rol === "control";
   const puedeVerControl = tienePermiso(perfil, "control.acceder");
+  const puedeVerGerencia = tienePermiso(perfil, "gerencia.acceder");
   const puedeVerVentas = tienePermiso(perfil, "ventas.acceder");
   const puedeVerCompras = tienePermiso(perfil, "compras.acceder");
   const puedeVerTesoreria = tienePermiso(perfil, "tesoreria.acceder");
@@ -298,6 +303,9 @@ export default function Navbar({ perfil }: { perfil: Perfil }) {
   } as Record<string, string>)[perfil.rol] ?? perfil.rol;
 
   const modulosBase: ModuloMenu[] = [
+    { id: "gerencia", etiqueta: "Gerencia", opciones: [
+      { href: "/gerencia", etiqueta: "Panel ejecutivo", descripcion: "Indicadores, alertas, tendencias y todos los reportes", visible: puedeVerGerencia },
+    ] },
     { id: "notificaciones", etiqueta: "Notificaciones", opciones: [
       { href: "/notificaciones", etiqueta: "Centro de avisos", descripcion: "Pendientes, vencimientos y comunicados", visible: puedeVerNotificaciones },
     ] },
