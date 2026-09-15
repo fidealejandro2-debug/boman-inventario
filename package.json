@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "verificar": "node scripts/verificar-todo.js && npm test",
-    "test": "node --test \"lib/*.test.ts\"",
+    "test": "node --test \"lib/*.test.ts\" \"app/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
