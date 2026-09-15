@@ -488,7 +488,15 @@ async function sincronizar(origen: Origen, ejecutadoPor: string | null) {
   // update liviano (mismo lote homogeneo, sin mezclar formas de fila).
   try {
     for (let i = 0; i < paraEscribir.length; i += 500) {
-      const lote = paraEscribir.slice(i, i + 500);
+      // bomansport_contratos es un espejo TIPADO fijo (v90): no crece solo
+      // cuando ContratoTipado gana un campo nuevo -lo que no tiene columna
+      // ahí ya vive en `datos` (el jsonb crudo). nombre_tecnica/numero_tecnica/
+      // sellos_tpu/ubicacion_tpu/bordado solo existen para filaContratoV79
+      // (la tabla `contratos`, más abajo); mandarlos aquí tal cual rompía el
+      // upsert con "Could not find the 'bordado' column...".
+      const lote = paraEscribir.slice(i, i + 500).map(
+        ({ nombre_tecnica, numero_tecnica, sellos_tpu, ubicacion_tpu, bordado, ...resto }) => resto
+      );
       const { error } = await admin.from("bomansport_contratos").upsert(lote, { onConflict: "numero" });
       if (error) throw new Error(error.message);
     }
