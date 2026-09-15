@@ -15,3 +15,14 @@ export const PRENDAS_CONTRATO = [
 export const CALIDADES_CONTRATO = [
   "Semiprofesional", "Competición", "Profesional", "Amateur", "Estándar",
 ] as const;
+
+export const TALLAS_ADULTOS_CONTRATO = [
+  "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL",
+] as const;
+
+// XXS (14) continua la escala infantil despues de 36 (12). Mantener el texto
+// completo: es la clave que comparten nomina, matriz de tallas e imprimible.
+export const TALLAS_NINOS_CONTRATO = [
+  "24 (0)", "26 (2)", "28 (4)", "30 (6)", "32 (8)", "34 (10)",
+  "36 (12)", "XXS (14)",
+] as const;

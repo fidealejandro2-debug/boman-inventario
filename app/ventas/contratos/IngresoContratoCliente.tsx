@@ -6,7 +6,7 @@ import { useProteccionSalida } from "@/components/useProteccionSalida";
 import { confirmarDialogo, mostrarAvisoDialogo, pedirMotivoDialogo } from "@/components/Dialogo";
 import { createClient } from "@/lib/supabase/client";
 import type { Perfil } from "@/lib/permisos";
-import {CALIDADES_CONTRATO,PRENDAS_CONTRATO} from "@/lib/catalogosContrato";
+import {CALIDADES_CONTRATO,PRENDAS_CONTRATO,TALLAS_ADULTOS_CONTRATO,TALLAS_NINOS_CONTRATO} from "@/lib/catalogosContrato";
 // Las reglas del brief viven en lib/ y estan cubiertas por briefContrato.test.ts.
 // Tenerlas aqui dentro es lo que permitio que se rompieran tres veces sin que
 // nadie se enterara hasta mirar un papel impreso.
@@ -72,8 +72,8 @@ function prendasParaLogos(sel:string[]){
 }
 function prendasConTalla(sel:string[]){const out:string[]=[];for(const p of sel)for(const c of (PRENDA_EXPANSION[p]??[p]))if(!PRENDAS_SIN_TALLA.includes(c)&&!out.includes(c))out.push(c);return out}
 
-const ADULTOS=["XS","S","M","L","XL","2XL","3XL","4XL"];
-const NINOS=["24 (0)","26 (2)","28 (4)","30 (6)","32 (8)","34 (10)","36 (12)"];
+const ADULTOS:string[]=[...TALLAS_ADULTOS_CONTRATO];
+const NINOS:string[]=[...TALLAS_NINOS_CONTRATO];
 const TECNICAS=["Sublimado","Estampado","Bordado","TPU","No aplica"];
 const UBICACION_TPU=["No aplica","Frente","Mangas","Espalda","Frente y mangas"];
 const CANALES=["Tienda física","WhatsApp","Instagram","Facebook","Llamada telefónica","Referido"];
@@ -508,7 +508,7 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
     const sup=normTalla(supRaw),inf=normTalla(infRaw||supRaw);
     if(supRaw){
      if(tallasValidas.includes(sup))j.talla_superior=sup;
-     else avisos.push(`⛔ Fila ${nFila} — ${quien}: la TALLA SUPERIOR "${supRaw}" está mal escrita → se subió SIN talla. Corrígela en el Excel (usa XS, S, M, L, XL, 2XL, 3XL, 4XL) y vuelve a subir.`);
+     else avisos.push(`⛔ Fila ${nFila} — ${quien}: la TALLA SUPERIOR "${supRaw}" está mal escrita → se subió SIN talla. Corrígela en el Excel (usa XXS (14) para niño; XS, S, M, L, XL, 2XL, 3XL o 4XL para adulto) y vuelve a subir.`);
     }
     if(inf&&tallasValidas.includes(inf))j.talla_inferior=inf;
     else if(infRaw)avisos.push(`⛔ Fila ${nFila} — ${quien}: la TALLA INFERIOR "${infRaw}" está mal escrita → se subió SIN talla.`);
@@ -541,7 +541,12 @@ export default function IngresoContratoCliente({perfil,editarId}:{perfil:Perfil;
   const XLSX=await import("xlsx");
   const ws=XLSX.utils.json_to_sheet([{"Nombre":"","Número":"","Categoría":"Hombre","Talla superior":"M","Talla inferior":"M","Manga":"Corta","Calidad":"Semiprofesional","Mod. arquero":"","Tipo uniforme":"Uniforme completo","Detalle/variante":"","Mockup":"Mockup 1"}]);
   ws["!cols"]=[24,10,14,16,16,12,18,18,24,28,16].map(wch=>({wch}));
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Jugadores");XLSX.writeFile(wb,"plantilla_jugadores_boman.xlsx");
+  const guia=XLSX.utils.aoa_to_sheet([
+   ["TALLAS PERMITIDAS"],["Niños",...NINOS],["Adultos",...ADULTOS],[],
+   ["Importante","Para 14 años usa exactamente XXS (14)."],
+  ]);
+  guia["!cols"]=[16,14,14,14,14,14,14,14,14].map(wch=>({wch}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Jugadores");XLSX.utils.book_append_sheet(wb,guia,"Tallas permitidas");XLSX.writeFile(wb,"plantilla_jugadores_boman.xlsx");
  }
 
  async function guardar(){const pasoIncompleto=[0,1,2,4,5,6].find(i=>Boolean(errorPaso(i)));if(pasoIncompleto!==undefined){setPaso(pasoIncompleto);await mostrarAvisoDialogo(errorPaso(pasoIncompleto),"Contrato incompleto",true);formularioRef.current?.focus();return;}
