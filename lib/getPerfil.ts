@@ -56,6 +56,8 @@ const PERMISOS_ANTERIORES: Record<RolUsuario, PermisoCodigo[]> = {
     "mantenimiento.acceder", "mantenimiento.editar", "franquicia.consolidado",
     "contratos.asignar_vendedor",
     "importaciones.acceder", "tesoreria.acceder", "tesoreria.editar",
+    "facturacion.preparar", "facturacion.reintentar", "facturacion.anular",
+    "facturacion.retenciones_emitir",
   ],
   produccion: [
     "produccion.acceder", "produccion.calidad.registrar",
